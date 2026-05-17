@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# moneta
 
-## Getting Started
+Личный трекер расходов: одна форма, чтобы за 5 секунд записать трату с
+телефона; одна сводка, чтобы видеть, на что уходят деньги.
 
-First, run the development server:
+> **Статус:** MVP в разработке. Бэкенда «своего» нет — Next.js PWA + Supabase
+> (Postgres + Auth) с прямыми запросами из браузера, защищёнными через
+> Row-Level Security.
+
+## Документация
+
+- 📘 [`docs/business-spec.md`](./docs/business-spec.md) — что мы делаем и
+  зачем (и чего НЕ делаем в MVP).
+- 🛠 [`docs/tech-spec.md`](./docs/tech-spec.md) — стек, архитектура,
+  модель данных, auth, деплой.
+- 🎨 [`design-system/moneta/MASTER.md`](./design-system/moneta/MASTER.md) —
+  токены и UI-правила.
+
+## Стек
+
+Next.js 15 (App Router) · TypeScript · Tailwind v4 · Supabase
+(Postgres + Auth) · react-query · react-hook-form + zod · lucide-react ·
+sonner. Hosting: Vercel.
+
+## Быстрый старт
 
 ```bash
+# 1. Зависимости
+npm install
+
+# 2. Окружение
+cp .env.local.example .env.local
+# Заполнить NEXT_PUBLIC_SUPABASE_URL и NEXT_PUBLIC_SUPABASE_ANON_KEY
+# (из Supabase Dashboard → Project Settings → API)
+
+# 3. Применить миграции на Supabase
+#    Вариант А — на cloud-проекте Supabase:
+npx supabase link --project-ref <your-ref>
+npx supabase db push
+
+#    Вариант Б — на локальном Supabase (Docker):
+npx supabase start
+npx supabase db push
+
+# 4. Dev-сервер
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# → http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+После первой собственной регистрации стоит выключить дальнейший приём заявок:
+**Supabase Dashboard → Authentication → Settings → "Disable new sign-ups"**.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Команды
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Команда           | Что делает                          |
+| ----------------- | ----------------------------------- |
+| `npm run dev`     | Dev-сервер (Turbopack)              |
+| `npm run build`   | Production-сборка                   |
+| `npm run start`   | Запуск production-сборки локально   |
+| `npm run lint`    | ESLint                              |
 
-## Learn More
+## Структура
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/
+  app/            # Next.js App Router (страницы + layouts)
+  components/     # UI-примитивы и составные блоки
+  lib/            # supabase client, money, dates, zod-схемы
+  hooks/          # React Query хуки
+supabase/
+  migrations/     # SQL миграции
+design-system/    # UI source of truth (MASTER.md + page overrides)
+docs/             # business + tech specs
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Лицензия
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Личный проект, без открытой лицензии. Если откроем — обновим этот блок.

@@ -3,9 +3,9 @@
 Личный трекер расходов: одна форма, чтобы за 5 секунд записать трату с
 телефона; одна сводка, чтобы видеть, на что уходят деньги.
 
-> **Статус:** MVP в разработке. Бэкенда «своего» нет — Next.js PWA + Supabase
-> (Postgres + Auth) с прямыми запросами из браузера, защищёнными через
-> Row-Level Security.
+> **Статус:** MVP в разработке. Next.js PWA + self-hosted Supabase (Postgres +
+> GoTrue Auth) — оба сервиса в Coolify на собственной VPS. Бэкенда «своего»
+> нет, фронт ходит в Supabase напрямую, безопасность через Row-Level Security.
 
 ## Документация
 
@@ -18,11 +18,12 @@
 
 ## Стек
 
-Next.js 15 (App Router) · TypeScript · Tailwind v4 · Supabase
-(Postgres + Auth) · react-query · react-hook-form + zod · lucide-react ·
-sonner. Hosting: Vercel.
+Next.js 15 (App Router) · TypeScript · Tailwind v4 · Supabase self-hosted
+(Postgres + GoTrue Auth) · react-query · react-hook-form + zod · lucide-react ·
+sonner. **Хостинг:** собственная VPS под Coolify (Supabase и Next.js — два
+сервиса).
 
-## Быстрый старт
+## Быстрый старт (локально)
 
 ```bash
 # 1. Зависимости
@@ -30,25 +31,33 @@ npm install
 
 # 2. Окружение
 cp .env.local.example .env.local
-# Заполнить NEXT_PUBLIC_SUPABASE_URL и NEXT_PUBLIC_SUPABASE_ANON_KEY
-# (из Supabase Dashboard → Project Settings → API)
+# Вариант A: указать NEXT_PUBLIC_SUPABASE_URL/KEY от Supabase в Coolify на VPS
+# Вариант B: поднять локальный Supabase (Docker) и взять локальные URL/KEY:
+#   npx supabase start
+#   npx supabase db push          # применит миграции из supabase/migrations/
 
-# 3. Применить миграции на Supabase
-#    Вариант А — на cloud-проекте Supabase:
-npx supabase link --project-ref <your-ref>
-npx supabase db push
-
-#    Вариант Б — на локальном Supabase (Docker):
-npx supabase start
-npx supabase db push
-
-# 4. Dev-сервер
+# 3. Dev-сервер
 npm run dev
 # → http://localhost:3000
 ```
 
-После первой собственной регистрации стоит выключить дальнейший приём заявок:
-**Supabase Dashboard → Authentication → Settings → "Disable new sign-ups"**.
+## Первый аккаунт
+
+Публичной регистрации нет. После деплоя Supabase зайти в Studio
+(`https://supabase.your-domain.com`) → **Authentication → Users → Add user**,
+поставить «Auto Confirm User» и сохранить. Дальше — этот email/password на
+`/login` приложения. Подробнее в [`docs/tech-spec.md §5`](./docs/tech-spec.md).
+
+## Деплой
+
+Оба сервиса в Coolify на одной VPS:
+
+1. **Supabase** — Coolify → New Resource → Service → Supabase (one-click).
+   Получить anon key из env сервиса.
+2. **moneta** (Next.js) — Coolify → New Resource → Application → подключить
+   репо, выставить `NEXT_PUBLIC_SUPABASE_URL` и `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+
+Полный gайд — в [`docs/tech-spec.md §11`](./docs/tech-spec.md).
 
 ## Команды
 

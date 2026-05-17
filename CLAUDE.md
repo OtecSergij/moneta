@@ -12,9 +12,17 @@
 ## Что это
 
 **moneta** — личный трекер расходов одного пользователя (владельца). Next.js
-PWA на фронте, Supabase (Postgres + Auth) на бэке. Свого Express-бэкенда нет —
-фронт ходит в Supabase напрямую через `@supabase/supabase-js`, безопасность
+PWA на фронте, **self-hosted Supabase** (Postgres + GoTrue Auth) на бэке.
+Оба сервиса крутятся в Coolify на собственной VPS. Своего Express-бэкенда нет
+— фронт ходит в Supabase напрямую через `@supabase/supabase-js`, безопасность
 через RLS.
+
+**Auth в MVP:** только email + password. Magic link и SMTP откладываем (нужны
+настроенные SMTP-credentials). Регистрация **не публичная** — единственный
+аккаунт владельца создаётся вручную в Supabase Studio.
+
+**Деплой:** Coolify на VPS, два сервиса (Supabase one-click + Next.js
+Application). Никакого Vercel и никакого Supabase Cloud.
 
 Источники правды:
 

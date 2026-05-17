@@ -3,18 +3,28 @@
 ## 1. Высокоуровневая архитектура
 
 ```
-┌─────────────────────────┐         ┌──────────────────────────────┐
-│  Браузер / PWA          │         │  Supabase (managed)          │
-│  (Next.js app, SSR+CSR) │ ──HTTP→ │  ├─ Postgres (БД + RLS)     │
-│                         │  WS     │  ├─ Auth (magic link, JWT)  │
-│  supabase-js SDK ───────┼─REST/RT─┤  └─ Edge Functions (нет MVP)│
-└─────────────────────────┘         └──────────────────────────────┘
+                    VPS (под управлением Coolify)
+┌──────────────────────────────────────────────────────────┐
+│  Traefik (reverse proxy, Let's Encrypt)                  │
+│   ├── moneta.tld              → Next.js app (PWA, SSR)   │
+│   └── supabase.moneta.tld     → Supabase (Kong gateway)  │
+│                                  ├─ Postgres (БД + RLS)  │
+│                                  ├─ GoTrue  (Auth)       │
+│                                  ├─ PostgREST (REST API) │
+│                                  ├─ Realtime  (WS)       │
+│                                  └─ Studio   (админка)   │
+└──────────────────────────────────────────────────────────┘
+            ▲                                ▲
+            │ HTTPS                          │ HTTPS (REST/RT)
+       ┌────┴───────────┐                    │
+       │ Браузер / PWA  │──── supabase-js ───┘
+       └────────────────┘
 ```
 
-- Frontend — единственный исполняемый код, который мы пишем. Хостится на Vercel.
-- Бэкенда «своего» нет: вся CRUD-логика — это запросы из браузера в Supabase
-  через `@supabase/supabase-js`. Безопасность данных — на уровне Postgres
-  Row-Level Security.
+- Frontend (Next.js) и Supabase — два отдельных сервиса в Coolify на одной
+  VPS. Каждый на своём субдомене.
+- Своего бэкенда нет: вся CRUD-логика — запросы из браузера в Supabase через
+  `@supabase/supabase-js`. Безопасность данных — Postgres Row-Level Security.
 - Никаких Express/Prisma/REST-роутов с нашей стороны.
 
 **Почему так:**
@@ -30,21 +40,21 @@
 
 | Слой              | Выбор                                  | Зачем именно это                                              |
 | ----------------- | -------------------------------------- | ------------------------------------------------------------- |
-| Framework         | **Next.js 15** (App Router, Turbopack) | SSR + клиент, простой деплой на Vercel, типизированные routes |
+| Framework         | **Next.js 15** (App Router, Turbopack) | SSR + клиент, типизированные routes, легко докеризовать       |
 | Язык              | **TypeScript** strict                  | Меньше ошибок на стыке БД ↔ UI                                |
 | Стили             | **Tailwind CSS v4**                    | Утилитарный, быстрый, токены из MASTER.md ложатся в `@theme`  |
 | Шрифт             | **Inter** via `next/font/google`       | Чистый, читаемый, tabular-nums                                |
 | Иконки            | **lucide-react**                       | SVG, дерево tree-shake-ится                                   |
-| БД + Auth         | **Supabase** (Postgres 15+)            | Managed, RLS, JS SDK, бесплатный tier                          |
-| Доступ к БД       | **@supabase/supabase-js**              | Официальный клиент, типы из БД генерим                         |
+| БД + Auth         | **Supabase** (self-hosted в Coolify)   | Postgres + GoTrue + PostgREST + RLS в одной пачке             |
+| Доступ к БД       | **@supabase/supabase-js**              | Официальный клиент, типы из БД генерим                        |
 | Формы             | **react-hook-form** + **zod**          | Стандарт, валидация типобезопасная                            |
-| Серверные данные  | **@tanstack/react-query**              | Кэш, refetch, оптимистические апдейты                          |
+| Серверные данные  | **@tanstack/react-query**              | Кэш, refetch, оптимистические апдейты                         |
 | Тосты             | **sonner**                             | Минимальный API, ARIA-friendly                                |
 | Дата-утилиты      | **date-fns** (только нужные функции)   | Меньше bundle, чем moment                                     |
 | PWA               | **@ducanh2912/next-pwa** или ручной    | Service worker + manifest                                     |
 | Линт              | **ESLint** + **Prettier**              | Дефолт от create-next-app                                     |
-| Деплой frontend   | **Vercel**                             | Бесшовно с Next.js                                            |
-| Деплой backend    | —                                      | Нет своего бэкенда                                            |
+| Деплой frontend   | **Coolify** (Application от git)       | На той же VPS, что и Supabase                                 |
+| Деплой backend    | **Coolify** (Supabase service)         | One-click Supabase, Traefik+LE сертификаты                    |
 
 **Никаких** Redux/Zustand для MVP — состояние или серверное (React Query) или
 форменное (RHF). Локальный UI-стейт — `useState`.
@@ -62,10 +72,7 @@ moneta/
 │  │  ├─ settings/
 │  │  │  └─ page.tsx             # /settings
 │  │  ├─ login/
-│  │  │  └─ page.tsx             # magic-link форма
-│  │  ├─ auth/
-│  │  │  └─ callback/
-│  │  │     └─ route.ts          # обработчик magic-link редиректа
+│  │  │  └─ page.tsx             # email + password форма
 │  │  └─ globals.css             # Tailwind + дизайн-токены
 │  ├─ components/
 │  │  ├─ ui/                     # примитивы: Button, Input, Select, Modal, ...
@@ -183,33 +190,63 @@ create policy "expenses: own rows"
 
 ## 5. Аутентификация
 
-### 5.1 Поток
+### 5.1 Поток (MVP) — email + password
 
-1. `/login` — форма с одним полем email и кнопкой «Получить ссылку».
-2. `supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: '/auth/callback' }})`.
-3. Письмо с ссылкой → клик → редирект на `/auth/callback?code=...`.
-4. `/auth/callback/route.ts` обменивает код на сессию через
-   `exchangeCodeForSession` → ставит httpOnly cookie → редирект на `/`.
+В MVP нет magic link и нет публичной регистрации.
 
-### 5.2 Допуск / запрет регистрации
+1. `/login` — форма с полями email + password.
+2. `supabase.auth.signInWithPassword({ email, password })`.
+3. SDK кладёт сессию в httpOnly cookie (через `createServerClient` на
+   серверной стороне).
+4. Редирект на `/`.
 
-Поскольку приложение для одного пользователя, в Supabase Dashboard:
+Причина выбора: self-hosted Supabase в Coolify требует настройки SMTP для
+отправки magic-link писем. На старте SMTP откладываем — пароль работает «из
+коробки».
 
-- **Auth → Providers → Email** оставляем включённым;
-- **Auth → Settings → "Disable new sign-ups"** — включаем после первой
-  собственной регистрации, чтобы никто посторонний не создал аккаунт через
-  публичный URL.
+### 5.2 Первичный аккаунт (one-off)
 
-Альтернатива: оставить регистрацию открытой, но добавить allowlist в RLS-policy
-(`auth.email() = 'myemail@…'`). Для MVP — проще dashboard-флаг.
+Сразу после деплоя Supabase (см. §11) заводим единственный аккаунт владельца
+**вручную** через Supabase Studio:
+
+- Studio → **Authentication → Users → "Add user"** → email + пароль +
+  поставить галочку «Auto Confirm User» (чтобы не нужна была email-верификация).
+
+Альтернатива через GoTrue admin API:
+
+```bash
+curl -X POST 'https://supabase.your-domain/auth/v1/admin/users' \
+  -H "apikey: $SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"me@example.com","password":"<длинный пароль>","email_confirm":true}'
+```
+
+После этого выставляем в Environment Variables Supabase-сервиса в Coolify:
+
+- `GOTRUE_DISABLE_SIGNUP=true` — публичный endpoint регистрации возвращает 422.
+- (опционально) `GOTRUE_MAILER_AUTOCONFIRM=true` — без SMTP всё равно
+  релевантно, чтобы не висели неподтверждённые пользователи.
 
 ### 5.3 Серверная и клиентская части
 
 - `lib/supabase/client.ts` — `createBrowserClient` для Client Components.
 - `lib/supabase/server.ts` — `createServerClient` для Server Components и Server
   Actions (использует cookies из `next/headers`).
-- Middleware (`src/middleware.ts`) — обновляет токен и перекидывает анонимов на
-  `/login` со всех путей кроме `/login`, `/auth/*`.
+- Middleware (`src/middleware.ts`) — обновляет токен и перекидывает анонимов
+  на `/login` со всех путей кроме `/login` и `/_next/*`.
+
+### 5.4 Magic link — на будущее
+
+Когда подключим SMTP (Mailgun / Resend / Yandex / Postmark / Mail.ru):
+
+1. В Supabase-сервисе Coolify прописать SMTP env vars
+   (`GOTRUE_SMTP_HOST`, `GOTRUE_SMTP_PORT`, `GOTRUE_SMTP_USER`,
+   `GOTRUE_SMTP_PASS`, `GOTRUE_SMTP_ADMIN_EMAIL`).
+2. На `/login` добавить кнопку «Получить ссылку» рядом с password-формой.
+3. Реализовать `/auth/callback/route.ts` с `exchangeCodeForSession`.
+
+Сейчас этого не делаем.
 
 ## 6. Слой данных на фронте
 
@@ -284,46 +321,109 @@ MASTER, чтобы не было двух источников правды.
 
 ## 10. Локальная разработка
 
+Два варианта — оба валидны, выбирать по контексту.
+
+### Вариант 1 (быстрый старт): dev-сервер ходит в Supabase на VPS
+
 ```bash
-# первая настройка
-cp .env.local.example .env.local         # вписать ключи Supabase
+cp .env.local.example .env.local
+# вписать NEXT_PUBLIC_SUPABASE_URL=https://supabase.moneta.tld
+#         NEXT_PUBLIC_SUPABASE_ANON_KEY=<из Coolify>
 npm install
 npm run dev                              # http://localhost:3000
 ```
 
-**Supabase локальный (опционально):**
+Плюс: не нужно поднимать Docker локально. Минус: миграции и поломки бьют по
+«проду».
 
-Для real ускорения dev-цикла без интернета:
+### Вариант 2 (изолированный): локальный Supabase через Supabase CLI
 
 ```bash
-npx supabase start                       # поднимает Postgres + Auth + Studio
+npx supabase start                       # поднимает Postgres + GoTrue + Studio
 npx supabase db push                     # применить миграции
+# CLI напечатает локальные URL и ключи — их в .env.local
+npm run dev
 ```
 
-В `.env.local` — локальные URL/ключи (печатает `supabase start`).
-
-Для MVP можно начать сразу на cloud-проекте Supabase, локалка опциональна.
+Плюс: никакого риска для VPS. Минус: нужны Docker и CLI. Рекомендуется, как
+только начнём вносить структурные изменения в схему.
 
 ## 11. Деплой
 
-### Frontend
+Всё хостится на собственной VPS под **Coolify** — два сервиса в одной панели.
 
-- **Vercel** (бесплатный hobby tier).
-- Env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-- Auto-deploy на push в `main`.
+### 11.1 Supabase (self-hosted в Coolify)
 
-### БД / Auth
+Coolify умеет one-click Supabase: разворачивает Postgres + GoTrue (Auth) +
+PostgREST (REST API) + Realtime + Studio (админка) + Kong (gateway).
 
-- **Supabase Cloud** — free tier.
-- Миграции применяем через `supabase db push` из локали (или CI).
-- В Supabase Dashboard включаем «Disable new sign-ups» после первой
-  регистрации.
+Шаги:
+
+1. Coolify → **+ New Resource → Service** → выбрать **Supabase** из шаблонов.
+2. Назначить домен/субдомен — например, `supabase.moneta.tld`. Coolify сам
+   выпустит Let's Encrypt сертификат.
+3. Запустить сервис. После старта в **Environment Variables** будут видны:
+   - `ANON_KEY` (он же `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
+   - `SERVICE_ROLE_KEY`
+   - `POSTGRES_PASSWORD`
+   - `JWT_SECRET`
+4. Применить миграцию `supabase/migrations/20260517120000_init.sql`:
+   - **через Studio:** SQL Editor → вставить → Run.
+   - **через CLI с локали:**
+     ```bash
+     npx supabase db push --db-url \
+       "postgresql://postgres:$POSTGRES_PASSWORD@supabase.moneta.tld:5432/postgres"
+     ```
+5. Завести аккаунт владельца через Studio (см. §5.2).
+6. Выставить `GOTRUE_DISABLE_SIGNUP=true` в env Supabase-сервиса и
+   перезапустить.
+
+**Бэкапы:** Coolify умеет периодические `pg_dump`. Сервис Supabase → **Backups
+→ Schedule**. Минимум — раз в сутки в S3-совместимое хранилище (или локально
+на VPS, но это рискованнее).
+
+### 11.2 Next.js приложение (в Coolify)
+
+1. Coolify → **+ New Resource → Application → Public Repository** (или
+   Private, если репо приватный — добавить deploy key/GitHub App).
+2. Source: `OtecSergij/moneta`, branch `main`.
+3. **Build pack:** Nixpacks (детектит Next.js автоматически). Можно
+   подменить на Dockerfile, если захотим зафиксировать окружение.
+4. **Build command:** `npm run build`. **Start command:** `npm run start`.
+   **Port:** `3000`.
+5. **Domain:** например, `moneta.tld` или `app.moneta.tld` (Coolify выпустит
+   сертификат).
+6. **Environment Variables:**
+   - `NEXT_PUBLIC_SUPABASE_URL=https://supabase.moneta.tld`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY=<из Supabase-сервиса>`
+   - `NODE_ENV=production`
+7. **Auto-deploy:** включить webhook в Coolify → подключить к GitHub-репо.
+   Push в `main` → автодеплой.
+
+### 11.3 Сеть
+
+- `NEXT_PUBLIC_SUPABASE_URL` уезжает в клиентский JS-бандл, поэтому Supabase
+  должен быть доступен **из браузера пользователя** — публичный субдомен
+  обязателен.
+- На VPS Next.js и Supabase сидят в одной docker-сети Coolify, но клиентские
+  запросы всё равно идут через публичный домен (так браузер устроен).
+- SSR-запросы из Next.js идут на тот же публичный URL — небольшой round-trip
+  через Traefik, но избавляет от двух конфигов.
+
+### 11.4 Что НЕ делаем сразу
+
+- **SMTP не настраиваем** — auth = email+password, письма пока не нужны.
+- **Supabase Storage не используем** — нет S3-конфига, бакетов, нет
+  загрузки чеков.
+- **Edge Functions не деплоим** — нечего.
+- **CDN / отдельный edge proxy** — Coolify-Traefik справится для одного
+  пользователя.
 
 ## 12. Что вне MVP в техническом смысле
 
 - Нет тестов (unit/integration) на старте — добавим после первой сборки фичей,
   чтобы не оверинженирить пустоту.
-- Нет CI кроме deploy preview от Vercel.
+- Нет CI кроме автодеплоя в Coolify по webhook'у из GitHub.
 - Нет Sentry / error reporting. Заведём, когда начнём ловить продакшен-баги.
 - Нет фича-флагов, A/B, аналитики.
 

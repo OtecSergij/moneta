@@ -12,24 +12,18 @@
 ## Что это
 
 **moneta** — личный трекер расходов одного пользователя (владельца). Next.js
-PWA на фронте, **self-hosted Supabase** (Postgres + GoTrue Auth) на бэке.
-Оба сервиса крутятся в Coolify на собственной VPS. Своего Express-бэкенда нет
-— фронт ходит в Supabase напрямую через `@supabase/supabase-js`, безопасность
-через RLS.
+PWA на фронте, Postgres + Auth на бэке.
+Оба сервиса крутятся в Coolify на собственной VPS.
 
-**Auth в MVP:** только email + password. Magic link и SMTP откладываем (нужны
-настроенные SMTP-credentials). Регистрация **не публичная** — единственный
-аккаунт владельца создаётся вручную в Supabase Studio.
+**Auth в MVP:** только email + password.
 
-**Деплой:** Coolify на VPS, два сервиса (Supabase one-click + Next.js
-Application). Никакого Vercel и никакого Supabase Cloud.
+**Деплой:** Coolify на VPS, Next.js
+Application + Postgres. Никакого Vercel и никакого Supabase Cloud.
 
 Источники правды:
 
 - [`docs/business-spec.md`](./docs/business-spec.md) — что и зачем делаем (и
   чего НЕ делаем в MVP).
-- [`docs/tech-spec.md`](./docs/tech-spec.md) — как делаем (стек, структура,
-  модель данных, auth flow, деплой).
 - [`design-system/moneta/MASTER.md`](./design-system/moneta/MASTER.md) —
   токены, типографика, layout-паттерны, компонентные правила. При создании
   страницы сначала проверь `design-system/moneta/pages/<page>.md` — он
@@ -37,9 +31,8 @@ Application). Никакого Vercel и никакого Supabase Cloud.
 
 ## Стек (коротко)
 
-- **Next.js 15** App Router, TypeScript, Turbopack dev
-- **Tailwind v4** (токены в `@theme` блоке `globals.css`, согласованы с MASTER.md)
-- **Supabase** (Postgres + Auth) + `@supabase/supabase-js`
+- **Next.js 16** App Router, TypeScript, Turbopack dev
+- **Tailwind last** (токены в `@theme` блоке `globals.css`, согласованы с MASTER.md)
 - **react-hook-form + zod** для форм
 - **@tanstack/react-query** для серверного состояния
 - **lucide-react** для иконок (никаких эмодзи в UI)
@@ -57,12 +50,9 @@ Application). Никакого Vercel и никакого Supabase Cloud.
 ## Команды
 
 ```bash
-npm run dev               # http://localhost:3000 (Turbopack)
+npm run dev               # http://localhost:3000
 npm run build             # prod build
 npm run lint              # ESLint
-npx supabase start        # локальный Postgres + Auth (опционально)
-npx supabase db push      # применить миграции
-npx supabase gen types typescript --linked > src/lib/supabase/types.ts
 ```
 
 ## Перед коммитом
@@ -74,7 +64,5 @@ npx supabase gen types typescript --linked > src/lib/supabase/types.ts
 
 - Не добавляем фичи из «backlog» бизнес-спеки (доходы, бюджеты, графики
   динамики, мульти-валюты и пр.) — это вне MVP.
-- Не пишем триггеры / RPC в Postgres, пока агрегаты на клиенте справляются.
-- Не делаем UI-переключатель темы — только auto через
-  `prefers-color-scheme`.
 - Не коммитим без явной команды от пользователя.
+– Не добавляем соавторство коммитам

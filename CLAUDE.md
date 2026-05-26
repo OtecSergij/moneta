@@ -15,15 +15,19 @@
 PWA на фронте, Postgres + Auth на бэке.
 Оба сервиса крутятся в Coolify на собственной VPS.
 
-**Auth в MVP:** только email + password.
+**Auth в MVP:** Better Auth (cookie-sessions в Postgres), email + password
++ «Sign in with Google». Email verification и password reset через Resend
+с первого дня. Multi-user: регистрация открыта, изоляция данных через
+repository pattern.
 
-**Деплой:** Coolify на VPS, Next.js
-Application + Postgres. Никакого Vercel и никакого Supabase Cloud.
+**Деплой:** Coolify на VPS, Next.js Application + Postgres. Никакого Vercel.
 
 Источники правды:
 
 - [`docs/business-spec.md`](./docs/business-spec.md) — что и зачем делаем (и
   чего НЕ делаем в MVP).
+- [`docs/auth-decisions.md`](./docs/auth-decisions.md) — стек, параметры
+  сессии, OAuth, account linking, email verification, rate limiting.
 - [`design-system/moneta/MASTER.md`](./design-system/moneta/MASTER.md) —
   токены, типографика, layout-паттерны, компонентные правила. При создании
   страницы сначала проверь `design-system/moneta/pages/<page>.md` — он

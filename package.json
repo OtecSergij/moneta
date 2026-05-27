@@ -8,7 +8,14 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "auth:generate": "npx @better-auth/cli@latest generate --config src/lib/auth.ts --output src/db/schema/auth.generated.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
@@ -31,6 +38,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",

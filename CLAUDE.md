@@ -11,9 +11,9 @@
 
 ## Что это
 
-**moneta** — личный трекер расходов одного пользователя (владельца). Next.js
-PWA на фронте, Postgres + Auth на бэке.
-Оба сервиса крутятся в Coolify на собственной VPS.
+**moneta** — личный трекер расходов: каждый зарегистрированный юзер ведёт
+свои траты в изолированном аккаунте. Next.js PWA на фронте, Postgres +
+Better Auth на бэке. Оба сервиса крутятся в Coolify на собственной VPS.
 
 **Auth в MVP:** Better Auth (cookie-sessions в Postgres), email + password
 + «Sign in with Google». Email verification и password reset через Resend

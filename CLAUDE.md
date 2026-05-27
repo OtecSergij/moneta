@@ -57,12 +57,15 @@ repository pattern.
 npm run dev               # http://localhost:3000
 npm run build             # prod build
 npm run lint              # ESLint
+npm test                  # vitest watch
+npm run test:run          # vitest one-shot (для CI / прекоммита)
 ```
 
 ## Перед коммитом
 
 1. `npm run build` — TS должен пройти без ошибок.
 2. `npm run lint` — без варнингов.
+3. `npm run test:run` — тесты зелёные.
 
 ## Чего НЕ делаем
 

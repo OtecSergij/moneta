@@ -45,6 +45,5 @@ next-env.d.ts
 __pycache__/
 *.pyc
 
-# supabase local config / temp
-supabase/.branches
-supabase/.temp
+# drizzle migration meta cache
+/drizzle/meta/_journal.json.bak

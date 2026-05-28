@@ -1,3 +1,3 @@
 export * from "./auth";
-// Future domain schemas (categories, expenses) will be re-exported here so
-// drizzle-kit picks them up via a single schema entry point.
+export * from "./categories";
+export * from "./expenses";

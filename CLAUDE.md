@@ -65,7 +65,9 @@ npm run test:run          # vitest one-shot (для CI / прекоммита)
 
 1. `npm run build` — TS должен пройти без ошибок.
 2. `npm run lint` — без варнингов.
-3. `npm run test:run` — тесты зелёные.
+3. `npm run test:run` — тесты зелёные. Требует запущенный Postgres
+   (`npm run db:up`) — интеграционные тесты репозиториев бегут против
+   `moneta_test` БД. Это починят Testcontainers (см. `docs/todo.md`).
 
 ## Чего НЕ делаем
 

@@ -47,3 +47,6 @@ __pycache__/
 
 # drizzle migration meta cache
 /drizzle/meta/_journal.json.bak
+
+# claude code local preview config (not part of the app)
+/.claude/launch.json

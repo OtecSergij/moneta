@@ -16,11 +16,13 @@ export const ExpenseInput = z.object({
   categoryId: z.uuid(),
   amountMinor: z.int().positive(),
   currency: z.enum(currencyEnum.enumValues).default("RUB"),
+  // .optional() outermost → inferred key is optional (`note?`), not a
+  // required key valued `string | undefined`. See categories.ts.
   note: z
     .string()
     .max(200)
-    .optional()
-    .transform((v) => (v && v.trim().length > 0 ? v : undefined)),
+    .transform((v) => (v.trim().length > 0 ? v : undefined))
+    .optional(),
   spentAt: z.iso.date(),
 });
 export type ExpenseInput = z.infer<typeof ExpenseInput>;

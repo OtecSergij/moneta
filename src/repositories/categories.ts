@@ -29,11 +29,13 @@ export type CategoryColor = (typeof CATEGORY_COLORS)[number];
 // source of truth.
 export const CategoryInput = z.object({
   name: z.string().trim().min(1).max(40),
+  // .optional() must wrap .transform() (be outermost) so the inferred key is
+  // optional (`description?`), not a required key valued `string | undefined`.
   description: z
     .string()
     .max(250)
-    .optional()
-    .transform((v) => (v && v.trim().length > 0 ? v : undefined)),
+    .transform((v) => (v.trim().length > 0 ? v : undefined))
+    .optional(),
   color: z.enum(CATEGORY_COLORS),
 });
 export type CategoryInput = z.infer<typeof CategoryInput>;

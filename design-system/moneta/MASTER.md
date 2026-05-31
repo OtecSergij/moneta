@@ -113,7 +113,7 @@ Light theme is the default. Dark theme is auto-applied when `prefers-color-schem
 ┌──────────────────────────────────────┐
 │  moneta              ⚙  ←nav       │
 ├──────────────────────────────────────┤
-│  За последние 7 дней                 │
+│  На этой неделе                      │
 │  ₽ 12 480                            │  ← total, text-3xl tabular-nums
 │  по 8 тратам                         │
 ├──────────────────────────────────────┤

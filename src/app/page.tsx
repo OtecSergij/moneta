@@ -1,30 +1,22 @@
 import Link from "next/link";
-import { Settings } from "lucide-react";
+import { ChevronRight, Settings } from "lucide-react";
 import { requireSession } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
-import { listExpenses, summary, type Expense } from "@/repositories/expenses";
+import { listExpenses, summary } from "@/repositories/expenses";
 import { currentWeekFromMonday } from "@/lib/dates";
-import { QuickAddForm } from "@/components/quick-add-form";
-import { SummaryCard } from "@/components/summary-card";
-import { ExpenseRow } from "@/components/expense-row";
+import { Money } from "@/components/ui/money";
+import { QuickAddForm } from "@/components/expenses/quick-add-form";
+import { RecentList } from "@/components/expenses/recent-list";
 
 export default async function HomePage() {
   const { user } = await requireSession();
   const week = currentWeekFromMonday();
 
-  const [categories, weekSummary, weekExpenses, recent] = await Promise.all([
+  const [categories, weekSummary, recent] = await Promise.all([
     listCategories(user.id),
     summary(user.id, week),
-    listExpenses(user.id, { from: week.from, to: week.to }),
     listExpenses(user.id, { limit: 10 }),
   ]);
-
-  const categoryById = new Map(categories.map((c) => [c.id, c]));
-
-  const expensesByCategory: Record<string, Expense[]> = {};
-  for (const e of weekExpenses) {
-    (expensesByCategory[e.categoryId] ??= []).push(e);
-  }
 
   return (
     <main className="mx-auto w-full max-w-md px-4 py-6 sm:max-w-2xl">
@@ -39,14 +31,23 @@ export default async function HomePage() {
         </Link>
       </header>
 
-      <SummaryCard
-        className="mb-6"
-        title="На этой неделе"
-        totalMinor={weekSummary.totalMinor}
-        count={weekExpenses.length}
-        byCategory={weekSummary.byCategory}
-        expensesByCategory={expensesByCategory}
-      />
+      {/* Week total — taps through to the full breakdown in History. */}
+      <Link
+        href="/history"
+        aria-label="Траты за неделю — открыть историю"
+        className="mb-6 flex items-center justify-between gap-4 rounded-lg border border-border bg-surface p-6 transition-colors hover:bg-border/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+      >
+        <span className="min-w-0">
+          <span className="block text-sm text-text-muted">На этой неделе</span>
+          <span className="mt-1 block text-3xl font-semibold text-text">
+            <Money minor={weekSummary.totalMinor} />
+          </span>
+        </span>
+        <ChevronRight
+          aria-hidden="true"
+          className="size-5 shrink-0 text-text-muted"
+        />
+      </Link>
 
       <section className="mb-6 rounded-lg border border-border bg-surface p-4 sm:p-6">
         <h2 className="mb-4 text-lg font-semibold text-text">Добавить трату</h2>
@@ -58,30 +59,7 @@ export default async function HomePage() {
         {recent.length === 0 ? (
           <p className="py-4 text-sm text-text-muted">Пока нет трат</p>
         ) : (
-          <>
-            <ul className="divide-y divide-border">
-              {recent.map((e) => {
-                const category = categoryById.get(e.categoryId);
-                if (!category) return null;
-                return (
-                  <ExpenseRow
-                    key={e.id}
-                    expense={e}
-                    categoryName={category.name}
-                    categoryColor={category.color}
-                  />
-                );
-              })}
-            </ul>
-            <div className="mt-3 text-right">
-              <Link
-                href="/history"
-                className="inline-flex min-h-11 items-center text-sm text-accent hover:text-accent-hover"
-              >
-                Вся история →
-              </Link>
-            </div>
-          </>
+          <RecentList expenses={recent} categories={categories} />
         )}
       </section>
     </main>

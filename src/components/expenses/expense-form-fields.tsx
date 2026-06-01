@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { todayISO } from "@/lib/dates";
 import { type ExpenseFormValues } from "@/lib/expense-form";
@@ -8,7 +8,7 @@ import { EXPENSE_NOTE_MAX } from "@/lib/expense-constants";
 import type { Category } from "@/repositories/categories";
 import { Field } from "@/components/ui/field";
 import { TextInput } from "@/components/ui/text-input";
-import { CategorySelect } from "@/components/category-select";
+import { CategorySelect } from "@/components/expenses/category-select";
 
 export function ExpenseFormFields({
   categories,
@@ -25,18 +25,16 @@ export function ExpenseFormFields({
   } = useFormContext<ExpenseFormValues>();
 
   const categoryId = useWatch({ control, name: "categoryId" });
+  const spentAt = useWatch({ control, name: "spentAt" });
 
+  // Controlled date field (value + setValue), NOT register(): an uncontrolled
+  // register'd date input desync'd from the form after reset() — adding a second
+  // expense in a row left spentAt empty/"invalid" though the picker showed a
+  // date. The plain ref only sets `max` post-mount (hydration-safe, no setState).
   const spentAtRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
     if (spentAtRef.current) spentAtRef.current.max = todayISO();
   }, []);
-  const setSpentAtRef = useCallback(
-    (el: HTMLInputElement | null) => {
-      register("spentAt").ref(el);
-      spentAtRef.current = el;
-    },
-    [register]
-  );
 
   return (
     <>
@@ -72,10 +70,9 @@ export function ExpenseFormFields({
         />
       </div>
 
-      <Field label="Заметка" htmlFor="note" error={errors.note?.message}>
+      <Field label="Описание" htmlFor="note" error={errors.note?.message}>
         <TextInput
           id="note"
-          placeholder="Необязательно"
           maxLength={EXPENSE_NOTE_MAX}
           aria-invalid={!!errors.note}
           {...register("note")}
@@ -86,9 +83,12 @@ export function ExpenseFormFields({
         <TextInput
           id="spentAt"
           type="date"
+          ref={spentAtRef}
+          value={spentAt ?? ""}
+          onChange={(e) =>
+            setValue("spentAt", e.target.value, { shouldValidate: true })
+          }
           aria-invalid={!!errors.spentAt}
-          {...register("spentAt")}
-          ref={setSpentAtRef}
         />
       </Field>
     </>

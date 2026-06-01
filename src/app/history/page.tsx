@@ -4,10 +4,10 @@ import { z } from "zod";
 import { requireSession } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
 import { listExpenses, summary, type Expense } from "@/repositories/expenses";
-import { formatDayHeading, lastNDays } from "@/lib/dates";
-import { SummaryCard } from "@/components/summary-card";
-import { HistoryFilter } from "@/components/history-filter";
-import { HistoryList } from "@/components/history-list";
+import { formatRelativeDay, lastNDays } from "@/lib/dates";
+import { HistoryFilter } from "@/components/history/history-filter";
+import { PeriodTabs } from "@/components/history/period-tabs";
+import type { DayGroup } from "@/components/history/history-list";
 
 const isoDate = z.iso.date();
 
@@ -42,16 +42,20 @@ export default async function HistoryPage({
     (expensesByCategory[e.categoryId] ??= []).push(e);
   }
 
-  const days: { day: string; heading: string; items: Expense[] }[] = [];
+  const days: DayGroup[] = [];
   for (const e of expenses) {
     const last = days[days.length - 1];
-    if (last && last.day === e.spentAt) last.items.push(e);
-    else
+    if (last && last.day === e.spentAt) {
+      last.items.push(e);
+      last.totalMinor += e.amountMinor;
+    } else {
       days.push({
         day: e.spentAt,
-        heading: formatDayHeading(e.spentAt),
+        heading: formatRelativeDay(e.spentAt),
+        totalMinor: e.amountMinor,
         items: [e],
       });
+    }
   }
 
   return (
@@ -70,25 +74,13 @@ export default async function HistoryPage({
         <HistoryFilter from={range.from} to={range.to} />
       </section>
 
-      <SummaryCard
-        className="mb-6"
-        title="За период"
+      <PeriodTabs
         totalMinor={periodSummary.totalMinor}
-        count={expenses.length}
         byCategory={periodSummary.byCategory}
         expensesByCategory={expensesByCategory}
+        days={days}
+        categories={categories}
       />
-
-      <section className="rounded-lg border border-border bg-surface p-4 sm:p-6">
-        <h2 className="mb-3 text-lg font-semibold text-text">Список</h2>
-        {days.length === 0 ? (
-          <p className="py-4 text-sm text-text-muted">
-            Нет трат за выбранный период
-          </p>
-        ) : (
-          <HistoryList groups={days} categories={categories} />
-        )}
-      </section>
     </main>
   );
 }

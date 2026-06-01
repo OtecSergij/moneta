@@ -23,6 +23,7 @@ Light theme is the default. Dark theme is auto-applied when `prefers-color-schem
 | Background         | `#FFFFFF`               | `#0B0B0E`               | `--bg`              |
 | Surface (card)     | `#FAFAFA`               | `#17171B`               | `--surface`         |
 | Surface raised     | `#FFFFFF`               | `#1F1F23`               | `--surface-raised`  |
+| Surface sunken     | `#E8EAEE`               | `#202027`               | `--surface-sunken`  |
 | Border             | `#E5E7EB`               | `#2A2A30`               | `--border`          |
 | Text primary       | `#09090B`               | `#FAFAFA`               | `--text`            |
 | Text secondary     | `#52525B`               | `#A1A1AA`               | `--text-muted`      |
@@ -206,8 +207,12 @@ Light theme is the default. Dark theme is auto-applied when `prefers-color-schem
 ### Cards
 
 - `bg-surface rounded-lg p-4` (или `p-6` для главной summary).
-- Without hover lift for static surfaces; hover only on actually clickable rows
-  (`hover:bg-surface-raised cursor-pointer`).
+- Static surfaces don't react to hover; clickable rows/cards get a subtle
+  `hover:bg-border/60 cursor-pointer` — a translucent darken that reads on both
+  tinted and untinted rows (a solid fill would vanish on the tinted zebra rows).
+- Zebra lists (expense rows): tint even rows `bg-surface-sunken`, leave odd rows
+  on the card surface; on hover both darken via `bg-border/60`. Surface scale is
+  `sunken` < `surface` < `raised`.
 
 ### Money rendering
 

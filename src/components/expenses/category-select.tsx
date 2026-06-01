@@ -14,7 +14,7 @@ import type { Category } from "@/repositories/categories";
 import { Button } from "@/components/ui/button";
 import { CategoryDot } from "@/components/ui/category-dot";
 import { TextInput } from "@/components/ui/text-input";
-import { ColorSwatches } from "@/components/color-swatches";
+import { ColorSwatches } from "@/components/expenses/color-swatches";
 import { cn } from "@/lib/utils";
 
 const NEW = "__new__";
@@ -92,8 +92,6 @@ export function CategorySelect({
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
-              // Enter inside the create field must not submit the outer
-              // expense form — create the category instead.
               if (e.key === "Enter") {
                 e.preventDefault();
                 onCreate();

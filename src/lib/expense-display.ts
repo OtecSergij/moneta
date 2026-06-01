@@ -1,8 +1,8 @@
-import { formatShortDate } from "@/lib/dates";
+import { formatRelativeDay } from "@/lib/dates";
 
 // Subtitle shared by expense rows (home list + summary bar details):
-// "17.05.2026" or "17.05.2026 · Магнит".
+// "Сегодня", "Вторник · Магнит", "1 июня · Магнит" (see formatRelativeDay).
 export function expenseSubtitle(spentAt: string, note: string | null): string {
-  const date = formatShortDate(spentAt);
+  const date = formatRelativeDay(spentAt);
   return note ? `${date} · ${note}` : date;
 }

@@ -7,6 +7,7 @@
 // reference instant; app code relies on the `new Date()` default.
 
 import {
+  differenceInCalendarDays,
   endOfMonth,
   format,
   startOfMonth,
@@ -88,7 +89,18 @@ export function formatDayHeading(iso: string, now: Date = new Date()): string {
   });
 }
 
-/** Compact numeric date: "17.05.2026". */
-export function formatShortDate(iso: string): string {
-  return format(parseISODate(iso), "dd.MM.yyyy");
+/**
+ * Relative day label, shared everywhere a single expense date is shown (history
+ * tabs + home list): "Сегодня" for today, the weekday name ("Вторник") for the
+ * previous 6 days, otherwise the day heading ("1 июня" / "1 июня 2025").
+ */
+export function formatRelativeDay(iso: string, now: Date = new Date()): string {
+  const d = parseISODate(iso);
+  const diff = differenceInCalendarDays(now, d);
+  if (diff === 0) return "Сегодня";
+  if (diff >= 1 && diff <= 6) {
+    const weekday = format(d, "EEEE", { locale: ru });
+    return weekday.charAt(0).toUpperCase() + weekday.slice(1);
+  }
+  return formatDayHeading(iso, now);
 }

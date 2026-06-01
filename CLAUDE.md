@@ -16,9 +16,10 @@
 Better Auth на бэке. Оба сервиса крутятся в Coolify на собственной VPS.
 
 **Auth в MVP:** Better Auth (cookie-sessions в Postgres), email + password
-+ «Sign in with Google». Email verification и password reset через Resend
-с первого дня. Multi-user: регистрация открыта, изоляция данных через
-repository pattern.
+
+- «Sign in with Google». Email verification и password reset через Resend
+  с первого дня. Multi-user: регистрация открыта, изоляция данных через
+  repository pattern.
 
 **Деплой:** Coolify на VPS, Next.js Application + Postgres. Никакого Vercel.
 
@@ -74,4 +75,5 @@ npm run test:run          # vitest one-shot (для CI / прекоммита)
 - Не добавляем фичи из «backlog» бизнес-спеки (доходы, бюджеты, графики
   динамики, мульти-валюты и пр.) — это вне MVP.
 - Не коммитим без явной команды от пользователя.
-– Не добавляем соавторство коммитам
+  – Не добавляем соавторство коммитам
+  – Не пишем комментариев в коде без реальной на то необходимости – только если без комментария реально непонятно, что тут происходит

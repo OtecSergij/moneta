@@ -14,7 +14,7 @@ import {
 import { createExpenseAction } from "@/lib/actions/expenses";
 import type { Category } from "@/repositories/categories";
 import { Button } from "@/components/ui/button";
-import { ExpenseFormFields } from "@/components/expense-form-fields";
+import { ExpenseFormFields } from "@/components/expenses/expense-form-fields";
 
 // Home screen quick-add form (business-spec §5.1.3). On success it revalidates
 // (server action) and refreshes the route so the summary + recent list update

@@ -20,7 +20,7 @@ import {
 import type { Category } from "@/repositories/categories";
 import type { Expense } from "@/repositories/expenses";
 import { Button } from "@/components/ui/button";
-import { ExpenseFormFields } from "@/components/expense-form-fields";
+import { ExpenseFormFields } from "@/components/expenses/expense-form-fields";
 
 function toDefaults(e: Expense): ExpenseFormValues {
   return {

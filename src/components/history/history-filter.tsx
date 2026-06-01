@@ -13,6 +13,17 @@ export function HistoryFilter({ from, to }: { from: string; to: string }) {
     router.push(`/history?from=${range.from}&to=${range.to}`);
   }
 
+  // Apply only when a field is committed (blur / Enter), never on every
+  // keystroke: navigating mid-edit changes the URL, which flips key={from-…}
+  // and remounts the input, stealing focus — so you can't finish typing a year.
+  // A native date input reports "" while the date is incomplete, so partial
+  // input is ignored here; the equality guard skips redundant navigations.
+  function commit(next: DateRange) {
+    if (!next.from || !next.to) return;
+    if (next.from === from && next.to === to) return;
+    apply(next);
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3">
@@ -23,8 +34,9 @@ export function HistoryFilter({ from, to }: { from: string; to: string }) {
             type="date"
             defaultValue={from}
             max={to}
-            onChange={(e) => {
-              if (e.target.value) apply({ from: e.target.value, to });
+            onBlur={(e) => commit({ from: e.target.value, to })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
             }}
           />
         </Field>
@@ -35,8 +47,9 @@ export function HistoryFilter({ from, to }: { from: string; to: string }) {
             type="date"
             defaultValue={to}
             min={from}
-            onChange={(e) => {
-              if (e.target.value) apply({ from, to: e.target.value });
+            onBlur={(e) => commit({ from, to: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
             }}
           />
         </Field>
@@ -48,7 +61,7 @@ export function HistoryFilter({ from, to }: { from: string; to: string }) {
             key={preset.key}
             type="button"
             onClick={() => apply(preset.range())}
-            className="inline-flex min-h-11 cursor-pointer items-center rounded-pill border border-border px-4 text-sm text-text transition-colors hover:bg-surface-raised"
+            className="inline-flex min-h-11 cursor-pointer items-center rounded-pill border border-border px-4 text-sm text-text transition-colors hover:bg-border/60"
           >
             {preset.label}
           </button>

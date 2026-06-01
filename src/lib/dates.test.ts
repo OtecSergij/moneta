@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   currentWeekFromMonday,
   formatDayHeading,
-  formatShortDate,
+  formatRelativeDay,
   isFutureISO,
   lastMonth,
   lastNDays,
@@ -75,10 +75,19 @@ describe("formatDayHeading", () => {
   });
 });
 
-describe("formatShortDate", () => {
-  it("renders dd.MM.yyyy", () => {
-    expect(formatShortDate("2026-05-17")).toBe("17.05.2026");
-    expect(formatShortDate("2026-01-03")).toBe("03.01.2026");
+describe("formatRelativeDay", () => {
+  it("returns 'Сегодня' for today", () => {
+    expect(formatRelativeDay("2026-05-17", NOW)).toBe("Сегодня");
+  });
+
+  it("returns the weekday name within the previous 6 days", () => {
+    expect(formatRelativeDay("2026-05-16", NOW)).toBe("Суббота"); // diff 1
+    expect(formatRelativeDay("2026-05-11", NOW)).toBe("Понедельник"); // diff 6
+  });
+
+  it("falls back to the date from 7 days back and older", () => {
+    expect(formatRelativeDay("2026-05-10", NOW)).toBe("10 мая"); // diff 7
+    expect(formatRelativeDay("2025-05-10", NOW)).toBe("10 мая 2025");
   });
 });
 

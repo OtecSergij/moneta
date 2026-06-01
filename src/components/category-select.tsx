@@ -17,15 +17,8 @@ import { TextInput } from "@/components/ui/text-input";
 import { ColorSwatches } from "@/components/color-swatches";
 import { cn } from "@/lib/utils";
 
-// Sentinel value for the "create new" row — switches into inline-create mode.
 const NEW = "__new__";
 
-// Category picker for the expense form. Existing categories are shown in an
-// accessible Radix Select (colour dot + name per option, keyboard nav,
-// typeahead); the last row opens an inline create mini-form (name + colour).
-// On an empty account it opens straight into create mode (business-spec DoD:
-// "форма траты предлагает создать первую категорию"). Self-contained label +
-// error so it drops into a form without the shared <Field> wrapper.
 export function CategorySelect({
   categories,
   value,

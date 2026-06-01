@@ -4,18 +4,9 @@ import { requireSession } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
 import { listExpenses, summary, type Expense } from "@/repositories/expenses";
 import { currentWeekFromMonday } from "@/lib/dates";
-import { Money } from "@/components/ui/money";
 import { QuickAddForm } from "@/components/quick-add-form";
-import { SummaryBars } from "@/components/summary-bars";
+import { SummaryCard } from "@/components/summary-card";
 import { ExpenseRow } from "@/components/expense-row";
-
-// "по 1 трате" / "по 8 тратам" — dative count, Russian numeral agreement.
-function spentCountLabel(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  const word = mod10 === 1 && mod100 !== 11 ? "трате" : "тратам";
-  return `по ${n} ${word}`;
-}
 
 export default async function HomePage() {
   const { user } = await requireSession();
@@ -30,7 +21,6 @@ export default async function HomePage() {
 
   const categoryById = new Map(categories.map((c) => [c.id, c]));
 
-  // Group the week's expenses per category for the expandable bar details.
   const expensesByCategory: Record<string, Expense[]> = {};
   for (const e of weekExpenses) {
     (expensesByCategory[e.categoryId] ??= []).push(e);
@@ -49,27 +39,14 @@ export default async function HomePage() {
         </Link>
       </header>
 
-      <section className="mb-6 rounded-lg border border-border bg-surface p-6">
-        <h2 className="text-sm text-text-muted">На этой неделе</h2>
-        <p className="mt-1 text-3xl font-semibold text-text">
-          <Money minor={weekSummary.totalMinor} />
-        </p>
-        <p className="mt-1 text-sm text-text-muted">
-          {weekExpenses.length > 0
-            ? spentCountLabel(weekExpenses.length)
-            : "Пока нет трат"}
-        </p>
-
-        {weekSummary.byCategory.length > 0 ? (
-          <div className="mt-4">
-            <SummaryBars
-              rows={weekSummary.byCategory}
-              total={weekSummary.totalMinor}
-              expensesByCategory={expensesByCategory}
-            />
-          </div>
-        ) : null}
-      </section>
+      <SummaryCard
+        className="mb-6"
+        title="На этой неделе"
+        totalMinor={weekSummary.totalMinor}
+        count={weekExpenses.length}
+        byCategory={weekSummary.byCategory}
+        expensesByCategory={expensesByCategory}
+      />
 
       <section className="mb-6 rounded-lg border border-border bg-surface p-4 sm:p-6">
         <h2 className="mb-4 text-lg font-semibold text-text">Добавить трату</h2>

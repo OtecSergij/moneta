@@ -1,13 +1,12 @@
 import { config as loadEnv } from "dotenv";
 import { defineConfig } from "drizzle-kit";
 
-// Match Next.js .env precedence: .env.local overrides .env.
 loadEnv({ path: ".env.local" });
-loadEnv(); // fallback to .env
+loadEnv();
 
 if (!process.env.DATABASE_URL) {
   throw new Error(
-    "DATABASE_URL is required for drizzle-kit (set in .env.local or shell)",
+    "DATABASE_URL is required for drizzle-kit (set in .env.local or shell)"
   );
 }
 

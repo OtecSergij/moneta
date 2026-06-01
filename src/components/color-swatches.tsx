@@ -9,10 +9,6 @@ import {
 } from "@/lib/categories";
 import { cn } from "@/lib/utils";
 
-// Colour picker for the 15 preset category colours (MASTER "Category colours").
-// Radix RadioGroup gives the radiogroup role, roving tabindex and arrow-key
-// navigation for free (one Tab-stop, not 15); each swatch is labelled with a
-// human colour name for screen readers.
 export function ColorSwatches({
   value,
   onChange,

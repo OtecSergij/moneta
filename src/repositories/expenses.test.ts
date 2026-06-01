@@ -4,6 +4,7 @@ import {
   createCategory,
 } from "@/repositories/categories";
 import {
+  ExpenseInput,
   createExpense,
   deleteExpense,
   listExpenses,
@@ -145,5 +146,37 @@ describe("expenses repository — isolation", () => {
 
     const bSummary = await summary(b.id, { from: today, to: today });
     expect(bSummary.totalMinor).toBe(99999);
+  });
+
+  it("updateExpense clears the note when set to null", async () => {
+    const u = await mkUser();
+    const cat = await createCategory(u.id, {
+      name: "Food",
+      color: CATEGORY_COLORS[0],
+    });
+    const exp = await createExpense(u.id, {
+      categoryId: cat.id,
+      amountMinor: 100,
+      currency: "RUB",
+      note: "обед",
+      spentAt: today,
+    });
+    expect(exp!.note).toBe("обед");
+
+    const cleared = await updateExpense(u.id, exp!.id, { note: null });
+    expect(cleared!.note).toBeNull();
+  });
+});
+
+describe("ExpenseInput.note", () => {
+  it("maps an empty or blank note to null so an update can clear it", () => {
+    const base = {
+      categoryId: crypto.randomUUID(),
+      amountMinor: 100,
+      spentAt: today,
+    };
+    expect(ExpenseInput.parse({ ...base, note: "" }).note).toBeNull();
+    expect(ExpenseInput.parse({ ...base, note: "   " }).note).toBeNull();
+    expect(ExpenseInput.parse({ ...base, note: " обед " }).note).toBe("обед");
   });
 });

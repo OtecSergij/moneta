@@ -1,5 +1,3 @@
-// Centering shell for all auth pages. Route groups don't affect URLs, so the
-// children still live at /login, /sign-up, etc. max-w-md per MASTER layout.
 export default function AuthLayout({
   children,
 }: {

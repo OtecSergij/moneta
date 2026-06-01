@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary";
+  variant?: "primary" | "secondary" | "danger";
   loading?: boolean;
 };
 
@@ -30,6 +30,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
           "bg-accent text-white hover:bg-accent-hover focus-visible:ring-accent/40",
         variant === "secondary" &&
           "border border-border bg-transparent text-text hover:bg-surface focus-visible:ring-accent/30",
+        variant === "danger" &&
+          "bg-danger text-white hover:bg-danger-hover focus-visible:ring-danger/40",
         className,
       )}
       {...props}

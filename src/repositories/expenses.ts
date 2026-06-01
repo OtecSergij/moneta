@@ -2,6 +2,7 @@ import { and, between, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { categories, currencyEnum, expenses } from "@/db/schema";
+import { EXPENSE_NOTE_MAX } from "@/lib/expense-constants";
 
 // Shared by the form (react-hook-form + zod) and the repo.
 //
@@ -16,12 +17,14 @@ export const ExpenseInput = z.object({
   categoryId: z.uuid(),
   amountMinor: z.int().positive(),
   currency: z.enum(currencyEnum.enumValues).default("RUB"),
-  // .optional() outermost → inferred key is optional (`note?`), not a
-  // required key valued `string | undefined`. See categories.ts.
+  // Empty/blank → null (NOT undefined) so an UPDATE actually clears the column:
+  // Drizzle's update-set drops undefined keys (= "don't touch") but keeps null
+  // (= SET note = NULL). .optional() keeps the key optional for direct callers
+  // that omit note entirely (e.g. repository tests).
   note: z
     .string()
-    .max(200)
-    .transform((v) => (v.trim().length > 0 ? v : undefined))
+    .max(EXPENSE_NOTE_MAX)
+    .transform((v) => (v.trim().length > 0 ? v.trim() : null))
     .optional(),
   spentAt: z.iso.date(),
 });

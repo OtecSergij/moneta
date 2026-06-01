@@ -27,14 +27,11 @@ export function ForgotPasswordForm() {
   });
 
   async function onSubmit(values: ForgotPasswordValues) {
-    // redirectTo is where BA sends the user from the email link, with ?token=
-    // appended after server-side validation.
     await authClient.requestPasswordReset({
       email: values.email,
       redirectTo: "/reset-password",
     });
-    // Always show the same confirmation — never reveal whether the email is
-    // registered. BA enforces this server-side too; the UI never branches.
+
     setSent(true);
   }
 

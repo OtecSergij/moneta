@@ -25,8 +25,6 @@ export function SignUpForm({ hasGoogle }: { hasGoogle: boolean }) {
   } = useForm<SignUpValues>({ resolver: zodResolver(signUpSchema) });
 
   async function onSubmit(values: SignUpValues) {
-    // BA requires a non-empty name; fall back to the email local-part. zod
-    // already trimmed name, so no .trim() here.
     const name = values.name || values.email.split("@")[0];
     const { error } = await authClient.signUp.email({
       email: values.email,
@@ -34,15 +32,12 @@ export function SignUpForm({ hasGoogle }: { hasGoogle: boolean }) {
       name,
     });
     if (error) {
-      // Generic — don't confirm whether the email is already registered.
       toast.error("Не удалось создать аккаунт", {
         description:
           "Если у вас уже есть аккаунт, попробуйте войти или восстановить пароль.",
       });
       return;
     }
-    // requireEmailVerification + autoSignIn:false → no session yet; switch to
-    // the "check your inbox" state.
     setSubmittedEmail(values.email);
   }
 
@@ -50,8 +45,8 @@ export function SignUpForm({ hasGoogle }: { hasGoogle: boolean }) {
     return (
       <StatusCard icon={MailCheck} title="Проверьте почту">
         Мы отправили ссылку подтверждения на{" "}
-        <span className="font-medium text-text">{submittedEmail}</span>. Откройте
-        письмо и нажмите на ссылку, чтобы войти.
+        <span className="font-medium text-text">{submittedEmail}</span>.
+        Откройте письмо и нажмите на ссылку, чтобы войти.
         <p className="mt-6">
           <Link href="/login" className="text-accent hover:text-accent-hover">
             Вернуться ко входу

@@ -45,9 +45,10 @@ export function HistoryList({
                 <ExpenseListRow
                   key={expense.id}
                   expense={expense}
-                  category={category}
+                  color={category.color}
+                  title={expense.note}
+                  subtitle={category.name}
                   index={i}
-                  subtitle={expense.note}
                   onClick={openEditor}
                 />
               );

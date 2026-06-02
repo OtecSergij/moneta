@@ -21,8 +21,10 @@ import { ExpenseFormFields } from "@/components/expenses/expense-form-fields";
 // without a manual reload.
 export function QuickAddForm({
   initialCategories,
+  initialCategoryId,
 }: {
   initialCategories: Category[];
+  initialCategoryId: string;
 }) {
   const router = useRouter();
   // Seeded from props so onCreated can append + select a new category instantly
@@ -33,7 +35,12 @@ export function QuickAddForm({
 
   const methods = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
-    defaultValues: { amount: "", categoryId: "", note: "", spentAt: todayISO() },
+    defaultValues: {
+      amount: "",
+      categoryId: initialCategoryId,
+      note: "",
+      spentAt: todayISO(),
+    },
   });
 
   async function onSubmit(values: ExpenseFormValues) {
@@ -43,7 +50,14 @@ export function QuickAddForm({
       return;
     }
     toast.success("Трата добавлена");
-    methods.reset({ amount: "", categoryId: "", note: "", spentAt: todayISO() });
+    // Keep the just-used category selected so adding several similar expenses in
+    // a row doesn't require re-picking it (business-spec §5.1).
+    methods.reset({
+      amount: "",
+      categoryId: values.categoryId,
+      note: "",
+      spentAt: todayISO(),
+    });
     router.refresh();
   }
 

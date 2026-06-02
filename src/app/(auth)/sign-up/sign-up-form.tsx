@@ -115,7 +115,7 @@ export function SignUpForm({ hasGoogle }: { hasGoogle: boolean }) {
 
       <GoogleSignIn
         hasGoogle={hasGoogle}
-        label="Зарегистрироваться через Google"
+        label="Продолжить с Google"
         disabled={isSubmitting}
         onBusyChange={setGoogleBusy}
       />

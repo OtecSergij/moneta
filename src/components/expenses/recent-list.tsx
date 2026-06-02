@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import type { Category } from "@/repositories/categories";
 import type { Expense } from "@/repositories/expenses";
-import { expenseSubtitle } from "@/lib/expense-display";
+import { formatRelativeDay } from "@/lib/dates";
 import { ExpenseListRow } from "@/components/expenses/expense-list-row";
 import { useExpenseEditor } from "@/components/expenses/use-expense-editor";
 
@@ -33,9 +33,10 @@ export function RecentList({
             <ExpenseListRow
               key={e.id}
               expense={e}
-              category={category}
+              color={category.color}
+              title={e.note}
+              subtitle={`${formatRelativeDay(e.spentAt)} · ${category.name}`}
               index={i}
-              subtitle={expenseSubtitle(e.spentAt, e.note)}
               onClick={openEditor}
             />
           );

@@ -1,21 +1,23 @@
-import type { Category } from "@/repositories/categories";
 import type { Expense } from "@/repositories/expenses";
 import { ExpenseRowContent } from "@/components/expenses/expense-row-content";
 import { cn } from "@/lib/utils";
 
 // One clickable, zebra-striped expense row — shared by the home "Последние" list
-// and the History day list. `index` drives the zebra tint (even rows tinted);
-// `subtitle` differs per list (date·note on home, just the note under a day
-// heading in History). Clicking calls `onClick(expense)` (→ edit/delete dialog).
+// and the History day list. `index` drives the zebra tint (even rows tinted).
+// Both lead with the description (business-spec §5.2): the subtitle is
+// "дата · категория" on home (flat list) and just the category under a day
+// heading in History. Clicking calls `onClick(expense)` (→ edit/delete dialog).
 export function ExpenseListRow({
   expense,
-  category,
+  color,
+  title,
   subtitle,
   index,
   onClick,
 }: {
   expense: Expense;
-  category: Category;
+  color: string;
+  title: string;
   subtitle?: string | null;
   index: number;
   onClick: (expense: Expense) => void;
@@ -31,10 +33,10 @@ export function ExpenseListRow({
         )}
       >
         <ExpenseRowContent
-          categoryName={category.name}
-          categoryColor={category.color}
-          amountMinor={expense.amountMinor}
+          color={color}
+          title={title}
           subtitle={subtitle}
+          amountMinor={expense.amountMinor}
         />
       </button>
     </li>

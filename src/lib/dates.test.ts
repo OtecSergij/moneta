@@ -4,11 +4,9 @@ import {
   formatDayHeading,
   formatRelativeDay,
   isFutureISO,
-  lastMonth,
   lastNDays,
   parseISODate,
   sinceLastSalary,
-  thisMonth,
   toISODate,
   todayISO,
 } from "@/lib/dates";
@@ -39,21 +37,6 @@ describe("range helpers", () => {
     expect(lastNDays(7, NOW)).toEqual({ from: "2026-05-11", to: "2026-05-17" });
     expect(lastNDays(30, NOW)).toEqual({ from: "2026-04-18", to: "2026-05-17" });
     expect(lastNDays(1, NOW)).toEqual({ from: "2026-05-17", to: "2026-05-17" });
-  });
-
-  it("thisMonth spans the 1st through today", () => {
-    expect(thisMonth(NOW)).toEqual({ from: "2026-05-01", to: "2026-05-17" });
-  });
-
-  it("lastMonth spans the whole previous month", () => {
-    expect(lastMonth(NOW)).toEqual({ from: "2026-04-01", to: "2026-04-30" });
-  });
-
-  it("lastMonth handles January -> previous December", () => {
-    expect(lastMonth(new Date(2026, 0, 10))).toEqual({
-      from: "2025-12-01",
-      to: "2025-12-31",
-    });
   });
 });
 

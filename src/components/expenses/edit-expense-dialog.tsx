@@ -26,7 +26,7 @@ function toDefaults(e: Expense): ExpenseFormValues {
   return {
     amount: minorToInput(e.amountMinor),
     categoryId: e.categoryId,
-    note: e.note ?? "",
+    note: e.note,
     spentAt: e.spentAt,
   };
 }

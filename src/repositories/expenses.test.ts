@@ -7,6 +7,7 @@ import {
   ExpenseInput,
   createExpense,
   deleteExpense,
+  lastUsedCategoryId,
   listExpenses,
   summary,
   updateExpense,
@@ -32,12 +33,14 @@ describe("expenses repository — isolation", () => {
       categoryId: catA.id,
       amountMinor: 10000,
       currency: "RUB",
+      note: "обед",
       spentAt: today,
     });
     await createExpense(b.id, {
       categoryId: catB.id,
       amountMinor: 20000,
       currency: "RUB",
+      note: "обед",
       spentAt: today,
     });
 
@@ -58,6 +61,7 @@ describe("expenses repository — isolation", () => {
       categoryId: catA.id,
       amountMinor: 5000,
       currency: "RUB",
+      note: "обед",
       spentAt: today,
     });
     expect(exp).not.toBeNull();
@@ -80,6 +84,7 @@ describe("expenses repository — isolation", () => {
       categoryId: catA.id,
       amountMinor: 7000,
       currency: "RUB",
+      note: "обед",
       spentAt: today,
     });
 
@@ -100,6 +105,7 @@ describe("expenses repository — isolation", () => {
       categoryId: catA.id,
       amountMinor: 100,
       currency: "RUB",
+      note: "обед",
       spentAt: today,
     });
     expect(result).toBeNull();
@@ -123,18 +129,21 @@ describe("expenses repository — isolation", () => {
       categoryId: catA.id,
       amountMinor: 30000,
       currency: "RUB",
+      note: "обед",
       spentAt: today,
     });
     await createExpense(a.id, {
       categoryId: catA.id,
       amountMinor: 12000,
       currency: "RUB",
+      note: "ужин",
       spentAt: today,
     });
     await createExpense(b.id, {
       categoryId: catB.id,
       amountMinor: 99999,
       currency: "RUB",
+      note: "обед",
       spentAt: today,
     });
 
@@ -148,7 +157,7 @@ describe("expenses repository — isolation", () => {
     expect(bSummary.totalMinor).toBe(99999);
   });
 
-  it("updateExpense clears the note when set to null", async () => {
+  it("updateExpense changes the note", async () => {
     const u = await mkUser();
     const cat = await createCategory(u.id, {
       name: "Food",
@@ -163,20 +172,71 @@ describe("expenses repository — isolation", () => {
     });
     expect(exp!.note).toBe("обед");
 
-    const cleared = await updateExpense(u.id, exp!.id, { note: null });
-    expect(cleared!.note).toBeNull();
+    const updated = await updateExpense(u.id, exp!.id, { note: "ужин" });
+    expect(updated!.note).toBe("ужин");
+  });
+});
+
+describe("lastUsedCategoryId", () => {
+  it("returns null when the user has no expenses", async () => {
+    const u = await mkUser();
+    expect(await lastUsedCategoryId(u.id)).toBeNull();
+  });
+
+  it("returns the most recently created expense's category, ignoring other users", async () => {
+    const u = await mkUser();
+    const other = await mkUser();
+    const food = await createCategory(u.id, {
+      name: "Food",
+      color: CATEGORY_COLORS[0],
+    });
+    const taxi = await createCategory(u.id, {
+      name: "Taxi",
+      color: CATEGORY_COLORS[1],
+    });
+    const otherCat = await createCategory(other.id, {
+      name: "Other",
+      color: CATEGORY_COLORS[2],
+    });
+
+    await createExpense(u.id, {
+      categoryId: food.id,
+      amountMinor: 100,
+      currency: "RUB",
+      note: "продукты",
+      spentAt: today,
+    });
+    // Created later but spent earlier — "last used" follows creation order.
+    await createExpense(u.id, {
+      categoryId: taxi.id,
+      amountMinor: 200,
+      currency: "RUB",
+      note: "такси",
+      spentAt: "2020-01-01",
+    });
+    // Another user's later expense must not leak into u's result.
+    await createExpense(other.id, {
+      categoryId: otherCat.id,
+      amountMinor: 300,
+      currency: "RUB",
+      note: "прочее",
+      spentAt: today,
+    });
+
+    expect(await lastUsedCategoryId(u.id)).toBe(taxi.id);
   });
 });
 
 describe("ExpenseInput.note", () => {
-  it("maps an empty or blank note to null so an update can clear it", () => {
+  it("requires a non-empty description and trims it", () => {
     const base = {
       categoryId: crypto.randomUUID(),
       amountMinor: 100,
       spentAt: today,
     };
-    expect(ExpenseInput.parse({ ...base, note: "" }).note).toBeNull();
-    expect(ExpenseInput.parse({ ...base, note: "   " }).note).toBeNull();
+    expect(ExpenseInput.safeParse(base).success).toBe(false);
+    expect(ExpenseInput.safeParse({ ...base, note: "" }).success).toBe(false);
+    expect(ExpenseInput.safeParse({ ...base, note: "   " }).success).toBe(false);
     expect(ExpenseInput.parse({ ...base, note: " обед " }).note).toBe("обед");
   });
 });

@@ -96,7 +96,7 @@ export function LoginForm({ hasGoogle }: { hasGoogle: boolean }) {
 
       <GoogleSignIn
         hasGoogle={hasGoogle}
-        label="Войти через Google"
+        label="Продолжить с Google"
         disabled={isSubmitting}
         onBusyChange={setGoogleBusy}
       />

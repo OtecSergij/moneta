@@ -4,9 +4,10 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import type { Category } from "@/repositories/categories";
 import type { Expense, SummaryRow } from "@/repositories/expenses";
-import { expenseSubtitle } from "@/lib/expense-display";
+import { formatRelativeDay } from "@/lib/dates";
 import { Money } from "@/components/ui/money";
 import { CategoryDot } from "@/components/ui/category-dot";
+import { ExpenseRowContent } from "@/components/expenses/expense-row-content";
 import { useExpenseEditor } from "@/components/expenses/use-expense-editor";
 import { cn } from "@/lib/utils";
 
@@ -103,14 +104,15 @@ function SummaryBarRow({
                   type="button"
                   onClick={() => onSelect(e)}
                   className={cn(
-                    "flex min-h-11 w-full cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm text-text-muted transition-colors hover:bg-border/60",
+                    "flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-border/60",
                     i % 2 === 1 && "bg-surface-sunken",
                   )}
                 >
-                  <span className="truncate">
-                    {expenseSubtitle(e.spentAt, e.note)}
-                  </span>
-                  <Money minor={e.amountMinor} />
+                  <ExpenseRowContent
+                    title={e.note}
+                    subtitle={formatRelativeDay(e.spentAt)}
+                    amountMinor={e.amountMinor}
+                  />
                 </button>
               </li>
             ))

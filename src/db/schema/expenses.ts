@@ -42,7 +42,8 @@ export const expenses = pgTable(
       .references(() => categories.id, { onDelete: "restrict" }),
     amountMinor: integer("amount_minor").notNull(),
     currency: currencyEnum("currency").notNull().default("RUB"),
-    note: text("note"),
+    // Required: every expense carries a short description (business-spec §4.2).
+    note: text("note").notNull(),
     // App-level default to "today in user's timezone"; no DB default because
     // the timezone calculation lives in the app. Always set on insert.
     // Future-date validation is in the repository (zod).
@@ -57,7 +58,7 @@ export const expenses = pgTable(
     check("expenses_amount_positive", sql`${t.amountMinor} > 0`),
     check(
       "expenses_note_len",
-      sql`${t.note} is null or char_length(${t.note}) <= 200`,
+      sql`char_length(${t.note}) between 1 and 200`,
     ),
   ],
 );

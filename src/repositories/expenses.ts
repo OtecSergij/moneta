@@ -17,15 +17,9 @@ export const ExpenseInput = z.object({
   categoryId: z.uuid(),
   amountMinor: z.int().positive(),
   currency: z.enum(currencyEnum.enumValues).default("RUB"),
-  // Empty/blank → null (NOT undefined) so an UPDATE actually clears the column:
-  // Drizzle's update-set drops undefined keys (= "don't touch") but keeps null
-  // (= SET note = NULL). .optional() keeps the key optional for direct callers
-  // that omit note entirely (e.g. repository tests).
-  note: z
-    .string()
-    .max(EXPENSE_NOTE_MAX)
-    .transform((v) => (v.trim().length > 0 ? v.trim() : null))
-    .optional(),
+  // Required: trimmed, non-empty, capped — mirrors the NOT NULL `note` column
+  // and the form's "Добавьте описание" rule (business-spec §4.2).
+  note: z.string().trim().min(1).max(EXPENSE_NOTE_MAX),
   spentAt: z.iso.date(),
 });
 export type ExpenseInput = z.infer<typeof ExpenseInput>;
@@ -65,6 +59,22 @@ export async function listExpenses(
     .orderBy(desc(expenses.spentAt), desc(expenses.createdAt));
 
   return opts.limit ? await q.limit(opts.limit) : await q;
+}
+
+// Category of the user's most recently created expense — pre-selects the
+// quick-add form so adding several similar expenses doesn't require re-picking
+// the category (business-spec §5.1). Ordered by creation, not spending date, so
+// a backdated entry doesn't change "last used". Null when there are no expenses.
+export async function lastUsedCategoryId(
+  userId: string,
+): Promise<string | null> {
+  const rows = await db
+    .select({ categoryId: expenses.categoryId })
+    .from(expenses)
+    .where(eq(expenses.userId, userId))
+    .orderBy(desc(expenses.createdAt))
+    .limit(1);
+  return rows[0]?.categoryId ?? null;
 }
 
 export async function getExpense(

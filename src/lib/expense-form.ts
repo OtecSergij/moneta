@@ -16,8 +16,9 @@ export const expenseFormSchema = z.object({
   categoryId: z.uuid("Выберите категорию"),
   note: z
     .string()
-    .max(EXPENSE_NOTE_MAX, `Не больше ${EXPENSE_NOTE_MAX} символов`)
-    .optional(),
+    .trim()
+    .min(1, "Добавьте описание")
+    .max(EXPENSE_NOTE_MAX, `Не больше ${EXPENSE_NOTE_MAX} символов`),
   spentAt: z
     .iso
     .date("Укажите дату")
@@ -32,9 +33,7 @@ export function toExpenseInput(values: ExpenseFormValues): ExpenseInput {
     categoryId: values.categoryId,
     amountMinor: parseMoney(values.amount)!,
     currency: "RUB",
-    // Send "" (not undefined) when cleared so the server schema maps it to null
-    // and the UPDATE actually clears the note (see ExpenseInput.note).
-    note: values.note ?? "",
+    note: values.note,
     spentAt: values.spentAt,
   };
 }

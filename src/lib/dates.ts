@@ -8,12 +8,9 @@
 
 import {
   differenceInCalendarDays,
-  endOfMonth,
   format,
-  startOfMonth,
   startOfWeek,
   subDays,
-  subMonths,
 } from "date-fns";
 import { ru } from "date-fns/locale";
 
@@ -41,17 +38,6 @@ export function todayISO(now: Date = new Date()): string {
 /** Last N calendar days ending today, inclusive. `lastNDays(7)` spans 7 dates. */
 export function lastNDays(n: number, now: Date = new Date()): DateRange {
   return { from: toISODate(subDays(now, n - 1)), to: toISODate(now) };
-}
-
-/** 1st of the current month through today. */
-export function thisMonth(now: Date = new Date()): DateRange {
-  return { from: toISODate(startOfMonth(now)), to: toISODate(now) };
-}
-
-/** 1st through last day of the previous month. */
-export function lastMonth(now: Date = new Date()): DateRange {
-  const prev = subMonths(now, 1);
-  return { from: toISODate(startOfMonth(prev)), to: toISODate(endOfMonth(prev)) };
 }
 
 /**
@@ -117,9 +103,6 @@ export function sinceLastSalary(
 /** Quick range presets for the history screen (business-spec §5.2). */
 export const RANGE_PRESETS = [
   { key: "7d", label: "7 дней", range: (now?: Date) => lastNDays(7, now) },
-  { key: "30d", label: "30 дней", range: (now?: Date) => lastNDays(30, now) },
-  { key: "thisMonth", label: "Этот месяц", range: (now?: Date) => thisMonth(now) },
-  { key: "lastMonth", label: "Прошлый месяц", range: (now?: Date) => lastMonth(now) },
 ] as const;
 
 export type RangePresetKey = (typeof RANGE_PRESETS)[number]["key"];

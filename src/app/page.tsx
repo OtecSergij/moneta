@@ -2,7 +2,11 @@ import Link from "next/link";
 import { ChevronRight, Settings } from "lucide-react";
 import { requireSession } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
-import { listExpenses, summary } from "@/repositories/expenses";
+import {
+  lastUsedCategoryId,
+  listExpenses,
+  summary,
+} from "@/repositories/expenses";
 import { currentWeekFromMonday } from "@/lib/dates";
 import { Money } from "@/components/ui/money";
 import { QuickAddForm } from "@/components/expenses/quick-add-form";
@@ -12,10 +16,11 @@ export default async function HomePage() {
   const { user } = await requireSession();
   const week = currentWeekFromMonday();
 
-  const [categories, weekSummary, recent] = await Promise.all([
+  const [categories, weekSummary, recent, lastCategoryId] = await Promise.all([
     listCategories(user.id),
     summary(user.id, week),
     listExpenses(user.id, { limit: 10 }),
+    lastUsedCategoryId(user.id),
   ]);
 
   return (
@@ -51,7 +56,10 @@ export default async function HomePage() {
 
       <section className="mb-6 rounded-lg border border-border bg-surface p-4 sm:p-6">
         <h2 className="mb-4 text-lg font-semibold text-text">Добавить трату</h2>
-        <QuickAddForm initialCategories={categories} />
+        <QuickAddForm
+          initialCategories={categories}
+          initialCategoryId={lastCategoryId ?? ""}
+        />
       </section>
 
       <section className="rounded-lg border border-border bg-surface p-4 sm:p-6">

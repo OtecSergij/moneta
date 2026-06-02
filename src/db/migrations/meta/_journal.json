@@ -22,6 +22,13 @@
       "when": 1780382448007,
       "tag": "0002_secret_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780390554336,
+      "tag": "0003_handy_darwin",
+      "breakpoints": true
     }
   ]
 }

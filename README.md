@@ -31,8 +31,10 @@ react-hook-form + zod · lucide-react · sonner · date-fns.
 | `npm run build`     | Production-сборка                   |
 | `npm run start`     | Запуск production-сборки локально   |
 | `npm run lint`      | ESLint                              |
-| `npm test`          | Vitest в watch-режиме               |
-| `npm run test:run`  | Vitest one-shot (для CI)            |
+| `npm test`          | Vitest watch (оба проекта)          |
+| `npm run test:run`  | Все тесты one-shot (для CI)         |
+| `npm run test:unit` | Unit — быстро, без БД               |
+| `npm run test:integration` | Integration — Postgres через Testcontainers |
 
 ## Лицензия
 

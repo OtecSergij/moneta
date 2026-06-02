@@ -1,38 +1,39 @@
+import {
+  PostgreSqlContainer,
+  type StartedPostgreSqlContainer,
+} from "@testcontainers/postgresql";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 
-// Vitest globalSetup: bring the `moneta_test` database to current schema
-// before any test file loads. Runs once per `vitest` invocation.
-//
-// Has its own DB connection (admin → postgres db; then test → moneta_test);
-// does NOT import `@/db` to keep env wiring simple.
-//
-// See docs/todo.md "Testcontainers" for the planned upgrade.
-
-const ADMIN_URL = "postgresql://postgres:postgres@localhost:5432/postgres";
-const TEST_URL =
-  "postgresql://postgres:postgres@localhost:5432/moneta_test";
+let container: StartedPostgreSqlContainer | undefined;
 
 export default async function setup() {
-  // 1. Ensure the test DB exists.
-  const admin = postgres(ADMIN_URL, { max: 1 });
+  // Ryuk (the reaper sidecar) won't start on some local Docker/Podman setups
+  // and stalls every launch; default it off — cleanup is explicit below.
+  // Set TESTCONTAINERS_RYUK_DISABLED=false to re-enable it where it works.
+  process.env.TESTCONTAINERS_RYUK_DISABLED ??= "true";
+
+  container = await new PostgreSqlContainer("postgres:17")
+    .withDatabase("moneta_test")
+    .withUsername("postgres")
+    .withPassword("postgres")
+    .start();
+
   try {
-    const rows =
-      await admin`SELECT 1 FROM pg_database WHERE datname = 'moneta_test'`;
-    if (rows.length === 0) {
-      await admin`CREATE DATABASE moneta_test`;
+    process.env.DATABASE_URL = container.getConnectionUri();
+    const sql = postgres(process.env.DATABASE_URL, { max: 1 });
+    try {
+      await migrate(drizzle(sql), { migrationsFolder: "./src/db/migrations" });
+    } finally {
+      await sql.end();
     }
-  } finally {
-    await admin.end();
+  } catch (err) {
+    await container.stop();
+    throw err;
   }
 
-  // 2. Apply migrations.
-  const sql = postgres(TEST_URL, { max: 1 });
-  try {
-    const db = drizzle(sql);
-    await migrate(db, { migrationsFolder: "./src/db/migrations" });
-  } finally {
-    await sql.end();
-  }
+  return async () => {
+    await container?.stop();
+  };
 }

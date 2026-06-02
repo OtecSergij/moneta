@@ -9,12 +9,12 @@
     "lint": "eslint",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:up": "docker compose up -d postgres",
-    "db:down": "docker compose down",
     "auth:generate": "npx @better-auth/cli@latest generate --config src/lib/auth.ts --output src/db/schema/auth.generated.ts"
   },
   "dependencies": {
@@ -37,6 +37,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@testcontainers/postgresql": "^12.0.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

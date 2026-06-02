@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { db } from "@/db";
-import { categories, user } from "@/db/schema";
-import { CATEGORY_COLORS } from "@/repositories/categories";
+import { user } from "@/db/schema";
 
 export async function mkUser(
   overrides: Partial<typeof user.$inferInsert> = {},
@@ -13,22 +12,6 @@ export async function mkUser(
       email,
       name: "Test User",
       emailVerified: true,
-      ...overrides,
-    })
-    .returning();
-  return row;
-}
-
-export async function mkCategory(
-  userId: string,
-  overrides: Partial<typeof categories.$inferInsert> = {},
-): Promise<typeof categories.$inferSelect> {
-  const [row] = await db
-    .insert(categories)
-    .values({
-      userId,
-      name: `Cat-${randomUUID().slice(0, 8)}`,
-      color: CATEGORY_COLORS[0],
       ...overrides,
     })
     .returning();

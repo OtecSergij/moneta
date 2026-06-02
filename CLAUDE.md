@@ -58,17 +58,20 @@ Better Auth на бэке. Оба сервиса крутятся в Coolify н�
 npm run dev               # http://localhost:3000
 npm run build             # prod build
 npm run lint              # ESLint
-npm test                  # vitest watch
-npm run test:run          # vitest one-shot (для CI / прекоммита)
+npm test                  # vitest watch (оба проекта)
+npm run test:run          # все тесты one-shot (для CI / прекоммита)
+npm run test:unit         # только unit — быстро, без БД
+npm run test:integration  # integration — Testcontainers поднимает Postgres
 ```
 
 ## Перед коммитом
 
 1. `npm run build` — TS должен пройти без ошибок.
 2. `npm run lint` — без варнингов.
-3. `npm run test:run` — тесты зелёные. Требует запущенный Postgres
-   (`npm run db:up`) — интеграционные тесты репозиториев бегут против
-   `moneta_test` БД. Это починят Testcontainers (см. `docs/todo.md`).
+3. `npm run test:unit` — unit-тесты зелёные. Быстрые, без БД.
+4. `npm run test:integration` — интеграционные зелёные. Поднимают Postgres
+   через Testcontainers (нужен запущенный контейнер-рантайм, ~3 сек на старт).
+   `npm run test:run` гонит оба проекта разом.
 
 ## Чего НЕ делаем
 

@@ -7,6 +7,7 @@ import {
   lastMonth,
   lastNDays,
   parseISODate,
+  sinceLastSalary,
   thisMonth,
   toISODate,
   todayISO,
@@ -111,6 +112,64 @@ describe("currentWeekFromMonday", () => {
     expect(currentWeekFromMonday(new Date(2026, 4, 11))).toEqual({
       from: "2026-05-11",
       to: "2026-05-11",
+    });
+  });
+});
+
+describe("sinceLastSalary", () => {
+  it("falls back to the previous month when this month's days are still ahead", () => {
+    // Salary on the 3rd and 17th; today 2 June → both June days are future, so
+    // the last salary was 17 May (the headline business example).
+    expect(sinceLastSalary([3, 17], new Date(2026, 5, 2))).toEqual({
+      from: "2026-05-17",
+      to: "2026-06-02",
+    });
+  });
+
+  it("uses the latest day already passed this month", () => {
+    // Between the 3rd and 17th → last salary was the 3rd.
+    expect(sinceLastSalary([3, 17], new Date(2026, 5, 10))).toEqual({
+      from: "2026-06-03",
+      to: "2026-06-10",
+    });
+    // On/after the 17th → the 17th.
+    expect(sinceLastSalary([3, 17], new Date(2026, 5, 20))).toEqual({
+      from: "2026-06-17",
+      to: "2026-06-20",
+    });
+  });
+
+  it("includes the salary day itself (inclusive start)", () => {
+    expect(sinceLastSalary([3, 17], new Date(2026, 5, 17))).toEqual({
+      from: "2026-06-17",
+      to: "2026-06-17",
+    });
+  });
+
+  it("does not depend on input order", () => {
+    expect(sinceLastSalary([17, 3], new Date(2026, 5, 10)).from).toBe(
+      "2026-06-03",
+    );
+  });
+
+  it("clamps a day past the month length to its last day", () => {
+    // 31st, today 30 June (30-day month) → clamps to 30 June.
+    expect(sinceLastSalary([31], new Date(2026, 5, 30))).toEqual({
+      from: "2026-06-30",
+      to: "2026-06-30",
+    });
+    // 31st, today mid-June → June's 31st hasn't happened; fall back to 31 May.
+    expect(sinceLastSalary([31], new Date(2026, 5, 15)).from).toBe(
+      "2026-05-31",
+    );
+    // 30th, today 1 March → fall back to 28 Feb (2026 is not a leap year).
+    expect(sinceLastSalary([30], new Date(2026, 2, 1)).from).toBe("2026-02-28");
+  });
+
+  it("crosses the year boundary into the previous December", () => {
+    expect(sinceLastSalary([17], new Date(2026, 0, 5))).toEqual({
+      from: "2025-12-17",
+      to: "2026-01-05",
     });
   });
 });

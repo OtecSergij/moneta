@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/dal";
+import { isUniqueViolation } from "@/lib/db-errors";
 import {
   CategoryInput,
   CategoryPatch,
@@ -16,16 +17,6 @@ import type { ActionResult } from "./types";
 // Server actions are reachable via direct POST (Next.js docs: "Mutating Data" —
 // always verify auth inside every action), so each one starts with
 // requireSession() and re-validates input server-side. Never trust the client.
-
-// Postgres unique-violation (the per-user category name index).
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code?: unknown }).code === "23505"
-  );
-}
 
 function revalidateCategoryViews(): void {
   revalidatePath("/"); // home: category Select

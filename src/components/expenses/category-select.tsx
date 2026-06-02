@@ -3,18 +3,13 @@
 import { useState } from "react";
 import { Select } from "radix-ui";
 import { Check, ChevronDown, Plus } from "lucide-react";
-import { toast } from "sonner";
-import {
-  CATEGORY_NAME_MAX,
-  DEFAULT_CATEGORY_COLOR,
-  type CategoryColor,
-} from "@/lib/categories";
-import { createCategoryAction } from "@/lib/actions/categories";
+import { CATEGORY_NAME_MAX } from "@/lib/categories";
 import type { Category } from "@/repositories/categories";
 import { Button } from "@/components/ui/button";
 import { CategoryDot } from "@/components/ui/category-dot";
 import { TextInput } from "@/components/ui/text-input";
-import { ColorSwatches } from "@/components/expenses/color-swatches";
+import { ColorSwatches } from "@/components/categories/color-swatches";
+import { useCategoryForm } from "@/components/categories/use-category-form";
 import { cn } from "@/lib/utils";
 
 const NEW = "__new__";
@@ -36,43 +31,26 @@ export function CategorySelect({
 }) {
   const empty = categories.length === 0;
   const [creating, setCreating] = useState(empty);
-  const [name, setName] = useState("");
-  const [color, setColor] = useState<CategoryColor>(DEFAULT_CATEGORY_COLOR);
-  const [nameError, setNameError] = useState<string | undefined>();
-  const [saving, setSaving] = useState(false);
+  const { name, setName, color, setColor, nameError, saving, submit, reset } =
+    useCategoryForm({
+      onSaved: (category) => {
+        onCreated(category);
+        setCreating(false);
+      },
+    });
 
   const selected = categories.find((c) => c.id === value);
   const labelId = "category-label";
   const errorId = "category-error";
 
-  function resetCreate() {
-    setName("");
-    setColor(DEFAULT_CATEGORY_COLOR);
-    setNameError(undefined);
+  function openCreate() {
+    reset();
+    setCreating(true);
   }
 
-  async function onCreate() {
-    const trimmed = name.trim();
-    if (trimmed.length === 0) {
-      setNameError("Введите название");
-      return;
-    }
-    if (trimmed.length > CATEGORY_NAME_MAX) {
-      setNameError(`Не больше ${CATEGORY_NAME_MAX} символов`);
-      return;
-    }
-    setSaving(true);
-    setNameError(undefined);
-    const res = await createCategoryAction({ name: trimmed, color });
-    setSaving(false);
-    if (!res.ok) {
-      setNameError(res.error);
-      return;
-    }
-    onCreated(res.data);
-    resetCreate();
+  function cancelCreate() {
+    reset();
     setCreating(false);
-    toast.success("Категория создана");
   }
 
   return (
@@ -94,7 +72,7 @@ export function CategorySelect({
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                onCreate();
+                submit();
               }
             }}
             placeholder="Например, Еда"
@@ -115,10 +93,7 @@ export function CategorySelect({
                 type="button"
                 variant="secondary"
                 className="flex-1"
-                onClick={() => {
-                  setCreating(false);
-                  resetCreate();
-                }}
+                onClick={cancelCreate}
               >
                 Отмена
               </Button>
@@ -127,7 +102,7 @@ export function CategorySelect({
               type="button"
               className="flex-1"
               loading={saving}
-              onClick={onCreate}
+              onClick={submit}
             >
               Создать
             </Button>
@@ -140,7 +115,7 @@ export function CategorySelect({
             disabled={disabled}
             onValueChange={(v) => {
               if (v === NEW) {
-                setCreating(true);
+                openCreate();
                 return;
               }
               onChange(v);

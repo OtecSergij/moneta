@@ -65,6 +65,55 @@ export function currentWeekFromMonday(now: Date = new Date()): DateRange {
   };
 }
 
+/** Days in a given month (0-indexed month, JS convention) — 28–31. */
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+/**
+ * Range from the most recent salary day through today — the History
+ * "с последней зарплаты" preset (business-spec §5.2/§5.3). `salaryDays` are
+ * calendar days of the month (1–31); the latest one that has already occurred
+ * (this month, otherwise the last one in the previous month) is the range
+ * start. A day past the month's length is clamped to its last day (the 31st in
+ * a 30-day month → the 30th). Expects a non-empty `salaryDays`.
+ */
+export function sinceLastSalary(
+  salaryDays: number[],
+  now: Date = new Date(),
+): DateRange {
+  const today = toISODate(now);
+  if (salaryDays.length === 0) return { from: today, to: today };
+
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const dayOfMonth = now.getDate();
+
+  // Latest salary day this month that is on or before today.
+  let start: Date | null = null;
+  for (const day of salaryDays) {
+    const clamped = Math.min(day, daysInMonth(year, month));
+    if (clamped <= dayOfMonth) {
+      const candidate = new Date(year, month, clamped);
+      if (!start || candidate > start) start = candidate;
+    }
+  }
+
+  // None reached yet this month → the last salary day of the previous month.
+  if (!start) {
+    const prevYear = month === 0 ? year - 1 : year;
+    const prevMonth = month === 0 ? 11 : month - 1;
+    const latest = Math.max(...salaryDays);
+    start = new Date(
+      prevYear,
+      prevMonth,
+      Math.min(latest, daysInMonth(prevYear, prevMonth)),
+    );
+  }
+
+  return { from: toISODate(start), to: today };
+}
+
 /** Quick range presets for the history screen (business-spec §5.2). */
 export const RANGE_PRESETS = [
   { key: "7d", label: "7 дней", range: (now?: Date) => lastNDays(7, now) },

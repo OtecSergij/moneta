@@ -172,6 +172,11 @@ Light theme is the default. Dark theme is auto-applied when `prefers-color-schem
 │  ...                                 │
 │  + Новая категория                   │
 ├──────────────────────────────────────┤
+│  Дни зарплаты                        │
+│  числа месяца 1–31, тап — выбрать    │
+│  [1][2][▣3][4][5][6][7]  …  [▣17]    │
+│  [ Сохранить ]                       │
+├──────────────────────────────────────┤
 │  Аккаунт                             │
 │  email@example.com                   │
 │  [ Выйти ]                          │
@@ -203,6 +208,14 @@ Light theme is the default. Dark theme is auto-applied when `prefers-color-schem
 - Combo: select with options + last option `+ Создать новую…` opens inline mini-form
   (name + colour swatch picker). On save, new category becomes the selected value.
 - Each option shows colour dot + name.
+
+### Day-of-month grid (Settings → «Дни зарплаты»)
+
+- Grid of 31 toggle buttons (1–31), 7 per row (`grid-cols-7 gap-1.5`), each
+  `h-11` (≥44px tap) with `tabular-nums`. Selected = `bg-accent text-white
+  border-accent`; unselected = `border-border text-text hover:bg-border/60`.
+- Multi-select (a user can have several salary days). Empty selection is valid
+  and hides the History «С последней зарплаты» preset; non-empty shows it.
 
 ### Cards
 

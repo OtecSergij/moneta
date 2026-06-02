@@ -1,11 +1,22 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { RANGE_PRESETS, type DateRange } from "@/lib/dates";
+import { RANGE_PRESETS, sinceLastSalary, type DateRange } from "@/lib/dates";
 import { Field } from "@/components/ui/field";
 import { TextInput } from "@/components/ui/text-input";
 
-export function HistoryFilter({ from, to }: { from: string; to: string }) {
+const PILL_CLASS =
+  "inline-flex min-h-11 cursor-pointer items-center rounded-pill border border-border px-4 text-sm text-text transition-colors hover:bg-border/60";
+
+export function HistoryFilter({
+  from,
+  to,
+  salaryDays,
+}: {
+  from: string;
+  to: string;
+  salaryDays: number[];
+}) {
   const router = useRouter();
 
   function apply(range: DateRange) {
@@ -61,11 +72,20 @@ export function HistoryFilter({ from, to }: { from: string; to: string }) {
             key={preset.key}
             type="button"
             onClick={() => apply(preset.range())}
-            className="inline-flex min-h-11 cursor-pointer items-center rounded-pill border border-border px-4 text-sm text-text transition-colors hover:bg-border/60"
+            className={PILL_CLASS}
           >
             {preset.label}
           </button>
         ))}
+        {salaryDays.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => apply(sinceLastSalary(salaryDays))}
+            className={PILL_CLASS}
+          >
+            С последней зарплаты
+          </button>
+        ) : null}
       </div>
     </div>
   );

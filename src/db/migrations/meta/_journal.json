@@ -15,6 +15,13 @@
       "when": 1779989953818,
       "tag": "0001_mature_cardiac",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780382448007,
+      "tag": "0002_secret_chat",
+      "breakpoints": true
     }
   ]
 }

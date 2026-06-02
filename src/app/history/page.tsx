@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireSession } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
 import { listExpenses, summary, type Expense } from "@/repositories/expenses";
+import { getUserSettings } from "@/repositories/user-settings";
 import { formatRelativeDay, lastNDays } from "@/lib/dates";
 import { HistoryFilter } from "@/components/history/history-filter";
 import { PeriodTabs } from "@/components/history/period-tabs";
@@ -31,10 +32,11 @@ export default async function HistoryPage({
   const { from, to } = await searchParams;
   const range = resolveRange(from, to);
 
-  const [categories, periodSummary, expenses] = await Promise.all([
+  const [categories, periodSummary, expenses, settings] = await Promise.all([
     listCategories(user.id),
     summary(user.id, range),
     listExpenses(user.id, { from: range.from, to: range.to }),
+    getUserSettings(user.id),
   ]);
 
   const expensesByCategory: Record<string, Expense[]> = {};
@@ -71,7 +73,11 @@ export default async function HistoryPage({
       </header>
 
       <section className="mb-6 rounded-lg border border-border bg-surface p-4 sm:p-6">
-        <HistoryFilter from={range.from} to={range.to} />
+        <HistoryFilter
+          from={range.from}
+          to={range.to}
+          salaryDays={settings.salaryDays}
+        />
       </section>
 
       <PeriodTabs

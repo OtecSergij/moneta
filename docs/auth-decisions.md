@@ -133,6 +133,12 @@ Multi-user + Postgres без RLS = изоляция enforce'ится на applic
 Postgres RLS сейчас не делаем — overhead (миграции с policies, транзакционная обёртка под `SET LOCAL`, осторожность с pgBouncer) не оправдан для домена с двумя таблицами. Можно добавить поверх позже, если scope изменится.
 
 ## Порядок реализации
+
+_Статус (июнь 2026): пп. 2–7 выполнены — auth-формы, isolation-тесты, Resend
+(домен + DNS, email verification + password reset), Google OAuth с auto-link,
+rate limiting. Остаётся деплой в Coolify (п.1 — БД/миграции готовы, сам деплой
+ещё нет) и опц. п.8._
+
 1. Поднять Postgres в Coolify, подключить Better Auth с Drizzle-адаптером, накатить миграции.
 2. Email/password sign-up + login + базовый UI (формы, ошибки, redirect).
 3. Repository pattern для `categories` / `expenses` + isolation-тесты — **до** того, как появятся ручки данных.

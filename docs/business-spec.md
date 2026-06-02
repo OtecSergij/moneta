@@ -213,5 +213,5 @@ repository pattern + isolation-тесты).
 - [ ] PWA-манифест на месте, иконку можно установить на главный экран.
 - [ ] Postgres и Next.js задеплоены в Coolify на VPS, оба за HTTPS на своих
       субдоменах, ежедневный pg_dump бэкап настроен.
-- [ ] Домен куплен, DNS-записи для Resend (SPF, DKIM, DMARC, return-path)
+- [x] Домен куплен, DNS-записи для Resend (SPF, DKIM, DMARC, return-path)
       настроены, письма верификации доходят до Inbox (не в спам).

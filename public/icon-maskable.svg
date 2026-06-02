@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="moneta">
+  <rect width="512" height="512" fill="#2563eb"/>
+  <g transform="translate(256 256) scale(0.76) translate(-256 -256)">
+    <path d="M101 360 L101 242 A92 92 0 0 1 256 175 A92 92 0 0 1 411 242 L411 360 L353 360 L353 242 A34 34 0 0 0 285 242 L285 360 L227 360 L227 242 A34 34 0 0 0 159 242 L159 360 L101 360 Z" fill="#ffffff"/>
+  </g>
+</svg>

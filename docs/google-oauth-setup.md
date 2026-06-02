@@ -1,5 +1,10 @@
 # Настройка «Войти через Google»
 
+> **Статус:** настроено — `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` заданы в
+> окружении, кнопка активна. Инструкция ниже нужна на случай пересоздания
+> credentials или нового окружения; при деплое — добавить prod-redirect-URI
+> (шаг 3.4) и **Publish app** (см. «Прод»).
+
 Кнопка «Войти через Google» в коде **уже реализована** и появляется в UI
 автоматически, как только в окружении заданы `GOOGLE_CLIENT_ID` и
 `GOOGLE_CLIENT_SECRET` (флаг `hasGoogleOAuth` в [`src/env.ts`](../src/env.ts)).

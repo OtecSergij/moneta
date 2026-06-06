@@ -1,0 +1,18 @@
+# Installed fresh / regenerated inside the image
+node_modules
+.next
+out
+build
+coverage
+*.tsbuildinfo
+
+# VCS & CI
+.git
+.github
+
+# Secrets — must never enter the build context
+.env*
+
+# Editor / tooling cruft
+.claude
+.DS_Store

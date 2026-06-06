@@ -5,29 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1779907520592,
-      "tag": "0000_brown_stingray",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1779989953818,
-      "tag": "0001_mature_cardiac",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1780382448007,
-      "tag": "0002_secret_chat",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1780390554336,
-      "tag": "0003_handy_darwin",
+      "when": 1780775530991,
+      "tag": "0000_light_anthem",
       "breakpoints": true
     }
   ]

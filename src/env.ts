@@ -15,16 +15,30 @@ const schema = z.object({
     .default("development"),
 });
 
-const parsed = schema.safeParse(process.env);
-if (!parsed.success) {
-  console.error(
-    "Invalid environment variables:",
-    z.treeifyError(parsed.error),
-  );
-  throw new Error("Invalid environment variables");
+type Env = z.infer<typeof schema>;
+
+// All variables here are RUNTIME values (DB connection, session-signing secret,
+// public URL) — none are needed to produce the build artifact. During `next build`
+// (CI/Docker) we set SKIP_ENV_VALIDATION=1 to bypass parsing so the build needs no
+// secrets. Real validation runs at server startup via src/instrumentation.ts, so a
+// misconfigured deployment fails fast at boot. Mirrors @t3-oss/env's skip behavior.
+function loadEnv(): Env {
+  if (process.env.SKIP_ENV_VALIDATION) {
+    return process.env as unknown as Env;
+  }
+
+  const parsed = schema.safeParse(process.env);
+  if (!parsed.success) {
+    console.error(
+      "Invalid environment variables:",
+      z.treeifyError(parsed.error),
+    );
+    throw new Error("Invalid environment variables");
+  }
+  return parsed.data;
 }
 
-export const env = parsed.data;
+export const env = loadEnv();
 
 // Cross-field invariants (warn, don't crash).
 if (

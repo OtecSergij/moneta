@@ -16,21 +16,21 @@
 
 ### Color Palette
 
-Light theme is the default. Dark theme is auto-applied when `prefers-color-scheme: dark`.
+Light-only — there is no dark theme. `color-scheme: light` (set via `colorScheme` in `layout.tsx`) keeps native controls light even when the OS is in dark mode.
 
-| Role               | Light                   | Dark                    | CSS Variable        |
-| ------------------ | ----------------------- | ----------------------- | ------------------- |
-| Background         | `#FFFFFF`               | `#0B0B0E`               | `--bg`              |
-| Surface (card)     | `#FAFAFA`               | `#17171B`               | `--surface`         |
-| Surface raised     | `#FFFFFF`               | `#1F1F23`               | `--surface-raised`  |
-| Surface sunken     | `#E8EAEE`               | `#202027`               | `--surface-sunken`  |
-| Border             | `#E5E7EB`               | `#2A2A30`               | `--border`          |
-| Text primary       | `#09090B`               | `#FAFAFA`               | `--text`            |
-| Text secondary     | `#52525B`               | `#A1A1AA`               | `--text-muted`      |
-| Accent (CTA)       | `#2563EB`               | `#3B82F6`               | `--accent`          |
-| Accent hover       | `#1D4ED8`               | `#60A5FA`               | `--accent-hover`    |
-| Danger             | `#DC2626`               | `#F87171`               | `--danger`          |
-| Success            | `#16A34A`               | `#4ADE80`               | `--success`         |
+| Role               | Value     | CSS Variable        |
+| ------------------ | --------- | ------------------- |
+| Background         | `#FFFFFF` | `--bg`              |
+| Surface (card)     | `#FAFAFA` | `--surface`         |
+| Surface raised     | `#FFFFFF` | `--surface-raised`  |
+| Surface sunken     | `#E8EAEE` | `--surface-sunken`  |
+| Border             | `#E5E7EB` | `--border`          |
+| Text primary       | `#09090B` | `--text`            |
+| Text secondary     | `#52525B` | `--text-muted`      |
+| Accent (CTA)       | `#2563EB` | `--accent`          |
+| Accent hover       | `#1D4ED8` | `--accent-hover`    |
+| Danger             | `#DC2626` | `--danger`          |
+| Success            | `#16A34A` | `--success`         |
 
 **Category colours** (for user-picked tags) — preset palette user can choose from:
 
@@ -246,7 +246,7 @@ Light theme is the default. Dark theme is auto-applied when `prefers-color-schem
 
 ## Style Guidelines
 
-**Style:** Minimal Light (default) with auto dark via `prefers-color-scheme`.
+**Style:** Minimal Light — light-only, no dark theme.
 
 - Lots of whitespace. Single column. No decorative imagery.
 - Numbers are the hero — large, tabular, high contrast.
@@ -273,7 +273,7 @@ Light theme is the default. Dark theme is auto-applied when `prefers-color-schem
 - [ ] All icons from one icon set (Lucide recommended for Next.js: `lucide-react`)
 - [ ] `cursor-pointer` on all clickable elements
 - [ ] Hover/focus states with smooth transitions (150-300ms)
-- [ ] Text contrast 4.5:1 minimum in both light and dark
+- [ ] Text contrast 4.5:1 minimum
 - [ ] Focus states visible for keyboard navigation
 - [ ] All monetary values use `tabular-nums`
 - [ ] All inputs have visible `<label>`

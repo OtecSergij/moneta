@@ -47,6 +47,15 @@ COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 COPY --from=builder --chown=node:node /app/migrate.cjs ./migrate.cjs
 COPY --from=builder --chown=node:node /app/src/db/migrations ./src/db/migrations
 EXPOSE 3000
+
+# Liveness probe for Coolify's rolling-update gating: with a passing healthcheck,
+# Coolify waits for the new container to be ready before removing the old one.
+# Uses node (the slim image has no curl/wget) to hit the lightweight /api/health
+# route. start-period covers startup migrations + Next.js boot before failures
+# count against retries.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
+  CMD node -e "require('http').get('http://127.0.0.1:3000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+
 # Apply DB migrations, then exec the standalone server (so it becomes PID 1 and
 # receives signals). Fail-fast: if migrations fail, the server never starts and
 # the deploy is marked failed.

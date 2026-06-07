@@ -14,7 +14,7 @@ export default async function setup() {
   // Set TESTCONTAINERS_RYUK_DISABLED=false to re-enable it where it works.
   process.env.TESTCONTAINERS_RYUK_DISABLED ??= "true";
 
-  container = await new PostgreSqlContainer("postgres:17")
+  container = await new PostgreSqlContainer("postgres:18")
     .withDatabase("moneta_test")
     .withUsername("postgres")
     .withPassword("postgres")

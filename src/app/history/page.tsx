@@ -5,22 +5,22 @@ import { requireSession } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
 import { listExpenses, summary, type Expense } from "@/repositories/expenses";
 import { getUserSettings } from "@/repositories/user-settings";
-import { formatRelativeDay, lastNDays } from "@/lib/dates";
+import { formatRelativeDay, todayRange } from "@/lib/dates";
 import { HistoryFilter } from "@/components/history/history-filter";
 import { PeriodTabs } from "@/components/history/period-tabs";
 import type { DayGroup } from "@/components/history/history-list";
 
 const isoDate = z.iso.date();
 
-// Resolve the URL range, defaulting to the last 7 days (business-spec §5.2)
-// when params are missing/invalid or reversed.
+// Resolve the URL range, defaulting to today (business-spec §5.2) when
+// params are missing/invalid or reversed.
 function resolveRange(from?: string, to?: string) {
   const f = isoDate.safeParse(from);
   const t = isoDate.safeParse(to);
   if (f.success && t.success && f.data <= t.data) {
     return { from: f.data, to: t.data };
   }
-  return lastNDays(7);
+  return todayRange();
 }
 
 export default async function HistoryPage({

@@ -9,6 +9,7 @@ import {
   sinceLastSalary,
   toISODate,
   todayISO,
+  todayRange,
 } from "@/lib/dates";
 
 // Fixed reference: Sunday, 17 May 2026 (local).
@@ -37,6 +38,10 @@ describe("range helpers", () => {
     expect(lastNDays(7, NOW)).toEqual({ from: "2026-05-11", to: "2026-05-17" });
     expect(lastNDays(30, NOW)).toEqual({ from: "2026-04-18", to: "2026-05-17" });
     expect(lastNDays(1, NOW)).toEqual({ from: "2026-05-17", to: "2026-05-17" });
+  });
+
+  it("todayRange collapses to a single day", () => {
+    expect(todayRange(NOW)).toEqual({ from: "2026-05-17", to: "2026-05-17" });
   });
 });
 

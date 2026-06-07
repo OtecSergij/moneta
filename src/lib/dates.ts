@@ -40,6 +40,12 @@ export function lastNDays(n: number, now: Date = new Date()): DateRange {
   return { from: toISODate(subDays(now, n - 1)), to: toISODate(now) };
 }
 
+/** Single-day range covering today — the History screen's default filter. */
+export function todayRange(now: Date = new Date()): DateRange {
+  const today = toISODate(now);
+  return { from: today, to: today };
+}
+
 /**
  * Current week from Monday through today — the home screen's default summary
  * window (business-spec §5.1). Monday-start regardless of system locale.
@@ -102,6 +108,7 @@ export function sinceLastSalary(
 
 /** Quick range presets for the history screen (business-spec §5.2). */
 export const RANGE_PRESETS = [
+  { key: "today", label: "Сегодня", range: (now?: Date) => todayRange(now) },
   { key: "7d", label: "7 дней", range: (now?: Date) => lastNDays(7, now) },
 ] as const;
 

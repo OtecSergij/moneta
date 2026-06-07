@@ -3,7 +3,6 @@
 import { useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { RANGE_PRESETS, sinceLastSalary, type DateRange } from "@/lib/dates";
-import { Field } from "@/components/ui/field";
 import { TextInput } from "@/components/ui/text-input";
 import { cn } from "@/lib/utils";
 
@@ -74,32 +73,46 @@ export function HistoryFilter({
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="От" htmlFor="from">
+        <div className="flex items-center gap-3">
+          <label
+            htmlFor="from"
+            className="w-10 shrink-0 text-sm font-medium text-text"
+          >
+            От
+          </label>
           <TextInput
             key={`from-${from}`}
             id="from"
             type="date"
             defaultValue={from}
             max={to}
+            className="min-w-0"
             onBlur={(e) => commit({ from: e.target.value, to })}
             onKeyDown={(e) => {
               if (e.key === "Enter") e.currentTarget.blur();
             }}
           />
-        </Field>
-        <Field label="До" htmlFor="to">
+        </div>
+        <div className="flex items-center gap-3">
+          <label
+            htmlFor="to"
+            className="w-10 shrink-0 text-sm font-medium text-text"
+          >
+            До
+          </label>
           <TextInput
             key={`to-${to}`}
             id="to"
             type="date"
             defaultValue={to}
             min={from}
+            className="min-w-0"
             onBlur={(e) => commit({ from, to: e.target.value })}
             onKeyDown={(e) => {
               if (e.key === "Enter") e.currentTarget.blur();
             }}
           />
-        </Field>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">

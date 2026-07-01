@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { hasGoogleOAuth } from "@/env";
+import { getSession } from "@/lib/dal";
 import { SignUpForm } from "./sign-up-form";
 
 export const metadata: Metadata = { title: "Регистрация — moneta" };
@@ -11,6 +13,7 @@ export const metadata: Metadata = { title: "Регистрация — moneta" }
 // frozen to `false` in the build-time prerender and the button never shows.
 export const dynamic = "force-dynamic";
 
-export default function SignUpPage() {
+export default async function SignUpPage() {
+  if (await getSession()) redirect("/");
   return <SignUpForm hasGoogle={hasGoogleOAuth} />;
 }

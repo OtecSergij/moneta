@@ -8,6 +8,13 @@
       "when": 1780775530991,
       "tag": "0000_light_anthem",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788429111226,
+      "tag": "0001_cuddly_expediter",
+      "breakpoints": true
     }
   ]
 }

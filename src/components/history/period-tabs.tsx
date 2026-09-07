@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import type { Category } from "@/repositories/categories";
-import type { Expense, SummaryRow } from "@/repositories/expenses";
-import { Money } from "@/components/ui/money";
+import type { ExpenseWithConversion, SummaryRow } from "@/repositories/expenses";
+import type { CurrencyCode } from "@/lib/currency";
+import { TotalMoney } from "@/components/ui/total-money";
 import { SummaryBars } from "@/components/history/summary-bars";
 import { HistoryList, type DayGroup } from "@/components/history/history-list";
 import { cn } from "@/lib/utils";
@@ -17,16 +18,20 @@ const TABS: { key: Tab; label: string }[] = [
 
 export function PeriodTabs({
   totalMinor,
+  unconverted,
   byCategory,
   expensesByCategory,
   days,
   categories,
+  displayCurrency,
 }: {
   totalMinor: number;
+  unconverted: number;
   byCategory: SummaryRow[];
-  expensesByCategory: Record<string, Expense[]>;
+  expensesByCategory: Record<string, ExpenseWithConversion[]>;
   days: DayGroup[];
   categories: Category[];
+  displayCurrency: CurrencyCode;
 }) {
   const [tab, setTab] = useState<Tab>("categories");
   const isEmpty = days.length === 0;
@@ -34,7 +39,11 @@ export function PeriodTabs({
   return (
     <section className="rounded-lg border border-border bg-surface p-4 sm:p-6">
       <p className="text-3xl font-semibold text-text">
-        <Money minor={totalMinor} />
+        <TotalMoney
+          minor={totalMinor}
+          currency={displayCurrency}
+          unconverted={unconverted}
+        />
       </p>
 
       {isEmpty ? (
@@ -81,9 +90,14 @@ export function PeriodTabs({
                 total={totalMinor}
                 expensesByCategory={expensesByCategory}
                 categories={categories}
+                displayCurrency={displayCurrency}
               />
             ) : (
-              <HistoryList groups={days} categories={categories} />
+              <HistoryList
+                groups={days}
+                categories={categories}
+                displayCurrency={displayCurrency}
+              />
             )}
           </div>
         </>

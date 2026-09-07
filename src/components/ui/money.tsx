@@ -1,3 +1,4 @@
+import { type CurrencyCode } from "@/lib/currency";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
@@ -5,16 +6,16 @@ import { cn } from "@/lib/utils";
 // align vertically (MASTER.md "Money rendering").
 export function Money({
   minor,
-  currency = "RUB",
+  currency,
   className,
 }: {
   minor: number;
-  currency?: string;
+  currency: CurrencyCode;
   className?: string;
 }) {
   return (
     <span className={cn("tabular-nums", className)}>
-      {formatMoney(minor, { currency })}
+      {formatMoney(minor, currency)}
     </span>
   );
 }

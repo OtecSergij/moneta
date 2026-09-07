@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { check, integer, pgTable, timestamp, uuid } from "drizzle-orm/pg-core";
 import { user } from "./auth";
+import { currencyEnum } from "./expenses";
 
 // Per-user preferences — one row per user, created lazily on first save.
 // MVP holds only salary days: calendar days of the month (e.g. 3 and 17) that
@@ -19,6 +20,11 @@ export const userSettings = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::integer[]`),
+    // Currency all aggregates and lists render in (business-spec §7);
+    // switching it doesn't touch any expenses row, only how it's summed.
+    displayCurrency: currencyEnum("display_currency")
+      .notNull()
+      .default("RUB"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

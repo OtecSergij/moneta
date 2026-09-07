@@ -112,28 +112,31 @@ Light-only — there is no dark theme. `color-scheme: light` (set via `colorSche
 
 ```
 ┌──────────────────────────────────────┐
-│  moneta              ⚙  ←nav       │
+│  moneta  [USD ▾]      ⚙  ←nav      │  ← display currency switcher
 ├──────────────────────────────────────┤
 │  На этой неделе                      │
-│  ₽ 12 480                            │  ← total, text-3xl tabular-nums
+│  $ 142                               │  ← total in selected display currency
 │  по 8 тратам                         │
 ├──────────────────────────────────────┤
 │  По категориям                       │
-│  ▮▮▮▮▮▮▮▮▮▮ Еда           ₽ 6 200  │  ← horizontal bar list
-│  ▮▮▮▮▮       Транспорт    ₽ 2 800  │
-│  ▮▮▮         Развлечения  ₽ 1 800  │
-│  ▮           Прочее         ₽ 1 680 │
+│  ▮▮▮▮▮▮▮▮▮▮ Еда           $ 74   │  ← horizontal bar list
+│  ▮▮▮▮▮       Транспорт    $ 32   │
+│  ▮▮▮         Развлечения  $ 21   │
+│  ▮           Прочее         $ 15  │
 ├──────────────────────────────────────┤
 │  Добавить трату                      │
 │  ┌────────────────────────────────┐  │
-│  │ Сумма  [    ₽] [Категория ▾]   │  │
-│  │ Заметка (необязательно)        │  │
+│  │ Сумма  [        ]              │  │
+│  │ [RUB][USD][EUR][RSD][BTC]      │  │
+│  │ Категория [Еда ▾]              │  │
+│  │ Заметка                        │  │
 │  │ Дата [Сегодня]   [ Добавить ]  │  │
 │  └────────────────────────────────┘  │
 ├──────────────────────────────────────┤
 │  Последние                           │
-│  • 17 мая  Еда         Магнит   ₽ 850│
-│  • 17 мая  Транспорт   Такси    ₽ 420│
+│  • 17 мая  Еда          $ 10       │
+│    3 000 RSD            │
+│  • 17 мая  Транспорт    € 4,50    │
 │  ...                                 │
 │              [ Вся история → ]       │
 └──────────────────────────────────────┘
@@ -143,18 +146,19 @@ Light-only — there is no dark theme. `color-scheme: light` (set via `colorSche
 
 ```
 ┌──────────────────────────────────────┐
-│  ← История                          │
+│  ← История  [USD ▾]                 │
 ├──────────────────────────────────────┤
 │  [ от 10.05 ] — [ до 17.05 ]   ⟳   │  ← date range, default last 7 days
 ├──────────────────────────────────────┤
-│  Итого: ₽ 12 480 за 8 трат           │
-│  ▮▮▮▮▮▮▮▮▮▮ Еда           ₽ 6 200  │  ← same breakdown as main
+│  Итого: $ 142 за 8 трат              │
+│  ▮▮▮▮▮▮▮▮▮▮ Еда           $ 74   │  ← same breakdown, in display currency
 │  ...                                 │
 ├──────────────────────────────────────┤
 │  Список                              │
 │  17 мая                              │
-│   • Магнит      Еда         ₽ 850   │
-│   • Такси       Транспорт   ₽ 420   │
+│   • Магнит      Еда         $ 10   │
+│     3 000 RSD                │
+│   • Такси       Транспорт   € 5,00 │
 │  16 мая                              │
 │   ...                                │
 └──────────────────────────────────────┘
@@ -165,6 +169,9 @@ Light-only — there is no dark theme. `color-scheme: light` (set via `colorSche
 ```
 ┌──────────────────────────────────────┐
 │  ← Настройки                        │
+├──────────────────────────────────────┤
+│  Валюта отображения                  │
+│  [RUB][USD][EUR][RSD][▣BTC]         │
 ├──────────────────────────────────────┤
 │  Категории                           │
 │  ● Еда           [✎] [×]            │
@@ -203,6 +210,21 @@ Light-only — there is no dark theme. `color-scheme: light` (set via `colorSche
 - Date input: native `<input type="date">` for MVP — system picker, zero deps.
 - Labels are **always visible above** the input. Placeholder ≠ label.
 
+### Amount status slot (expense form)
+
+- One line under the amount + currency segment, shown as soon as the amount
+  parses to a positive number. It is the **only** tap target that opens the
+  «Сколько списали по факту» fixation panel.
+- Same treatment whichever label it carries: `text-sm text-text-muted`, dotted
+  underline, ≥44 px tap height, visible focus ring.
+- Entry currency ≠ display currency → live conversion (`≈ ₽ 858,67`, «курс
+  недоступен», or `…` while pending). Currencies equal → «Указать списание»:
+  what the bank debited is a fact about the expense, so recording it must not
+  depend on which display currency happens to be selected.
+- With the fixation panel open the slot stops being a tap target — it keeps
+  reporting the (fixation-aware) conversion when the currencies differ, and
+  disappears when they match.
+
 ### Category Select
 
 - Combo: select with options + last option `+ Создать новую…` opens inline mini-form
@@ -229,10 +251,26 @@ Light-only — there is no dark theme. `color-scheme: light` (set via `colorSche
 
 ### Money rendering
 
-- Always tabular nums: `font-variant-numeric: tabular-nums`.
-- Currency symbol left, space between symbol and value: `₽ 12 480`.
-- Group separator: thin space (U+202F) or NBSP (U+00A0).
-- No decimals if amount has no kopecks; otherwise 2 decimals (`₽ 12 480,50`).
+- **Always tabular nums:** `font-variant-numeric: tabular-nums`.
+- **Symbol position per currency:**
+  - Prefix (left): ₽ (RUB), $ (USD), € (EUR), ₿ (BTC)
+  - Suffix (right): RSD — the dinar has no Unicode sign, so the ISO code is used
+  - Space between symbol and value: NBSP (U+00A0)
+- **Group separator:** thin space (U+202F) between three-digit groups from right.
+- **Decimals per currency:**
+  - RUB/USD/EUR: 2 decimals; omit if zero after rounding (`₽ 12 480` or `₽ 12 480,50`)
+  - RSD: 0 decimals; always omit fraction even though stored with 2-digit para (`3 000 RSD`)
+  - BTC: 8 decimals; trim trailing zeros (`₿ 0,00045`)
+- **Decimal separator:** comma (,) in all locales.
+- **Incomplete totals:** an aggregate (period, day, category) that could not value every
+  row — no rate on file for some currency — is prefixed with `≈` and carries a `title`
+  naming how many rows are missing from it. Rendered bare it would read as an exact
+  figure, and a category whose rows are all unconverted would read as a plain `₽ 0`.
+- **List row pattern:** when an expense is shown in a display currency different from its
+  entry currency, the converted amount is the primary figure (right-aligned, tabular-nums),
+  and the original amount is a muted secondary line below (text-xs, text-text-muted) only
+  when the currencies differ. Example: expense entry `3 000 RSD` shown under display
+  currency USD displays as `$ 25,50 / 3 000 RSD` stacked.
 
 ### Charts
 

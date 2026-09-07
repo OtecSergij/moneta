@@ -4,6 +4,7 @@
 // these for server code — mirrors @/lib/categories.
 
 import { z } from "zod";
+import { CURRENCY_CODES } from "@/lib/currency";
 
 // Salary days are calendar days of the month. A user can have several (e.g. the
 // 3rd and the 17th). The bound lives here so the grid and the schema agree.
@@ -17,3 +18,8 @@ export const SalaryDaysInput = z
   .max(SALARY_DAY_MAX)
   .transform((days) => Array.from(new Set(days)).sort((a, b) => a - b));
 export type SalaryDaysInput = z.infer<typeof SalaryDaysInput>;
+
+// Same code list the money module renders against (@/lib/currency), so an
+// unknown currency is rejected here instead of surfacing as a DB enum error.
+export const DisplayCurrencyInput = z.enum(CURRENCY_CODES);
+export type DisplayCurrencyInput = z.infer<typeof DisplayCurrencyInput>;

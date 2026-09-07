@@ -1,4 +1,5 @@
-import { Money } from "@/components/ui/money";
+import type { CurrencyCode } from "@/lib/currency";
+import { ConvertedMoney } from "@/components/ui/converted-money";
 import { CategoryDot } from "@/components/ui/category-dot";
 
 // Generic two-line expense row: optional colour dot + title over an optional
@@ -9,11 +10,17 @@ export function ExpenseRowContent({
   title,
   subtitle,
   amountMinor,
+  currency,
+  convertedMinor,
+  displayCurrency,
 }: {
   color?: string;
   title: string;
   subtitle?: string | null;
   amountMinor: number;
+  currency: CurrencyCode;
+  convertedMinor: number | null;
+  displayCurrency: CurrencyCode;
 }) {
   return (
     <>
@@ -24,7 +31,13 @@ export function ExpenseRowContent({
           <div className="truncate text-xs text-text-muted">{subtitle}</div>
         ) : null}
       </div>
-      <Money minor={amountMinor} className="shrink-0 text-sm text-text" />
+      <ConvertedMoney
+        amountMinor={amountMinor}
+        currency={currency}
+        convertedMinor={convertedMinor}
+        displayCurrency={displayCurrency}
+        className="shrink-0"
+      />
     </>
   );
 }

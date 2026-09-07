@@ -1,95 +1,105 @@
 import { describe, expect, it } from "vitest";
+import type { CurrencyCode } from "@/lib/currency";
 import { formatMoney, minorToInput, parseMoney } from "@/lib/money";
 
 const NBSP = " ";
 const THIN = " ";
 
 describe("formatMoney", () => {
-  it("formats whole rubles without decimals and thin-space grouping", () => {
-    expect(formatMoney(1248000)).toBe(`₽${NBSP}12${THIN}480`);
+  it("formats the AC-2 table", () => {
+    expect(formatMoney(301000, "RUB")).toBe(`₽${NBSP}3${THIN}010`);
+    expect(formatMoney(2000, "USD")).toBe(`$${NBSP}20`);
+    expect(formatMoney(1550, "EUR")).toBe(`€${NBSP}15,50`);
+    expect(formatMoney(300000, "RSD")).toBe(`3${THIN}000${NBSP}RSD`);
+    expect(formatMoney(45000, "BTC")).toBe(`₿${NBSP}0,00045`);
   });
 
-  it("formats kopecks with a comma and two digits", () => {
-    expect(formatMoney(1248050)).toBe(`₽${NBSP}12${THIN}480,50`);
+  it("rounds RSD to zero display digits, half-even", () => {
+    expect(formatMoney(202794, "RSD")).toBe(`2${THIN}028${NBSP}RSD`);
+    // Exact ties (.50 para) resolve to the nearest even dinar.
+    expect(formatMoney(202650, "RSD")).toBe(`2${THIN}026${NBSP}RSD`); // 2026 even, stays
+    expect(formatMoney(202750, "RSD")).toBe(`2${THIN}028${NBSP}RSD`); // 2027 odd, rounds up
   });
 
-  it("pads a single kopeck digit", () => {
-    expect(formatMoney(1248005)).toBe(`₽${NBSP}12${THIN}480,05`);
+  it("keeps grouping, zero, and negative handling for RUB", () => {
+    expect(formatMoney(1248000, "RUB")).toBe(`₽${NBSP}12${THIN}480`);
+    expect(formatMoney(1248050, "RUB")).toBe(`₽${NBSP}12${THIN}480,50`);
+    expect(formatMoney(0, "RUB")).toBe(`₽${NBSP}0`);
+    expect(formatMoney(-1248000, "RUB")).toBe(`-₽${NBSP}12${THIN}480`);
   });
 
-  it("handles sub-ruble amounts", () => {
-    expect(formatMoney(99)).toBe(`₽${NBSP}0,99`);
-    expect(formatMoney(50)).toBe(`₽${NBSP}0,50`);
+  it("strips trailing zeros for BTC but never the whole fraction when non-zero", () => {
+    expect(formatMoney(100000000, "BTC")).toBe(`₿${NBSP}1`);
+    expect(formatMoney(1, "BTC")).toBe(`₿${NBSP}0,00000001`);
   });
 
-  it("handles zero", () => {
-    expect(formatMoney(0)).toBe(`₽${NBSP}0`);
-  });
-
-  it("groups millions", () => {
-    expect(formatMoney(123456789)).toBe(`₽${NBSP}1${THIN}234${THIN}567,89`);
-  });
-
-  it("prefixes a minus for negatives", () => {
-    expect(formatMoney(-1248000)).toBe(`-₽${NBSP}12${THIN}480`);
-  });
-
-  it("falls back to the currency code for unknown currencies", () => {
-    expect(formatMoney(100, { currency: "USD" })).toBe(`USD${NBSP}1`);
+  it("renders an unknown code instead of crashing on it", () => {
+    // Not reachable through the type system — db/schema/expenses.ts builds the
+    // pg enum from CURRENCY_CODES itself — but a hand-written migration could
+    // still add a label, and every read path calls currencyMeta. The cast is
+    // the point of the test: prove the degrade, not the type.
+    expect(formatMoney(12480, "XYZ" as CurrencyCode)).toBe(
+      `124,80${NBSP}XYZ`,
+    );
   });
 });
 
 describe("parseMoney", () => {
-  it("parses plain integers as rubles", () => {
-    expect(parseMoney("12480")).toBe(1248000);
+  it("parses the AC-2 table", () => {
+    expect(parseMoney("0,00004507", "BTC")).toBe(4507);
+    expect(parseMoney("12,345", "RUB")).toBeNull();
   });
 
-  it("parses a dot decimal", () => {
-    expect(parseMoney("1234.5")).toBe(123450);
-    expect(parseMoney("1234.56")).toBe(123456);
+  it("rejects more fractional digits than the currency's exponent", () => {
+    expect(parseMoney("10.999", "RUB")).toBeNull();
+    expect(parseMoney("0.123456789", "BTC")).toBeNull(); // 9 digits > exponent 8
   });
 
-  it("parses a comma decimal", () => {
-    expect(parseMoney("1234,56")).toBe(123456);
+  it("accepts up to `exponent` fractional digits", () => {
+    expect(parseMoney("15,5", "EUR")).toBe(1550);
+    expect(parseMoney("0,00004507", "BTC")).toBe(4507); // full 8-digit exponent
   });
 
-  it("ignores grouping spaces (regular, NBSP, thin)", () => {
-    expect(parseMoney(`12${THIN}480,50`)).toBe(1248050);
-    expect(parseMoney(`12${NBSP}480`)).toBe(1248000);
-    expect(parseMoney("12 480")).toBe(1248000);
+  it("ignores grouping spaces and rejects garbage", () => {
+    expect(parseMoney(`12${THIN}480,50`, "RUB")).toBe(1248050);
+    expect(parseMoney(`12${NBSP}480`, "RUB")).toBe(1248000);
+    expect(parseMoney("", "RUB")).toBeNull();
+    expect(parseMoney("abc", "RUB")).toBeNull();
+    expect(parseMoney("-5", "RUB")).toBeNull();
   });
 
-  it("parses zero", () => {
-    expect(parseMoney("0")).toBe(0);
-    expect(parseMoney("0,00")).toBe(0);
+  it("requires digits on both sides of the separator", () => {
+    // The accepting pattern is built per currency from `meta.exponent`, so
+    // these pin the parts of it that don't vary — a template edit that made
+    // the integer part optional would otherwise pass unnoticed.
+    expect(parseMoney(".5", "RUB")).toBeNull();
+    expect(parseMoney("1.", "RUB")).toBeNull();
+    expect(parseMoney(",5", "BTC")).toBeNull();
   });
 
-  it("rejects more than two fractional digits", () => {
-    expect(parseMoney("10.999")).toBeNull();
-  });
-
-  it("rejects garbage and empty input", () => {
-    expect(parseMoney("")).toBeNull();
-    expect(parseMoney("abc")).toBeNull();
-    expect(parseMoney(".5")).toBeNull();
-    expect(parseMoney("1.")).toBeNull();
-    expect(parseMoney("-5")).toBeNull();
+  it("parses zero, which is what the form's `> 0` check rejects on", () => {
+    expect(parseMoney("0", "RUB")).toBe(0);
+    expect(parseMoney("0,00", "RUB")).toBe(0);
+    expect(parseMoney("0", "BTC")).toBe(0);
   });
 });
 
 describe("minorToInput", () => {
-  it("drops decimals when there are no kopecks", () => {
-    expect(minorToInput(1248000)).toBe("12480");
+  it("uses `exponent`, not `displayDigits` — RSD keeps its para", () => {
+    expect(minorToInput(202794, "RSD")).toBe("2027.94");
   });
 
-  it("keeps two decimals when there are kopecks", () => {
-    expect(minorToInput(1248050)).toBe("12480.50");
-    expect(minorToInput(1248005)).toBe("12480.05");
-  });
-
-  it("round-trips through parseMoney", () => {
-    for (const minor of [0, 99, 100, 123450, 123456, 1248000]) {
-      expect(parseMoney(minorToInput(minor))).toBe(minor);
+  it("round-trips through parseMoney for all five currencies", () => {
+    const cases: Array<[number, CurrencyCode]> = [
+      [0, "RUB"],
+      [1248050, "RUB"],
+      [2000, "USD"],
+      [1550, "EUR"],
+      [300050, "RSD"], // non-zero para
+      [12345678, "BTC"], // 8 significant digits
+    ];
+    for (const [minor, currency] of cases) {
+      expect(parseMoney(minorToInput(minor, currency), currency)).toBe(minor);
     }
   });
 });

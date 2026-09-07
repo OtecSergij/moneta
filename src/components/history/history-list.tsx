@@ -2,8 +2,9 @@
 
 import { useMemo } from "react";
 import type { Category } from "@/repositories/categories";
-import type { Expense } from "@/repositories/expenses";
-import { Money } from "@/components/ui/money";
+import type { ExpenseWithConversion } from "@/repositories/expenses";
+import type { CurrencyCode } from "@/lib/currency";
+import { TotalMoney } from "@/components/ui/total-money";
 import { ExpenseListRow } from "@/components/expenses/expense-list-row";
 import { useExpenseEditor } from "@/components/expenses/use-expense-editor";
 
@@ -11,15 +12,19 @@ export interface DayGroup {
   day: string;
   heading: string;
   totalMinor: number;
-  items: Expense[];
+  // Rows in this day no rate could value — see TotalMoney.
+  unconverted: number;
+  items: ExpenseWithConversion[];
 }
 
 export function HistoryList({
   groups,
   categories,
+  displayCurrency,
 }: {
   groups: DayGroup[];
   categories: Category[];
+  displayCurrency: CurrencyCode;
 }) {
   const { openEditor, editor } = useExpenseEditor(categories);
   const categoryById = useMemo(
@@ -35,7 +40,13 @@ export function HistoryList({
             <h3 className="text-sm font-medium text-text-muted">
               {group.heading}
             </h3>
-            <Money minor={group.totalMinor} className="text-sm text-text" />
+            <span className="text-sm text-text">
+              <TotalMoney
+                minor={group.totalMinor}
+                currency={displayCurrency}
+                unconverted={group.unconverted}
+              />
+            </span>
           </div>
           <ul className="flex flex-col gap-1">
             {group.items.map((expense, i) => {

@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { Category } from "@/repositories/categories";
-import type { Expense } from "@/repositories/expenses";
+import type { ExpenseWithConversion } from "@/repositories/expenses";
 import { formatRelativeDay } from "@/lib/dates";
 import { ExpenseListRow } from "@/components/expenses/expense-list-row";
 import { useExpenseEditor } from "@/components/expenses/use-expense-editor";
@@ -14,7 +14,7 @@ export function RecentList({
   expenses,
   categories,
 }: {
-  expenses: Expense[];
+  expenses: ExpenseWithConversion[];
   categories: Category[];
 }) {
   const { openEditor, editor } = useExpenseEditor(categories);

@@ -1,4 +1,4 @@
-import type { Expense } from "@/repositories/expenses";
+import type { ExpenseWithConversion } from "@/repositories/expenses";
 import { ExpenseRowContent } from "@/components/expenses/expense-row-content";
 import { cn } from "@/lib/utils";
 
@@ -15,12 +15,12 @@ export function ExpenseListRow({
   index,
   onClick,
 }: {
-  expense: Expense;
+  expense: ExpenseWithConversion;
   color: string;
   title: string;
   subtitle?: string | null;
   index: number;
-  onClick: (expense: Expense) => void;
+  onClick: (expense: ExpenseWithConversion) => void;
 }) {
   return (
     <li>
@@ -37,6 +37,9 @@ export function ExpenseListRow({
           title={title}
           subtitle={subtitle}
           amountMinor={expense.amountMinor}
+          currency={expense.currency}
+          convertedMinor={expense.convertedMinor}
+          displayCurrency={expense.displayCurrency}
         />
       </button>
     </li>

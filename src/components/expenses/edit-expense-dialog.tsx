@@ -7,6 +7,7 @@ import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { minorToInput } from "@/lib/money";
+import { type CurrencyCode } from "@/lib/currency";
 import {
   expenseFormSchema,
   toExpenseInput,
@@ -24,20 +25,28 @@ import { ExpenseFormFields } from "@/components/expenses/expense-form-fields";
 
 function toDefaults(e: Expense): ExpenseFormValues {
   return {
-    amount: minorToInput(e.amountMinor),
+    amount: minorToInput(e.amountMinor, e.currency),
+    currency: e.currency,
     categoryId: e.categoryId,
     note: e.note,
     spentAt: e.spentAt,
+    chargedAmount:
+      e.chargedAmountMinor !== null && e.chargedCurrency !== null
+        ? minorToInput(e.chargedAmountMinor, e.chargedCurrency)
+        : undefined,
+    chargedCurrency: e.chargedCurrency ?? undefined,
   };
 }
 
 export function EditExpenseDialog({
   expense,
   categories,
+  displayCurrency,
   onClose,
 }: {
   expense: Expense;
   categories: Category[];
+  displayCurrency: CurrencyCode;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -84,6 +93,12 @@ export function EditExpenseDialog({
         >
           <ExpenseFormFields
             categories={categoryList}
+            displayCurrency={displayCurrency}
+            // No last-used charged currency here on purpose: it would have to
+            // be threaded through every list component that can open this
+            // dialog, and an edited row either already carries its own
+            // fixation or falls back to the display currency.
+            initialChargedCurrency={null}
             onCategoryCreated={(c) => {
               setCategoryList((prev) =>
                 [...prev, c].sort((a, b) => a.name.localeCompare(b.name, "ru")),

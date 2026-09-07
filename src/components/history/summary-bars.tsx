@@ -3,9 +3,10 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import type { Category } from "@/repositories/categories";
-import type { Expense, SummaryRow } from "@/repositories/expenses";
+import type { ExpenseWithConversion, SummaryRow } from "@/repositories/expenses";
+import type { CurrencyCode } from "@/lib/currency";
 import { formatRelativeDay } from "@/lib/dates";
-import { Money } from "@/components/ui/money";
+import { TotalMoney } from "@/components/ui/total-money";
 import { CategoryDot } from "@/components/ui/category-dot";
 import { ExpenseRowContent } from "@/components/expenses/expense-row-content";
 import { useExpenseEditor } from "@/components/expenses/use-expense-editor";
@@ -19,11 +20,13 @@ export function SummaryBars({
   total,
   expensesByCategory,
   categories,
+  displayCurrency,
 }: {
   rows: SummaryRow[];
   total: number;
-  expensesByCategory: Record<string, Expense[]>;
+  expensesByCategory: Record<string, ExpenseWithConversion[]>;
   categories: Category[];
+  displayCurrency: CurrencyCode;
 }) {
   const { openEditor, editor } = useExpenseEditor(categories);
 
@@ -36,6 +39,7 @@ export function SummaryBars({
             row={row}
             total={total}
             details={expensesByCategory[row.categoryId] ?? []}
+            displayCurrency={displayCurrency}
             onSelect={openEditor}
           />
         ))}
@@ -51,12 +55,14 @@ function SummaryBarRow({
   row,
   total,
   details,
+  displayCurrency,
   onSelect,
 }: {
   row: SummaryRow;
   total: number;
-  details: Expense[];
-  onSelect: (expense: Expense) => void;
+  details: ExpenseWithConversion[];
+  displayCurrency: CurrencyCode;
+  onSelect: (expense: ExpenseWithConversion) => void;
 }) {
   const [open, setOpen] = useState(false);
   const pct = total > 0 ? Math.round((row.totalMinor / total) * 100) : 0;
@@ -74,7 +80,13 @@ function SummaryBarRow({
         <span className="min-w-0 flex-1">
           <span className="flex items-center justify-between gap-2">
             <span className="truncate text-sm text-text">{row.name}</span>
-            <Money minor={row.totalMinor} className="text-sm text-text" />
+            <span className="text-sm text-text">
+              <TotalMoney
+                minor={row.totalMinor}
+                currency={displayCurrency}
+                unconverted={row.unconverted}
+              />
+            </span>
           </span>
           <span className="mt-1.5 block h-1.5 w-full overflow-hidden rounded-pill bg-border">
             <span
@@ -112,6 +124,9 @@ function SummaryBarRow({
                     title={e.note}
                     subtitle={formatRelativeDay(e.spentAt)}
                     amountMinor={e.amountMinor}
+                    currency={e.currency}
+                    convertedMinor={e.convertedMinor}
+                    displayCurrency={e.displayCurrency}
                   />
                 </button>
               </li>

@@ -3,9 +3,17 @@ import { ArrowLeft } from "lucide-react";
 import { z } from "zod";
 import { requireSession } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
-import { listExpenses, summary, type Expense } from "@/repositories/expenses";
+import {
+  listExpenses,
+  summary,
+  type ExpenseWithConversion,
+} from "@/repositories/expenses";
 import { getUserSettings } from "@/repositories/user-settings";
+import { loadRateIndex } from "@/repositories/fx-rates";
+import { CURRENCY_CODES } from "@/lib/currency";
+import { sumConvertedByDay } from "@/lib/fx/convert";
 import { formatRelativeDay, todayRange } from "@/lib/dates";
+import { DisplayCurrencySwitcher } from "@/components/settings/display-currency-switcher";
 import { HistoryFilter } from "@/components/history/history-filter";
 import { PeriodTabs } from "@/components/history/period-tabs";
 import type { DayGroup } from "@/components/history/history-list";
@@ -32,33 +40,48 @@ export default async function HistoryPage({
   const { from, to } = await searchParams;
   const range = resolveRange(from, to);
 
-  const [categories, periodSummary, expenses, settings] = await Promise.all([
+  // The rate history is the heaviest read in this render, so it is loaded
+  // once and threaded into every consumer below — summary and listExpenses
+  // would each repeat the identical query if left to load their own. It
+  // depends only on the range, so it goes in this first batch rather than
+  // waiting on the settings lookup.
+  const [categories, settings, rateIndex] = await Promise.all([
     listCategories(user.id),
-    summary(user.id, range),
-    listExpenses(user.id, { from: range.from, to: range.to }),
     getUserSettings(user.id),
+    loadRateIndex([...CURRENCY_CODES], range.to),
+  ]);
+  const displayCurrency = settings.displayCurrency;
+
+  const [periodSummary, expenses] = await Promise.all([
+    summary(user.id, displayCurrency, range, rateIndex),
+    listExpenses(
+      user.id,
+      displayCurrency,
+      { from: range.from, to: range.to },
+      rateIndex,
+    ),
   ]);
 
-  const expensesByCategory: Record<string, Expense[]> = {};
+  const expensesByCategory: Record<string, ExpenseWithConversion[]> = {};
   for (const e of expenses) {
     (expensesByCategory[e.categoryId] ??= []).push(e);
   }
 
-  const days: DayGroup[] = [];
-  for (const e of expenses) {
-    const last = days[days.length - 1];
-    if (last && last.day === e.spentAt) {
-      last.items.push(e);
-      last.totalMinor += e.amountMinor;
-    } else {
-      days.push({
-        day: e.spentAt,
-        heading: formatRelativeDay(e.spentAt),
-        totalMinor: e.amountMinor,
-        items: [e],
-      });
-    }
-  }
+  // Day totals are recomputed here (not read off periodSummary, which only
+  // groups by category) via sumConvertedByDay, the same sumConverted
+  // arithmetic the rest of the app uses, so a day's total follows the
+  // identical rounding rules.
+  const days: DayGroup[] = sumConvertedByDay(
+    expenses,
+    displayCurrency,
+    rateIndex,
+  ).map((bucket) => ({
+    day: bucket.day,
+    heading: formatRelativeDay(bucket.day),
+    totalMinor: bucket.totalMinor,
+    unconverted: bucket.unconverted,
+    items: bucket.items,
+  }));
 
   return (
     <main className="mx-auto w-full max-w-md px-4 py-6 sm:max-w-2xl">
@@ -69,7 +92,10 @@ export default async function HistoryPage({
         >
           <ArrowLeft className="size-4" /> На главную
         </Link>
-        <h1 className="mt-1 text-2xl font-semibold text-text">История</h1>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <h1 className="text-2xl font-semibold text-text">История</h1>
+          <DisplayCurrencySwitcher initialDisplayCurrency={displayCurrency} />
+        </div>
       </header>
 
       <section className="mb-6 rounded-lg border border-border bg-surface p-4 sm:p-6">
@@ -82,10 +108,12 @@ export default async function HistoryPage({
 
       <PeriodTabs
         totalMinor={periodSummary.totalMinor}
+        unconverted={periodSummary.unconverted}
         byCategory={periodSummary.byCategory}
         expensesByCategory={expensesByCategory}
         days={days}
         categories={categories}
+        displayCurrency={displayCurrency}
       />
     </main>
   );

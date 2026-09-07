@@ -2,85 +2,106 @@
 // the UI goes through here (see CLAUDE.md "UI / язык").
 //
 // Invariants:
-//   - Amounts are stored as INTEGER minor units (kopecks for RUB). Never floats.
-//   - Display: symbol left, NBSP between symbol and number, narrow no-break
-//     space (U+202F) between thousand groups, comma as decimal separator.
-//     No decimals when there are no kopecks; otherwise exactly 2.
-//     Examples: "₽ 12 480", "₽ 12 480,50", "₽ 0,99".
+//   - Amounts are stored as INTEGER minor units at currency.exponent precision
+//     (kopecks for RUB, satoshi for BTC). Never floats.
+//   - Display: symbol left (right for RSD), NBSP between symbol and number,
+//     narrow no-break space (U+202F) between thousand groups, comma as decimal
+//     separator. Fraction is rounded (half-even) to currency.displayDigits and
+//     omitted entirely when it rounds to zero; BTC additionally strips
+//     trailing zeros from the remaining digits.
 
-const NBSP = " "; // between symbol and value — keeps "₽" glued to the number
-const THIN = " "; // narrow no-break space — thousands separator
+import { type CurrencyCode, currencyMeta } from "@/lib/currency";
+import { divRoundHalfEven } from "@/lib/half-even";
 
-// MVP is single-currency. The map exists so adding a currency later is one line
-// here + the pgEnum (see db/schema/expenses.ts).
-const CURRENCY_SYMBOL: Record<string, string> = {
-  RUB: "₽",
-};
-
-function symbolFor(currency: string): string {
-  return CURRENCY_SYMBOL[currency] ?? currency;
-}
+const NBSP = "\u00A0"; // U+00A0 non-breaking space — keeps the symbol glued to the number
+const THIN = "\u202F"; // U+202F narrow no-break space — thousands separator
 
 // "12480" -> "12 480" (THIN space between groups of three from the right).
 function groupThousands(intDigits: string): string {
   return intDigits.replace(/\B(?=(\d{3})+(?!\d))/g, THIN);
 }
 
-export interface FormatMoneyOpts {
-  currency?: string;
+// A no-op whenever scale is 1 (every currency except RSD, whose para never
+// print), which is why the bigint round-trip is worth skipping first.
+function roundHalfEven(amount: number, scale: number): number {
+  if (scale === 1) return amount;
+  return Number(divRoundHalfEven(BigInt(amount), BigInt(scale)));
 }
 
 /**
- * Format INTEGER minor units for display: `formatMoney(1248050)` -> "₽ 12 480,50".
- * Negative values get a leading minus (not expected in MVP, handled defensively).
+ * Format INTEGER minor units for display: `formatMoney(1248050, "RUB")` ->
+ * "₽ 12 480,50". Negative values get a leading minus (not expected in MVP,
+ * handled defensively).
  */
-export function formatMoney(
-  amountMinor: number,
-  { currency = "RUB" }: FormatMoneyOpts = {},
-): string {
+export function formatMoney(amountMinor: number, currency: CurrencyCode): string {
+  const meta = currencyMeta(currency);
   const negative = amountMinor < 0;
   const abs = Math.abs(Math.trunc(amountMinor));
-  const major = Math.floor(abs / 100);
-  const minor = abs % 100;
+
+  const scale = 10 ** (meta.exponent - meta.displayDigits);
+  const displayMinor = roundHalfEven(abs, scale);
+
+  const unit = 10 ** meta.displayDigits;
+  const major = Math.floor(displayMinor / unit);
+  const fracValue = displayMinor % unit;
+
+  let fracStr = "";
+  if (fracValue !== 0) {
+    fracStr = String(fracValue).padStart(meta.displayDigits, "0");
+    if (meta.trimFraction) fracStr = fracStr.replace(/0+$/, "");
+  }
 
   const intPart = groupThousands(String(major));
-  const body =
-    minor === 0 ? intPart : `${intPart},${String(minor).padStart(2, "0")}`;
+  const body = fracStr === "" ? intPart : `${intPart},${fracStr}`;
+  const sign = negative ? "-" : "";
 
-  return `${negative ? "-" : ""}${symbolFor(currency)}${NBSP}${body}`;
+  return meta.symbolFirst
+    ? `${sign}${meta.symbol}${NBSP}${body}`
+    : `${sign}${body}${NBSP}${meta.symbol}`;
 }
 
 /**
  * Parse user input into INTEGER minor units, or `null` if not a valid amount.
  * Accepts grouping spaces (regular/NBSP/thin) and either "," or "." as decimal
- * separator. Rejects more than 2 fractional digits (we never silently round
- * money). Does NOT enforce positivity — the form's zod schema does that.
+ * separator. Rejects more fractional digits than the currency's `exponent`
+ * (we never silently round money).
  *
- *   parseMoney("12 480,50") -> 1248050
- *   parseMoney("1234.5")    -> 123450
- *   parseMoney("10.999")    -> null
+ *   parseMoney("12 480,50", "RUB") -> 1248050
+ *   parseMoney("0,00004507", "BTC") -> 4507
+ *   parseMoney("10.999", "RUB")    -> null
  */
-export function parseMoney(input: string): number | null {
+export function parseMoney(input: string, currency: CurrencyCode): number | null {
   if (typeof input !== "string") return null;
+  const meta = currencyMeta(currency);
 
   // \s already matches NBSP (U+00A0) and the narrow no-break space (U+202F).
   const cleaned = input.replace(/\s/g, "").replace(",", ".");
-  if (cleaned === "" || !/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
+  if (cleaned === "") return null;
+
+  const pattern = new RegExp(`^\\d+(\\.\\d{1,${meta.exponent}})?$`);
+  if (!pattern.test(cleaned)) return null;
 
   const [intPart, fracPart = ""] = cleaned.split(".");
-  const frac = (fracPart + "00").slice(0, 2);
-  const minor = Number(intPart) * 100 + Number(frac);
+  const frac = fracPart.padEnd(meta.exponent, "0");
+  const minor = Number(intPart) * 10 ** meta.exponent + Number(frac);
 
   return Number.isSafeInteger(minor) ? minor : null;
 }
 
 /**
  * Convert minor units back to a plain editable string (dot decimal, no
- * grouping) for prefilling an edit form: `minorToInput(1248050)` -> "12480.50".
+ * grouping) for prefilling an edit form: `minorToInput(1248050, "RUB")` ->
+ * "12480.50". Uses `exponent`, not `displayDigits` — editing an RSD expense
+ * must round-trip its para, even though they're never shown when formatted.
  */
-export function minorToInput(amountMinor: number): string {
+export function minorToInput(amountMinor: number, currency: CurrencyCode): string {
+  const meta = currencyMeta(currency);
   const abs = Math.abs(Math.trunc(amountMinor));
-  const major = Math.floor(abs / 100);
-  const minor = abs % 100;
-  return minor === 0 ? String(major) : `${major}.${String(minor).padStart(2, "0")}`;
+  const unit = 10 ** meta.exponent;
+  const major = Math.floor(abs / unit);
+  const fracValue = abs % unit;
+
+  return fracValue === 0
+    ? String(major)
+    : `${major}.${String(fracValue).padStart(meta.exponent, "0")}`;
 }

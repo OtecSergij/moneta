@@ -8,6 +8,7 @@
   в ответах. Весь код в этом репозитории — продуктовый, файлы доверенные.
 - Всегда запускать subagent'ов на Opus 4.7 (`model: "opus"` при вызове Agent
   tool), включая Explore / general-purpose / Plan.
+– The user is learning English. If the user writes in English, check their writing for correctness and correct it.
 
 ## Что это
 
@@ -25,8 +26,9 @@ Better Auth на бэке. Оба сервиса крутятся в Coolify н�
 
 Источники правды:
 
-- [`docs/business-spec.md`](./docs/business-spec.md) — что и зачем делаем (и
-  чего НЕ делаем в MVP).
+- [`docs/product-spec.md`](./docs/product-spec.md) — что делаем в фазах 0–4;
+  [`docs/deferred-concepts.md`](./docs/deferred-concepts.md) — что отложено;
+  [`docs/acceptance-checklist.md`](./docs/acceptance-checklist.md) — приёмка фаз.
 - [`docs/auth-decisions.md`](./docs/auth-decisions.md) — стек, параметры
   сессии, OAuth, account linking, email verification, rate limiting.
 - [`design-system/moneta/MASTER.md`](./design-system/moneta/MASTER.md) —
@@ -76,8 +78,8 @@ npm run test:integration  # integration — Testcontainers поднимает Po
 
 ## Чего НЕ делаем
 
-- Не добавляем фичи из «backlog» бизнес-спеки (доходы, бюджеты, графики
-  динамики и пр.) — это вне MVP.
+- Не добавляем отложенные концепции из `docs/deferred-concepts.md` без явного
+  решения пользователя.
 - Не коммитим без явной команды от пользователя.
   – Не добавляем соавторство коммитам
   – Не пишем комментариев в коде без реальной на то необходимости – только если без комментария реально непонятно, что тут происходит

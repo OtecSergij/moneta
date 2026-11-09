@@ -29,21 +29,17 @@ export async function createExpenseAction(
   const parsed = ExpenseInput.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Проверьте поля формы" };
 
-  // Repo returns null for any rejected write: an unowned category, an
-  // out-of-range date, or a charged pair that violates the paired CHECKs.
-  // The form prevents all three, so a single message covers the direct-POST
-  // case without claiming a cause that may be wrong.
+  // Repo returns null for any rejected write: an unowned category or an
+  // out-of-range date. The form prevents both, so a single message covers the
+  // direct-POST case without claiming a cause that may be wrong.
   const expense = await createExpense(user.id, parsed.data);
   if (!expense) {
-    return { ok: false, error: "Не удалось сохранить трату. Проверьте категорию, дату и сумму списания" };
+    return { ok: false, error: "Не удалось сохранить трату. Проверьте категорию и дату" };
   }
   revalidateExpenseViews();
-  // Snapshot top-up for the plain path: createExpense already awaited the
-  // rate when a value derivation needed it, so a save never waits on this.
-  // The repair follows it rather than racing it — a fixation that had no
-  // exact-date snapshot at write time can only be derived once ensureRates
-  // has actually written one (plan Step 4.5.4). `user.id` is read here, not
-  // inside the callback: after() runs outside the request context.
+  // Snapshot top-up after the response, so a save never waits on a provider.
+  // `user.id` is read here, not inside the callback: after() runs outside the
+  // request context.
   const userId = user.id;
   after(async () => {
     await ensureRates(parsed.data.spentAt);
@@ -69,9 +65,8 @@ export async function updateExpenseAction(
   if (!expense) return { ok: false, error: "Не удалось обновить трату" };
   revalidateExpenseViews();
   // The patch may not touch spentAt at all — skip the top-up rather than
-  // guessing which date to fill, but still run the repair: an edit can leave
-  // a fixation pending regardless of whether the date moved (see
-  // createExpenseAction for the ordering and the userId capture).
+  // guessing which date to fill (see createExpenseAction for the userId
+  // capture).
   const { spentAt } = parsed.data;
   const userId = user.id;
   after(async () => {

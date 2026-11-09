@@ -1,10 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CURRENCY_CODES, type CurrencyCode } from "@/lib/currency";
-import { type ConvertibleRow, convertRow } from "@/lib/fx/convert";
-import {
-  deriveOverrideForFixation,
-  loadRateIndex,
-} from "@/repositories/fx-rates";
 import { setDisplayCurrency } from "@/repositories/user-settings";
 import { clearRates, mkRate, mkUser } from "@/test/factories";
 
@@ -30,7 +25,6 @@ import { quoteConversionAction } from "@/lib/actions/fx";
 beforeEach(clearRates);
 
 const PLAIN_DATE = "2026-04-10";
-const FIXATION_DATE = "2026-04-11";
 
 const RATES: Record<CurrencyCode, string> = {
   RUB: "0.01040000000000000000",
@@ -100,54 +94,5 @@ describe("quoteConversionAction — plain conversion", () => {
     if (!res.ok) throw new Error(res.error);
     expect(res.data.displayCurrency).toBe("USD");
     expect(res.data.convertedMinor).toBe(104); // 100 ₽ * 0,0104 = $1,04
-  });
-});
-
-describe("quoteConversionAction — fixation with a third display currency", () => {
-  it("prices the fixation exactly as the saved row will render", async () => {
-    const u = await mkUser();
-    await setDisplayCurrency(u.id, "EUR");
-    session.userId = u.id;
-    await seedRates(FIXATION_DATE);
-
-    // 3 000 RSD entered, 2 850 ₽ actually debited, shown in EUR — none of the
-    // three currencies coincide, so convert.ts's identity rules don't apply and
-    // only the derived override can make the preview agree with the save.
-    const fixation = {
-      amountMinor: 300000,
-      currency: "RSD" as const,
-      chargedAmountMinor: 285000,
-      chargedCurrency: "RUB" as const,
-      spentAt: FIXATION_DATE,
-    };
-
-    const res = await quoteConversionAction(fixation);
-    if (!res.ok) throw new Error(res.error);
-    expect(res.data.displayCurrency).toBe("EUR");
-
-    const derived = await deriveOverrideForFixation(fixation);
-    expect(derived).not.toBeNull();
-    const index = await loadRateIndex([...CURRENCY_CODES], FIXATION_DATE);
-    const saved: ConvertibleRow = {
-      amountMinor: fixation.amountMinor,
-      currency: fixation.currency,
-      spentAt: fixation.spentAt,
-      rateToUsdOverride: derived!.rateToUsdOverride,
-      chargedAmountMinor: fixation.chargedAmountMinor,
-      chargedCurrency: fixation.chargedCurrency,
-    };
-    expect(res.data.convertedMinor).toBe(convertRow(saved, "EUR", index));
-
-    // And it is not the reference conversion the preview used to show — that
-    // difference is the card-vs-reference margin the fixation exists to record.
-    const reference: ConvertibleRow = {
-      ...saved,
-      rateToUsdOverride: null,
-      chargedAmountMinor: null,
-      chargedCurrency: null,
-    };
-    expect(convertRow(reference, "EUR", index)).not.toBe(
-      res.data.convertedMinor,
-    );
   });
 });

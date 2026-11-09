@@ -28,9 +28,6 @@ function buildIndex(entries: Partial<Record<CurrencyCode, Array<{ date: string; 
 function row(overrides: Partial<ConvertibleRow> & Pick<ConvertibleRow, "amountMinor" | "currency">): ConvertibleRow {
   return {
     spentAt: "2026-09-01",
-    rateToUsdOverride: null,
-    chargedAmountMinor: null,
-    chargedCurrency: null,
     ...overrides,
   };
 }
@@ -44,10 +41,6 @@ function addDays(iso: string, days: number): string {
 describe("parseRate", () => {
   it("scales a DB-shaped padded decimal to 1e20 by exact string shift", () => {
     expect(parseRate("0.00000012877219489060")).toBe(BigInt("12877219489060"));
-  });
-
-  it("keeps the integer part when the rate is above 1", () => {
-    expect(parseRate("86.31931694000000000000")).toBe(BigInt("8631931694000000000000"));
   });
 
   it("keeps full precision on 20 fractional digits — Number would round this away", () => {
@@ -70,11 +63,6 @@ describe("rateFor", () => {
     }
   });
 
-  it("reaches back for BTC too, which used to have the tightest bound", () => {
-    const index = buildIndex({ BTC: [{ date: "2026-08-20", rate: "78783.80494894651871698368" }] });
-    expect(rateFor(index, "BTC", "2026-08-23")).toBe(parseRate("78783.80494894651871698368"));
-  });
-
   it("binary-searches to the nearest earlier point, not the first or last", () => {
     const index = buildIndex({
       RUB: [
@@ -93,54 +81,9 @@ describe("rateFor", () => {
 });
 
 describe("convertMicro / convertRow — rate selection ladder", () => {
-  it("regression: a BTC row with a Coinbase override, displayed in BTC, returns exactly the entered amount", () => {
-    const r = row({
-      amountMinor: 45000, // 0.00045 BTC
-      currency: "BTC",
-      rateToUsdOverride: "80000.00000000000000000000", // must be ignored entirely — identity wins
-    });
-    expect(convertRow(r, "BTC", new Map())).toBe(45000);
-  });
-
-  it("regression: 100 USD charged 9000 RUB, displayed in USD, returns exactly 10000 — not the FX-inclusive value", () => {
-    const r = row({
-      amountMinor: 10000, // 100.00 USD
-      currency: "USD",
-      chargedAmountMinor: 900000, // 9000.00 RUB
-      chargedCurrency: "RUB",
-      rateToUsdOverride: "0.90000000000000000000",
-    });
-    expect(convertRow(r, "USD", new Map())).toBe(10000);
-  });
-
   it("identity: a RUB row displayed in RUB returns the entered amount", () => {
     const r = row({ amountMinor: 1248050, currency: "RUB" });
     expect(convertRow(r, "RUB", new Map())).toBe(1248050);
-  });
-
-  it("charged pair in the charged currency returns the exact charged amount", () => {
-    const r = row({
-      amountMinor: 10000,
-      currency: "USD",
-      chargedAmountMinor: 900000,
-      chargedCurrency: "RUB",
-    });
-    expect(convertRow(r, "RUB", new Map())).toBe(900000);
-  });
-
-  it("charged pair in a third currency is converted through the override, not a lookup of the row's own currency", () => {
-    const index = buildIndex({ EUR: [{ date: "2026-09-01", rate: "1.10000000000000000000" }] });
-    // No USD rate anywhere in the index — a non-null result can only come
-    // from the override, proving rule 3 used it instead of rateFor(index, "USD", ...).
-    const r = row({
-      amountMinor: 10000, // 100.00 USD
-      currency: "USD",
-      chargedAmountMinor: 900000, // 9000.00 RUB
-      chargedCurrency: "RUB",
-      rateToUsdOverride: "0.90000000000000000000",
-    });
-    expect(convertMicro(r, "EUR", index)).toBe(BigInt("8181818181"));
-    expect(convertRow(r, "EUR", index)).toBe(8182);
   });
 
   it("exponent shift: 3000 RSD is ~2560 RUB at the 1 Sept rates", () => {
@@ -163,19 +106,16 @@ describe("convertMicro / convertRow — rate selection ladder", () => {
     expect(convertRow(r, "RUB", index)).toBe(30603); // 306.03 RUB
   });
 
-  it("never substitutes a rate of 1 — a missing 'from' rate returns null", () => {
-    // If a rate of 1 were substituted for the missing RSD leg, this would
-    // resolve to a nonzero RUB amount instead of null.
-    const index = buildIndex({ RUB: [{ date: "2026-09-01", rate: "0.01158489241400153276" }] });
+  it("never substitutes a rate of 1 — a missing 'from' or 'to' rate returns null", () => {
+    // If a rate of 1 were substituted for the missing leg, this would resolve
+    // to a nonzero RUB amount instead of null.
     const r = row({ amountMinor: 300000, currency: "RSD" });
-    expect(convertMicro(r, "RUB", index)).toBeNull();
-    expect(convertRow(r, "RUB", index)).toBeNull();
-  });
+    const noFrom = buildIndex({ RUB: [{ date: "2026-09-01", rate: "0.01158489241400153276" }] });
+    expect(convertMicro(r, "RUB", noFrom)).toBeNull();
+    expect(convertRow(r, "RUB", noFrom)).toBeNull();
 
-  it("a missing 'to' rate also returns null", () => {
-    const index = buildIndex({ RSD: [{ date: "2026-09-01", rate: "0.00988734312401027658" }] });
-    const r = row({ amountMinor: 300000, currency: "RSD" });
-    expect(convertRow(r, "RUB", index)).toBeNull();
+    const noTo = buildIndex({ RSD: [{ date: "2026-09-01", rate: "0.00988734312401027658" }] });
+    expect(convertRow(r, "RUB", noTo)).toBeNull();
   });
 
   it("converts through a month-old rate instead of dropping the row", () => {

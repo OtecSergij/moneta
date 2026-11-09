@@ -24,12 +24,9 @@ export async function setDisplayCurrencyAction(
 
   const displayCurrency = await setDisplayCurrency(user.id, parsed.data);
 
-  // The switcher appears on all three, and /settings is a dynamic server
-  // component reading the setting server-side — skipping it would leave
-  // that page showing the old currency.
+  // The switcher appears on both pages that render totals.
   revalidatePath("/");
   revalidatePath("/history");
-  revalidatePath("/settings");
 
   // cookies()/headers() aren't callable inside an after() callback, so the
   // user id is resolved here and closed over rather than re-derived inside.

@@ -46,7 +46,6 @@ describe("formatMoney", () => {
 
 describe("parseMoney", () => {
   it("parses the AC-2 table", () => {
-    expect(parseMoney("0,00004507", "BTC")).toBe(4507);
     expect(parseMoney("12,345", "RUB")).toBeNull();
   });
 

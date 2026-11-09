@@ -15,6 +15,13 @@
       "when": 1788429111226,
       "tag": "0001_cuddly_expediter",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794235642772,
+      "tag": "0002_messy_vengeance",
+      "breakpoints": true
     }
   ]
 }

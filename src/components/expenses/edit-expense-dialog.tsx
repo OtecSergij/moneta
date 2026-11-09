@@ -30,11 +30,6 @@ function toDefaults(e: Expense): ExpenseFormValues {
     categoryId: e.categoryId,
     note: e.note,
     spentAt: e.spentAt,
-    chargedAmount:
-      e.chargedAmountMinor !== null && e.chargedCurrency !== null
-        ? minorToInput(e.chargedAmountMinor, e.chargedCurrency)
-        : undefined,
-    chargedCurrency: e.chargedCurrency ?? undefined,
   };
 }
 
@@ -94,11 +89,6 @@ export function EditExpenseDialog({
           <ExpenseFormFields
             categories={categoryList}
             displayCurrency={displayCurrency}
-            // No last-used charged currency here on purpose: it would have to
-            // be threaded through every list component that can open this
-            // dialog, and an edited row either already carries its own
-            // fixation or falls back to the display currency.
-            initialChargedCurrency={null}
             onCategoryCreated={(c) => {
               setCategoryList((prev) =>
                 [...prev, c].sort((a, b) => a.name.localeCompare(b.name, "ru")),

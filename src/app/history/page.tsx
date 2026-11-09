@@ -41,8 +41,8 @@ export default async function HistoryPage({
   const range = resolveRange(from, to);
 
   // The rate history is the heaviest read in this render, so it is loaded
-  // once and threaded into every consumer below — summary and listExpenses
-  // would each repeat the identical query if left to load their own. It
+  // once and threaded into every consumer below — summary, the row list and
+  // the day totals would each repeat the identical query otherwise. It
   // depends only on the range, so it goes in this first batch rather than
   // waiting on the settings lookup.
   const [categories, settings, rateIndex] = await Promise.all([
@@ -99,11 +99,7 @@ export default async function HistoryPage({
       </header>
 
       <section className="mb-6 rounded-lg border border-border bg-surface p-4 sm:p-6">
-        <HistoryFilter
-          from={range.from}
-          to={range.to}
-          salaryDays={settings.salaryDays}
-        />
+        <HistoryFilter from={range.from} to={range.to} />
       </section>
 
       <PeriodTabs

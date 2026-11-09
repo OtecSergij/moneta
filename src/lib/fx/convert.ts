@@ -27,9 +27,6 @@ export interface ConvertibleRow {
   amountMinor: number;
   currency: CurrencyCode;
   spentAt: string; // "YYYY-MM-DD"
-  rateToUsdOverride: string | null; // numeric from DB, as a string
-  chargedAmountMinor: number | null;
-  chargedCurrency: CurrencyCode | null;
 }
 
 const RATE_SCALE_DIGITS = 20;
@@ -89,27 +86,18 @@ export function rateFor(index: RateIndex, currency: CurrencyCode, onDate: string
 
 /**
  * Micro-minor units of `row` valued in `display` currency, or `null` when no
- * rate gets us there. Branch order is load-bearing (plan "Шаг 3.3"):
- *   1. charged pair matches display -> the actual charge, exactly.
- *   2. row's own currency matches display -> the entered amount, exactly,
- *      unconditionally — even with an override present. A BTC row with a
- *      live Coinbase rate must not get re-valued through the daily snapshot
- *      when shown in BTC.
- *   3. otherwise convert through rates: the row's override if it has one,
- *      else the day's snapshot — looked up independently for `from` and
- *      `to`, since only the "from" side can carry an override.
- *   4. any missing rate -> null, never a substituted rate of 1.
+ * rate gets us there:
+ *   1. row's own currency matches display -> the entered amount, exactly.
+ *   2. otherwise convert through the day's snapshot, looked up independently
+ *      for `from` and `to`.
+ *   3. any missing rate -> null, never a substituted rate of 1.
  */
 export function convertMicro(row: ConvertibleRow, display: CurrencyCode, index: RateIndex): bigint | null {
-  if (row.chargedCurrency === display && row.chargedAmountMinor !== null) {
-    return BigInt(row.chargedAmountMinor) * MICRO_PER_MINOR;
-  }
   if (row.currency === display) {
     return BigInt(row.amountMinor) * MICRO_PER_MINOR;
   }
 
-  const rateFrom =
-    row.rateToUsdOverride !== null ? parseRate(row.rateToUsdOverride) : rateFor(index, row.currency, row.spentAt);
+  const rateFrom = rateFor(index, row.currency, row.spentAt);
   const rateTo = rateFor(index, display, row.spentAt);
   if (rateFrom === null || rateTo === null) return null;
 
@@ -213,32 +201,6 @@ export function sumConvertedByDay<T extends ConvertibleRow>(
     bucket.unconverted = unconverted;
   }
   return buckets;
-}
-
-/**
- * Rate implied by a manual fixation: the user says "I paid `amountMinor`
- * `currency` and my bank charged me `chargedAmountMinor` `chargedCurrency`".
- *
- *   override = (charged / 10^expCharged) * rate_to_usd(chargedCurrency)
- *              / (amount / 10^expCurrency)
- *
- * Lives here rather than in the repository because the insert path and the
- * background repair path must produce bit-identical rates: a row repaired
- * later has to be indistinguishable from one that got its rate immediately.
- */
-export function deriveOverrideScaled(row: {
-  amountMinor: number;
-  currency: CurrencyCode;
-  chargedAmountMinor: number;
-  chargedCurrency: CurrencyCode;
-  rateChargedToUsd: bigint;
-}): bigint {
-  const expCurrency = currencyMeta(row.currency).exponent;
-  const expCharged = currencyMeta(row.chargedCurrency).exponent;
-  const numerator =
-    BigInt(row.chargedAmountMinor) * row.rateChargedToUsd * TEN ** BigInt(expCurrency);
-  const denominator = TEN ** BigInt(expCharged) * BigInt(row.amountMinor);
-  return divRoundHalfEven(numerator, denominator);
 }
 
 // Inverse of parseRate: renders a scale-1e20 bigint back to the

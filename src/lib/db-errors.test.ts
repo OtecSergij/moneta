@@ -6,13 +6,10 @@ describe("isUniqueViolation", () => {
     expect(isUniqueViolation({ code: "23505" })).toBe(true);
   });
 
-  it("matches 23505 nested on .cause (Drizzle wraps the driver error)", () => {
+  it("matches 23505 anywhere in the .cause chain (Drizzle wraps the driver error)", () => {
     // The real shape we hit: DrizzleQueryError → PostgresError on `.cause`.
     const wrapped = { message: "Failed query: insert ...", cause: { code: "23505" } };
     expect(isUniqueViolation(wrapped)).toBe(true);
-  });
-
-  it("matches deeper in the cause chain", () => {
     expect(isUniqueViolation({ cause: { cause: { code: "23505" } } })).toBe(true);
   });
 

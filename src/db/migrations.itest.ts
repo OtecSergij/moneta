@@ -47,7 +47,7 @@ describe("migrations — AC-21: no new-currency literal outside ADD VALUE", () =
 // the type is born in that same transaction, so it would not catch AC-21
 // violations — only a database seeded to look like production does.
 describe("migrations — AC-24: applied in production shape", () => {
-  it("runs the pending migration cleanly against a database where 0000 is already committed", async () => {
+  it("runs the pending migrations cleanly against a database where 0000 is already committed", async () => {
     const baseUrl = new URL(process.env.DATABASE_URL as string);
     const dbName = `moneta_migration_${randomUUID().replace(/-/g, "")}`;
     const freshUrl = new URL(baseUrl.toString());
@@ -97,8 +97,8 @@ describe("migrations — AC-24: applied in production shape", () => {
         await seed.end();
       }
 
-      // Fresh connection for the deploy that adds the new currencies — the
-      // one migrate() actually wraps in a transaction. Without the
+      // Fresh connection for the deploy that runs every later migration —
+      // the one migrate() actually wraps in a transaction. Without the
       // bookkeeping row above, migrate() would treat 0000 as pending too
       // and fail on "type currency_code already exists" — a red test for
       // the wrong reason (plan AC-24).
@@ -128,11 +128,16 @@ describe("migrations — AC-24: applied in production shape", () => {
           select hash, created_at from "drizzle"."__drizzle_migrations"
           order by created_at
         `;
-        expect(bookkeeping).toHaveLength(2);
+        const journal = JSON.parse(
+          readFileSync(path.join(MIGRATIONS_DIR, "meta/_journal.json"), "utf8"),
+        ) as { entries: unknown[] };
+        expect(bookkeeping).toHaveLength(journal.entries.length);
         expect(Number(bookkeeping[0].created_at)).toBe(MIGRATION_0000_MILLIS);
-        expect(Number(bookkeeping[1].created_at)).toBeGreaterThan(
-          MIGRATION_0000_MILLIS,
-        );
+        for (const later of bookkeeping.slice(1)) {
+          expect(Number(later.created_at)).toBeGreaterThan(
+            MIGRATION_0000_MILLIS,
+          );
+        }
 
         const fxRatesTable = await migrateClient`
           select 1 from information_schema.tables where table_name = 'fx_rates'

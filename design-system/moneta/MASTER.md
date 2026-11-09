@@ -134,9 +134,8 @@ Light-only — there is no dark theme. `color-scheme: light` (set via `colorSche
 │  └────────────────────────────────┘  │
 ├──────────────────────────────────────┤
 │  Последние                           │
-│  • 17 мая  Еда          $ 10       │
-│    3 000 RSD            │
-│  • 17 мая  Транспорт    € 4,50    │
+│  • 17 мая  Еда          $ 25,50   │
+│  • 17 мая  Транспорт    $ 4,90    │
 │  ...                                 │
 │              [ Вся история → ]       │
 └──────────────────────────────────────┘
@@ -156,9 +155,8 @@ Light-only — there is no dark theme. `color-scheme: light` (set via `colorSche
 ├──────────────────────────────────────┤
 │  Список                              │
 │  17 мая                              │
-│   • Магнит      Еда         $ 10   │
-│     3 000 RSD                │
-│   • Такси       Транспорт   € 5,00 │
+│   • Магнит      Еда         $ 25,50 │
+│   • Такси       Транспорт   $ 5,45 │
 │  16 мая                              │
 │   ...                                │
 └──────────────────────────────────────┘
@@ -170,19 +168,11 @@ Light-only — there is no dark theme. `color-scheme: light` (set via `colorSche
 ┌──────────────────────────────────────┐
 │  ← Настройки                        │
 ├──────────────────────────────────────┤
-│  Валюта отображения                  │
-│  [RUB][USD][EUR][RSD][▣BTC]         │
-├──────────────────────────────────────┤
 │  Категории                           │
 │  ● Еда           [✎] [×]            │
 │  ● Транспорт     [✎] [×]            │
 │  ...                                 │
 │  + Новая категория                   │
-├──────────────────────────────────────┤
-│  Дни зарплаты                        │
-│  числа месяца 1–31, тап — выбрать    │
-│  [1][2][▣3][4][5][6][7]  …  [▣17]    │
-│  [ Сохранить ]                       │
 ├──────────────────────────────────────┤
 │  Аккаунт                             │
 │  email@example.com                   │
@@ -210,34 +200,19 @@ Light-only — there is no dark theme. `color-scheme: light` (set via `colorSche
 - Date input: native `<input type="date">` for MVP — system picker, zero deps.
 - Labels are **always visible above** the input. Placeholder ≠ label.
 
-### Amount status slot (expense form)
+### Amount conversion line (expense form)
 
-- One line under the amount + currency segment, shown as soon as the amount
-  parses to a positive number. It is the **only** tap target that opens the
-  «Сколько списали по факту» fixation panel.
-- Same treatment whichever label it carries: `text-sm text-text-muted`, dotted
-  underline, ≥44 px tap height, visible focus ring.
-- Entry currency ≠ display currency → live conversion (`≈ ₽ 858,67`, «курс
-  недоступен», or `…` while pending). Currencies equal → «Указать списание»:
-  what the bank debited is a fact about the expense, so recording it must not
-  depend on which display currency happens to be selected.
-- With the fixation panel open the slot stops being a tap target — it keeps
-  reporting the (fixation-aware) conversion when the currencies differ, and
-  disappears when they match.
+- One line under the amount + currency segment, shown only when the entry
+  currency differs from the display currency and the amount parses to a
+  positive number: live conversion (`₽ 858,67`), «курс недоступен», or `…`
+  while pending. With matching currencies nothing is shown.
+- `text-sm text-text-muted`, static text — not a tap target.
 
 ### Category Select
 
 - Combo: select with options + last option `+ Создать новую…` opens inline mini-form
   (name + colour swatch picker). On save, new category becomes the selected value.
 - Each option shows colour dot + name.
-
-### Day-of-month grid (Settings → «Дни зарплаты»)
-
-- Grid of 31 toggle buttons (1–31), 7 per row (`grid-cols-7 gap-1.5`), each
-  `h-11` (≥44px tap) with `tabular-nums`. Selected = `bg-accent text-white
-  border-accent`; unselected = `border-border text-text hover:bg-border/60`.
-- Multi-select (a user can have several salary days). Empty selection is valid
-  and hides the History «С последней зарплаты» preset; non-empty shows it.
 
 ### Cards
 
@@ -266,11 +241,13 @@ Light-only — there is no dark theme. `color-scheme: light` (set via `colorSche
   row — no rate on file for some currency — is prefixed with `≈` and carries a `title`
   naming how many rows are missing from it. Rendered bare it would read as an exact
   figure, and a category whose rows are all unconverted would read as a plain `₽ 0`.
-- **List row pattern:** when an expense is shown in a display currency different from its
-  entry currency, the converted amount is the primary figure (right-aligned, tabular-nums),
-  and the original amount is a muted secondary line below (text-xs, text-text-muted) only
-  when the currencies differ. Example: expense entry `3 000 RSD` shown under display
-  currency USD displays as `$ 25,50 / 3 000 RSD` stacked.
+- **List row pattern:** an expense row shows one figure — the amount converted to the
+  display currency (right-aligned, `text-sm text-text`, tabular-nums). When the entry
+  currency is the display currency, that figure is the entered amount itself. Example:
+  `3 000 RSD` under display currency USD shows as `$ 25,50`. The entered amount in its own
+  currency appears only in the expense card (edit dialog). If no rate is on file for the
+  expense's currency at all, the row falls back to the entered amount in its own currency
+  rather than a 1:1 substitute.
 
 ### Charts
 

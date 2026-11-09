@@ -30,8 +30,7 @@ export const OFFICIAL_HISTORY_FLOOR = "2003-01-01";
 // notion of "today" by one day forward. `maxEntryDate` is the validation
 // upper bound (src/lib/actions/fx.ts); `isCurrentDate` backs every "is this
 // today" gate a client's clock could legitimately push one day ahead: the
-// live-BTC branch (src/repositories/expenses.ts), the `@latest` tag gate and
-// the ECB carry-forward below.
+// `@latest` tag gate and the ECB carry-forward below.
 export function maxEntryDate(now: Date = new Date()): string {
   return todayISO(addDays(now, 1));
 }
@@ -92,8 +91,6 @@ const ECB_RECENT_URL =
 const ECB_HISTORY_URL =
   "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml";
 const NBS_URL = "https://kurs.resenje.org/api/v1/currencies/usd/rates";
-const COINBASE_URL = "https://api.coinbase.com/v2/exchange-rates?currency=BTC";
-const COINBASE_CACHE_MS = 60_000;
 
 const USD_PIVOT_RATE = "1.00000000000000000000";
 
@@ -103,19 +100,6 @@ function isValidRate(n: number): boolean {
   return Number.isFinite(n) && n > 0 && n >= MIN_RATE && n <= MAX_RATE;
 }
 
-// Same 1e-9…1e9 band as isValidRate above, expressed as a bigint at the
-// 1e20 scale expenses.ts derives manual-fixation rates in (RATE_SCALE_DIGITS
-// in convert.ts) — reused there so a user-derived override is sanity-checked
-// against the exact band a fetched rate is, without a lossy Number
-// comparison on a 20-fractional-digit value.
-const RATE_SCALE_DIGITS = 20;
-const MIN_RATE_SCALED = BigInt(10) ** BigInt(RATE_SCALE_DIGITS - 9); // 1e-9 scaled
-const MAX_RATE_SCALED = BigInt(10) ** BigInt(RATE_SCALE_DIGITS + 9); // 1e9 scaled
-
-export function isScaledRateInBand(scaledRate: bigint): boolean {
-  return scaledRate >= MIN_RATE_SCALED && scaledRate <= MAX_RATE_SCALED;
-}
-
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null
     ? (value as Record<string, unknown>)
@@ -123,8 +107,8 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 // Never throws, never leaves a hung request: Node's fetch has no default
-// timeout, and a stalled quote request would block expense creation (plan
-// Step 4.2). Returns null on any failure — callers decide what "no data"
+// timeout, and a stalled request would block the form's conversion preview
+// and the background fill (plan Step 4.2). Returns null on any failure — callers decide what "no data"
 // means for them.
 async function fetchOk(
   url: string,
@@ -563,44 +547,4 @@ export async function fetchRates(
     });
   }
   return rows;
-}
-
-// Keyed by the transport for the same reason ecbCaches above is: an injected
-// fetch (tests, or a future proxy) must never be served a quote some other
-// transport downloaded. A bare module-level variable here let a stubbed fetch
-// read the value a previous stub had cached, silently exercising the wrong
-// branch.
-const coinbaseCaches = new WeakMap<
-  FxDeps["fetch"],
-  { value: string; at: number }
->();
-
-export async function fetchLiveBtcUsd(deps: FxDeps): Promise<string | null> {
-  const cached = coinbaseCaches.get(deps.fetch);
-  if (cached && Date.now() - cached.at < COINBASE_CACHE_MS) {
-    return cached.value;
-  }
-
-  const payload = asRecord(await fetchJson(COINBASE_URL, deps));
-  const data = payload ? asRecord(payload.data) : null;
-  const rates = data ? asRecord(data.rates) : null;
-  const raw = rates?.USD;
-  // The quote goes straight into a numeric(36,20) column, so `Number()` alone
-  // is the wrong gate: it accepts "1e5" (which Postgres would take, silently
-  // storing a different literal than the provider sent) and "0x1F" (which
-  // Postgres rejects, turning a save into a 500). Only a plain decimal passes,
-  // and it is canonicalised through the same scale-20 path the daily rates use
-  // — by exact string shifting, never a double.
-  if (
-    typeof raw !== "string" ||
-    !PLAIN_DECIMAL.test(raw) ||
-    !isValidRate(Number(raw))
-  ) {
-    console.warn("fx.invalid_rate", { source: "coinbase", raw });
-    return null;
-  }
-
-  const value = formatScaledRate(parseRate(raw));
-  coinbaseCaches.set(deps.fetch, { value, at: Date.now() });
-  return value;
 }

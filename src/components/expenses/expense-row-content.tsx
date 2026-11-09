@@ -1,10 +1,15 @@
 import type { CurrencyCode } from "@/lib/currency";
-import { ConvertedMoney } from "@/components/ui/converted-money";
+import { Money } from "@/components/ui/money";
 import { CategoryDot } from "@/components/ui/category-dot";
 
 // Generic two-line expense row: optional colour dot + title over an optional
 // subtitle + amount. Every list leads with the description (business-spec §5.2);
 // the dot is omitted in History "По категориям" where the category is the group.
+//
+// The amount is one figure in the display currency (MASTER.md "List row
+// pattern"); the entered amount is only shown in the expense card. With no
+// rate on file for the row's currency it falls back to the entered amount —
+// never a silent 1:1 substitution.
 export function ExpenseRowContent({
   color,
   title,
@@ -31,12 +36,10 @@ export function ExpenseRowContent({
           <div className="truncate text-xs text-text-muted">{subtitle}</div>
         ) : null}
       </div>
-      <ConvertedMoney
-        amountMinor={amountMinor}
-        currency={currency}
-        convertedMinor={convertedMinor}
-        displayCurrency={displayCurrency}
-        className="shrink-0"
+      <Money
+        minor={convertedMinor ?? amountMinor}
+        currency={convertedMinor === null ? currency : displayCurrency}
+        className="shrink-0 text-sm text-text"
       />
     </>
   );

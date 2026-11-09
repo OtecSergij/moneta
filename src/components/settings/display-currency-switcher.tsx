@@ -14,10 +14,9 @@ import { setDisplayCurrencyAction } from "@/lib/actions/display-currency";
 import { cn } from "@/lib/utils";
 
 // App-wide display currency, switchable from the header on `/` and
-// `/history` and from its own section on `/settings` — same component in
-// all three places. Optimistic: the trigger shows the picked value right
-// away and reverts on failure, the same useTransition + toast pattern the
-// rest of the settings/expense forms use.
+// `/history` — same component in both places. Optimistic: the trigger shows
+// the picked value right away and reverts on failure, the same
+// useTransition + toast pattern the rest of the settings/expense forms use.
 export function DisplayCurrencySwitcher({
   initialDisplayCurrency,
 }: {

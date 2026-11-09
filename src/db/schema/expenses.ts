@@ -4,7 +4,6 @@ import {
   check,
   date,
   index,
-  numeric,
   pgEnum,
   pgTable,
   text,
@@ -63,24 +62,6 @@ export const expenses = pgTable(
     // fragments (see plan Step 2.2).
     amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
     currency: currencyEnum("currency").notNull().default("RUB"),
-    // Frozen conversion rate for this row, scale 1e20 (matches
-    // fx_rates.rate_to_usd). NULL unless rate_source is set — see the
-    // pairing CHECK below. Meaning depends on the source: 'user' is a cache
-    // derived from charged_amount_minor/charged_currency, recomputed
-    // whenever an input to that derivation changes; 'coinbase' is the live
-    // BTC quote itself, frozen forever because Coinbase has no historical
-    // endpoint to recompute it from (see src/lib/fx/convert.ts and plan
-    // Step 5.3 for the update-time freeze rules).
-    rateToUsdOverride: numeric("rate_to_usd_override", {
-      precision: 36,
-      scale: 20,
-    }),
-    rateSource: text("rate_source"),
-    // What the user says was actually charged (e.g. a card's own RUB
-    // conversion of a USD purchase) — rate_to_usd_override is derived from
-    // this pair when rate_source = 'user'.
-    chargedAmountMinor: bigint("charged_amount_minor", { mode: "number" }),
-    chargedCurrency: currencyEnum("charged_currency"),
     // Required: every expense carries a short description (business-spec §4.2).
     note: text("note").notNull(),
     // App-level default to "today in user's timezone"; no DB default because
@@ -98,42 +79,6 @@ export const expenses = pgTable(
     check(
       "expenses_note_len",
       sql`char_length(${t.note}) between 1 and 200`,
-    ),
-    // Pairs: an override rate can't exist without a source, and a manual
-    // charge fixation can't exist as only half a pair.
-    check(
-      "expenses_rate_override_pair",
-      sql`(${t.rateToUsdOverride} is null) = (${t.rateSource} is null)`,
-    ),
-    check(
-      "expenses_charged_pair",
-      sql`(${t.chargedAmountMinor} is null) = (${t.chargedCurrency} is null)`,
-    ),
-    check(
-      "expenses_charged_amount_positive",
-      sql`${t.chargedAmountMinor} is null or ${t.chargedAmountMinor} > 0`,
-    ),
-    check(
-      "expenses_rate_override_positive",
-      sql`${t.rateToUsdOverride} is null or ${t.rateToUsdOverride} > 0`,
-    ),
-    check(
-      "expenses_rate_source_values",
-      sql`${t.rateSource} is null or ${t.rateSource} in ('user', 'coinbase')`,
-    ),
-    // A 'user'-derived rate can't outlive the fixation it's derived from:
-    // that row would be unexplainable and unclearable from the UI (plan
-    // Step 2.3, pre-mortem "осиротевший курс").
-    check(
-      "expenses_rate_source_requires_charged",
-      sql`${t.rateSource} is distinct from 'user' or ${t.chargedAmountMinor} is not null`,
-    ),
-    // Fixing the charge in the expense's own currency is meaningless and
-    // would collide with convert.ts's rule order (identity vs. override
-    // both claiming the same row — plan Step 3.3).
-    check(
-      "expenses_charged_currency_differs",
-      sql`${t.chargedCurrency} is null or ${t.chargedCurrency} <> ${t.currency}`,
     ),
   ],
 );

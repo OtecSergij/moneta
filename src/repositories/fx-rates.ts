@@ -1,40 +1,18 @@
-import {
-  and,
-  asc,
-  eq,
-  gte,
-  inArray,
-  isNotNull,
-  isNull,
-  lte,
-} from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
 import { db } from "@/db";
 import { expenses, fxRates } from "@/db/schema";
 import { type CurrencyCode } from "@/lib/currency";
-import {
-  type RateIndex,
-  type RatePoint,
-  deriveOverrideScaled,
-  formatScaledRate,
-  parseRate,
-} from "@/lib/fx/convert";
+import { type RateIndex, type RatePoint, parseRate } from "@/lib/fx/convert";
 import {
   type FxDeps,
   OFFICIAL_HISTORY_FLOOR,
   fetchRates,
   fetchableCurrencies,
-  isScaledRateInBand,
 } from "@/lib/fx/provider";
 
 const BACKFILL_CONCURRENCY = 4;
 const BACKFILL_MAX_DATES = 400;
 const NEGATIVE_CACHE_MS = 60_000;
-
-// Rows whose fixation still has no derivable rate, per repair pass. A row that
-// can never derive — an implied rate permanently outside the sane band — stays
-// in this query's result set forever, so the pass has to be bounded rather than
-// "however many are pending". Anything above the cap waits for the next one.
-const REPAIR_MAX_ROWS = 200;
 
 /**
  * How long a page-render-triggered sync stays quiet for a user. The write
@@ -47,17 +25,16 @@ export const PAGE_SYNC_THROTTLE_MS = 5 * 60_000;
 /**
  * Ceiling on how long a *foreground* caller waits for ensureRates. The fetch
  * itself is not cancelled — it stays in `inFlight` and still fills the table —
- * so exceeding the budget costs a derivation this request, not the rate: the
- * row is saved pending and `repairPendingOverrides` converges it (AC-27).
- * Without this a back-dated fixation blocks the save on the ECB full-history
- * download, whose own budget is 10 s.
+ * so exceeding the budget costs this one response, not the rate. Without it a
+ * back-dated preview blocks on the ECB full-history download, whose own
+ * budget is 10 s.
  */
 export const FOREGROUND_RATE_BUDGET_MS = 2_000;
 
 // A thunk, not a captured reference: `{ fetch: globalThis.fetch }` binds once
 // at module import time, so a test stubbing the global afterwards would have
-// no effect on calls that fall back to this default (same reasoning as
-// src/repositories/expenses.ts).
+// no effect on calls that fall back to this default. Deferring the lookup
+// into the wrapper reads globalThis.fetch fresh on every call.
 const defaultDeps: FxDeps = { fetch: (...args) => globalThis.fetch(...args) };
 
 // In-flight requests keyed by date, so a debounced preview firing alongside
@@ -210,102 +187,6 @@ export async function loadRateIndex(
   return index;
 }
 
-const exactKey = (currency: CurrencyCode, date: string) =>
-  `${currency}|${date}`;
-
-/**
- * Rates for exactly these (currency, date) pairs — nothing carried forward.
- * A derived override is frozen onto its row and only recomputed when one of
- * its own inputs changes, so deriving it from a neighbouring day's snapshot
- * would silently bake in a rate the user never transacted at, with nothing
- * left to correct it. A miss keeps the row pending instead, which
- * repairPendingOverrides does converge.
- *
- * Two exact keys are all a derivation needs, so this replaces scanning a
- * currency's whole history through loadRateIndex to reach one row.
- */
-async function loadExactRates(
-  currencies: CurrencyCode[],
-  dates: string[],
-): Promise<Map<string, bigint>> {
-  const exact = new Map<string, bigint>();
-  if (currencies.length === 0 || dates.length === 0) return exact;
-
-  const rows = await db
-    .select({
-      currency: fxRates.currency,
-      effectiveDate: fxRates.effectiveDate,
-      rateToUsd: fxRates.rateToUsd,
-    })
-    .from(fxRates)
-    .where(
-      and(
-        inArray(fxRates.currency, currencies),
-        inArray(fxRates.effectiveDate, dates),
-      ),
-    );
-
-  for (const row of rows) {
-    exact.set(
-      exactKey(row.currency, row.effectiveDate),
-      parseRate(row.rateToUsd),
-    );
-  }
-  return exact;
-}
-
-export interface FixationInputs {
-  amountMinor: number;
-  currency: CurrencyCode;
-  chargedAmountMinor: number;
-  chargedCurrency: CurrencyCode;
-  spentAt: string;
-}
-
-export interface DerivedOverride {
-  rateToUsdOverride: string;
-  rateSource: "user";
-}
-
-// deriveOverrideScaled has no bound of its own — an extreme but individually
-// valid charged pair (a huge charge against a tiny entered amount) can imply a
-// rate numeric(36,20) can store but that is nonsense as a currency rate, and
-// past ~1e16 USD per unit it does not even fit the column. Same band the
-// provider enforces on fetched rates (src/lib/fx/provider.ts).
-function deriveOverrideInBand(
-  params: Omit<FixationInputs, "spentAt"> & { rateChargedToUsd: bigint },
-): DerivedOverride | null {
-  const scaled = deriveOverrideScaled(params);
-  if (!isScaledRateInBand(scaled)) return null;
-  return { rateToUsdOverride: formatScaledRate(scaled), rateSource: "user" };
-}
-
-/**
- * Rate implied by a manual fixation, read from whatever `fx_rates` snapshot
- * already exists — pure lookup, no network. The one derivation entry point for
- * the write paths (createExpense/updateExpense in
- * src/repositories/expenses.ts) and the preview (src/lib/actions/fx.ts); the
- * background repair below shares the same two helpers rather than this
- * function only because it reads its rates in bulk. A row repaired later has
- * to be indistinguishable from one that got its rate immediately, so all of
- * them must apply the exact-date rule and the band check identically.
- *
- * Returns null when the snapshot isn't there yet or the implied rate is out of
- * band; the row is then left with rate_source = null for the repair to pick up
- * (AC-27).
- */
-export async function deriveOverrideForFixation(
-  params: FixationInputs,
-): Promise<DerivedOverride | null> {
-  const exact = await loadExactRates(
-    [params.chargedCurrency],
-    [params.spentAt],
-  );
-  const rate = exact.get(exactKey(params.chargedCurrency, params.spentAt));
-  if (rate === undefined) return null;
-  return deriveOverrideInBand({ ...params, rateChargedToUsd: rate });
-}
-
 // Dates (from `dates`) that already have every currency a source can supply
 // for them in `fx_rates` — counted in JS rather than a raw `sql<number>`
 // count(*), since a handful of rows per date is cheap and this sidesteps
@@ -384,99 +265,10 @@ export async function backfillRates(
   }
 }
 
-/**
- * Second phase of the background fill: rows whose manual fixation
- * (`charged*`) was saved while `rate_to_usd_override` could not be derived
- * (the rate table was empty at the time) get it derived now, if the charged
- * currency's rate for that exact day has since appeared. Without this,
- * `backfillRates` alone
- * only closes the gap for dates, not for fixations that failed mid-write
- * (plan Step 4.5.3, AC-27). Returns the number of rows repaired.
- */
-export async function repairPendingOverrides(userId: string): Promise<number> {
-  try {
-    const pending = await db
-      .select({
-        id: expenses.id,
-        amountMinor: expenses.amountMinor,
-        currency: expenses.currency,
-        spentAt: expenses.spentAt,
-        chargedAmountMinor: expenses.chargedAmountMinor,
-        chargedCurrency: expenses.chargedCurrency,
-      })
-      .from(expenses)
-      .where(
-        and(
-          eq(expenses.userId, userId),
-          isNotNull(expenses.chargedAmountMinor),
-          isNull(expenses.rateToUsdOverride),
-          // Same floor backfillRates fills to: below it no source will ever
-          // publish a rate, so those rows are not "pending", they are
-          // permanently underivable and only cost work to revisit.
-          gte(expenses.spentAt, OFFICIAL_HISTORY_FLOOR),
-        ),
-      )
-      .limit(REPAIR_MAX_ROWS);
-    if (pending.length === 0) return 0;
-
-    const chargedCurrencies = Array.from(
-      new Set(
-        pending
-          .map((r) => r.chargedCurrency)
-          .filter((c): c is CurrencyCode => c !== null),
-      ),
-    );
-    const exact = await loadExactRates(
-      chargedCurrencies,
-      Array.from(new Set(pending.map((r) => r.spentAt))),
-    );
-
-    let repaired = 0;
-    for (const row of pending) {
-      // Per row, so one unwritable rate can't abort the pass — and with it
-      // every later row — on every single run.
-      try {
-        if (row.chargedCurrency === null || row.chargedAmountMinor === null) {
-          continue;
-        }
-        const rate = exact.get(exactKey(row.chargedCurrency, row.spentAt));
-        if (rate === undefined) continue;
-
-        const derived = deriveOverrideInBand({
-          amountMinor: row.amountMinor,
-          currency: row.currency,
-          chargedAmountMinor: row.chargedAmountMinor,
-          chargedCurrency: row.chargedCurrency,
-          rateChargedToUsd: rate,
-        });
-        if (!derived) continue;
-
-        await db
-          .update(expenses)
-          .set(derived)
-          .where(and(eq(expenses.id, row.id), eq(expenses.userId, userId)));
-        repaired++;
-      } catch (err) {
-        console.warn("fx.repair_failed", { id: row.id, err });
-      }
-    }
-
-    return repaired;
-  } catch (err) {
-    console.warn("fx.fetch_failed", { userId, err });
-    return 0;
-  }
-}
-
 const lastSyncAt = new Map<string, number>();
 
 /**
- * The background fill, as one call: fill the snapshots the user's dates need,
- * then derive the fixations that were saved before their rate existed.
- *
- * Sequential, not concurrent: repairPendingOverrides reads the very rows
- * backfillRates is still writing, so running them side by side would make
- * AC-27's second phase need two passes to converge instead of one.
+ * The background fill: the snapshots the user's expense dates need.
  *
  * `throttleMs` is for callers that fire on plain navigation — the page
  * renders that make "opening the app" the retry for a provider outage. Write
@@ -499,5 +291,4 @@ export async function syncUserRates(
   lastSyncAt.set(userId, Date.now());
 
   await backfillRates(userId);
-  await repairPendingOverrides(userId);
 }

@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { db } from "@/db";
 import { fxRates, user } from "@/db/schema";
 import { todayISO } from "@/lib/dates";
-import type { FxDeps } from "@/lib/fx/provider";
 import { CATEGORY_COLORS, createCategory } from "@/repositories/categories";
 import {
   type Expense,
@@ -34,7 +33,6 @@ export async function mkUser(
 export async function mkExpense(
   userId: string,
   overrides: Partial<ExpenseInput> = {},
-  deps?: FxDeps,
 ): Promise<Expense> {
   // Unique per call, not a fixed "Test": categories has a unique index on
   // (user_id, name) (db/schema/categories.ts), and a caller creating several
@@ -51,18 +49,14 @@ export async function mkExpense(
       })
     ).id;
 
-  const row = await createExpense(
-    userId,
-    {
-      amountMinor: 1000,
-      currency: "RUB",
-      note: "тест",
-      spentAt: todayISO(),
-      ...overrides,
-      categoryId,
-    },
-    deps,
-  );
+  const row = await createExpense(userId, {
+    amountMinor: 1000,
+    currency: "RUB",
+    note: "тест",
+    spentAt: todayISO(),
+    ...overrides,
+    categoryId,
+  });
   if (!row) {
     throw new Error("mkExpense: createExpense returned null");
   }

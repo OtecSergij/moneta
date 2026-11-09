@@ -7,27 +7,20 @@ import { type ExpenseFormValues } from "@/lib/expense-form";
 import { EXPENSE_NOTE_MAX } from "@/lib/expense-constants";
 import type { Category } from "@/repositories/categories";
 import { type CurrencyCode } from "@/lib/currency";
-import {
-  type ConversionPreview,
-  type ConversionQuote,
-  type VisiblePreview,
-  resolveFixationSlot,
-} from "@/lib/fixation-slot";
 import { formatMoney, parseMoney } from "@/lib/money";
 import { quoteConversionAction } from "@/lib/actions/fx";
-import { cn } from "@/lib/utils";
 import { Field } from "@/components/ui/field";
 import { TextInput } from "@/components/ui/text-input";
 import { CurrencySegment } from "@/components/ui/currency-segment";
 import { CategorySelect } from "@/components/expenses/category-select";
-import { ChargedAmountField } from "@/components/expenses/charged-amount-field";
 
 const PREVIEW_DEBOUNCE_MS = 300;
 
-const SLOT_CLASS =
-  "inline-flex min-h-11 w-fit items-center self-start rounded-md px-1 text-sm text-text-muted";
-const SLOT_TAPPABLE_CLASS =
-  "cursor-pointer underline decoration-dotted underline-offset-4 transition-colors hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30";
+type ConversionQuote =
+  | { status: "unavailable" }
+  | { status: "value"; convertedMinor: number; displayCurrency: CurrencyCode };
+
+type VisiblePreview = { status: "pending" } | ConversionQuote;
 
 function previewLabel(preview: VisiblePreview): string {
   if (preview.status === "value") {
@@ -39,12 +32,10 @@ function previewLabel(preview: VisiblePreview): string {
 export function ExpenseFormFields({
   categories,
   displayCurrency,
-  initialChargedCurrency,
   onCategoryCreated,
 }: {
   categories: Category[];
   displayCurrency: CurrencyCode;
-  initialChargedCurrency: CurrencyCode | null;
   onCategoryCreated: (category: Category) => void;
 }) {
   const {
@@ -58,48 +49,27 @@ export function ExpenseFormFields({
   const spentAt = useWatch({ control, name: "spentAt" });
   const amount = useWatch({ control, name: "amount" });
   const currency = useWatch({ control, name: "currency" });
-  const chargedAmount = useWatch({ control, name: "chargedAmount" });
-  const chargedCurrency = useWatch({ control, name: "chargedCurrency" });
-
-  // Starts open when editing a row that already carries a fixation. It only
-  // ever closes through ChargedAmountField's own remove button, which clears
-  // the pair first: nothing else may take an entered fixation off screen and
-  // leave it silently in the form.
-  const [chargedOpen, setChargedOpen] = useState(() => !!chargedAmount);
 
   // Controlled date field (value + setValue), NOT register(): an uncontrolled
   // register'd date input desync'd from the form after reset() — adding a second
   // expense in a row left spentAt empty/"invalid" though the picker showed a
-  // date. The plain ref only sets `max` post-mount (hydration-safe, no setState).
+  // date. The plain ref sets `max` post-render (hydration-safe, no setState),
+  // and again whenever the date changes, so the quick-add reset() after
+  // midnight lifts the cap to the new today.
   const spentAtRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
     if (spentAtRef.current) spentAtRef.current.max = todayISO();
-  }, []);
+  }, [spentAt]);
 
-  // Gates the network quote only: with matching currencies convert.ts's
-  // identity rule returns exactly the entered amount, so the round-trip would
-  // buy nothing. It deliberately does NOT gate the fixation affordance — what
-  // the bank debited is a fact about the expense, and recording it changes the
-  // row's value in every other display currency (see resolveFixationSlot).
+  // With matching currencies convert.ts's identity rule returns exactly the
+  // entered amount, so there is nothing to show and no quote to request.
   const currenciesDiffer = currency !== displayCurrency;
 
   const minor = parseMoney(amount, currency);
 
-  // Mirrors toExpenseInput's "hasCharged" gate (@/lib/expense-form): both
-  // halves of the fixation must be present and the amount must actually
-  // parse, or the preview treats it the same as no fixation at all — which
-  // is exactly what gets saved.
-  const chargedParsed =
-    chargedAmount && chargedCurrency
-      ? parseMoney(chargedAmount, chargedCurrency)
-      : null;
-  const hasCharged = chargedParsed !== null && chargedParsed > 0;
-  const chargedMinor = hasCharged ? chargedParsed : null;
-  const chargedCurrencyValue = hasCharged ? chargedCurrency! : null;
-
   const previewKey =
-    minor !== null && minor > 0
-      ? `${minor}|${currency}|${displayCurrency}|${spentAt}|${chargedMinor}|${chargedCurrencyValue}`
+    currenciesDiffer && minor !== null && minor > 0
+      ? `${minor}|${currency}|${displayCurrency}|${spentAt}`
       : null;
 
   // Resolved answers are keyed by the exact inputs they answer for, so
@@ -116,18 +86,12 @@ export function ExpenseFormFields({
   // typing shouldn't fire it on every keystroke, and a failure must never
   // block the amount input itself (plan Step 6.4).
   useEffect(() => {
-    if (!currenciesDiffer || previewKey === null) return;
+    if (previewKey === null) return;
 
     let cancelled = false;
     const key = previewKey;
     const timer = setTimeout(() => {
-      quoteConversionAction({
-        amountMinor: minor,
-        currency,
-        spentAt,
-        chargedAmountMinor: chargedMinor,
-        chargedCurrency: chargedCurrencyValue,
-      }).then((res) => {
+      quoteConversionAction({ amountMinor: minor, currency, spentAt }).then((res) => {
         if (cancelled) return;
         if (!res.ok) {
           setResolved({ key, result: { status: "unavailable" } });
@@ -152,29 +116,14 @@ export function ExpenseFormFields({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [
-    previewKey,
-    minor,
-    currency,
-    displayCurrency,
-    spentAt,
-    currenciesDiffer,
-    chargedMinor,
-    chargedCurrencyValue,
-  ]);
+  }, [previewKey, minor, currency, spentAt]);
 
-  const preview: ConversionPreview =
+  const preview: VisiblePreview | null =
     previewKey === null
-      ? { status: "empty" }
+      ? null
       : resolved && resolved.key === previewKey
         ? resolved.result
         : { status: "pending" };
-
-  const slot = resolveFixationSlot({
-    currenciesDiffer,
-    panelOpen: chargedOpen,
-    preview,
-  });
 
   return (
     <>
@@ -200,27 +149,10 @@ export function ExpenseFormFields({
             label="Валюта траты"
           />
 
-          {slot.kind === "hidden" ? null : slot.kind === "preview-status" ? (
-            <p className={SLOT_CLASS}>{previewLabel(slot.preview)}</p>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setChargedOpen(true)}
-              className={cn(SLOT_CLASS, SLOT_TAPPABLE_CLASS)}
-            >
-              {slot.kind === "prompt"
-                ? "Указать списание"
-                : previewLabel(slot.preview)}
-            </button>
-          )}
-
-          {chargedOpen ? (
-            <ChargedAmountField
-              entryCurrency={currency}
-              lastChargedCurrency={initialChargedCurrency}
-              displayCurrency={displayCurrency}
-              onRemove={() => setChargedOpen(false)}
-            />
+          {preview ? (
+            <p className="inline-flex min-h-11 w-fit items-center self-start px-1 text-sm text-text-muted">
+              {previewLabel(preview)}
+            </p>
           ) : null}
         </div>
 

@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import { RANGE_PRESETS, sinceLastSalary, type DateRange } from "@/lib/dates";
+import { RANGE_PRESETS, type DateRange } from "@/lib/dates";
 import { TextInput } from "@/components/ui/text-input";
 import { cn } from "@/lib/utils";
 
@@ -14,11 +14,9 @@ const PILL_INACTIVE = "border-border text-text hover:bg-border/60";
 export function HistoryFilter({
   from,
   to,
-  salaryDays,
 }: {
   from: string;
   to: string;
-  salaryDays: number[];
 }) {
   const router = useRouter();
 
@@ -42,22 +40,11 @@ export function HistoryFilter({
     return mounted && range.from === from && range.to === to;
   }
 
-  const presets = [
-    ...RANGE_PRESETS.map((p) => ({
-      key: p.key,
-      label: p.label,
-      range: p.range(),
-    })),
-    ...(salaryDays.length > 0
-      ? [
-          {
-            key: "salary",
-            label: "С последней зарплаты",
-            range: sinceLastSalary(salaryDays),
-          },
-        ]
-      : []),
-  ];
+  const presets = RANGE_PRESETS.map((p) => ({
+    key: p.key,
+    label: p.label,
+    range: p.range(),
+  }));
 
   // Apply only when a field is committed (blur / Enter), never on every
   // keystroke: navigating mid-edit changes the URL, which flips key={from-…}

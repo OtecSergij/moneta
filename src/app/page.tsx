@@ -5,7 +5,6 @@ import { requireSession } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
 import {
   lastUsedCategoryId,
-  lastUsedChargedCurrency,
   lastUsedCurrency,
   listExpenses,
   summary,
@@ -37,21 +36,14 @@ export default async function HomePage() {
   ]);
   const displayCurrency = settings.displayCurrency;
 
-  const [
-    categories,
-    weekSummary,
-    recent,
-    lastCategoryId,
-    lastCurrency,
-    lastChargedCurrency,
-  ] = await Promise.all([
-    listCategories(user.id),
-    summary(user.id, displayCurrency, week, rateIndex),
-    listExpenses(user.id, displayCurrency, { limit: 10 }, rateIndex),
-    lastUsedCategoryId(user.id),
-    lastUsedCurrency(user.id),
-    lastUsedChargedCurrency(user.id),
-  ]);
+  const [categories, weekSummary, recent, lastCategoryId, lastCurrency] =
+    await Promise.all([
+      listCategories(user.id),
+      summary(user.id, displayCurrency, week, rateIndex),
+      listExpenses(user.id, displayCurrency, { limit: 10 }, rateIndex),
+      lastUsedCategoryId(user.id),
+      lastUsedCurrency(user.id),
+    ]);
 
   // The save path schedules its own rate fetch, but that one is
   // fire-and-forget: if the provider was down, nothing retried it. Opening
@@ -107,7 +99,6 @@ export default async function HomePage() {
           initialCategories={categories}
           initialCategoryId={lastCategoryId ?? ""}
           initialCurrency={lastCurrency ?? displayCurrency}
-          initialChargedCurrency={lastChargedCurrency}
           displayCurrency={displayCurrency}
         />
       </section>

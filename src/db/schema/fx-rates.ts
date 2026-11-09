@@ -18,8 +18,7 @@ export const fxRates = pgTable(
   {
     currency: currencyEnum("currency").notNull(),
     effectiveDate: date("effective_date", { mode: "string" }).notNull(),
-    // Scale 1e20, matching expenses.rate_to_usd_override — see
-    // src/lib/fx/convert.ts for how both feed the same conversion math.
+    // Scale 1e20 — see src/lib/fx/convert.ts for the conversion math.
     rateToUsd: numeric("rate_to_usd", { precision: 36, scale: 20 }).notNull(),
     source: text("source").notNull(),
     fetchedAt: timestamp("fetched_at", { withTimezone: true })

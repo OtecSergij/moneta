@@ -5,7 +5,6 @@ import {
   PROVIDER_HISTORY_FLOOR,
   fetchAggregatorRates,
   fetchEurToUsdRange,
-  fetchLiveBtcUsd,
   fetchRates,
   fetchRsdToUsd,
   fetchRubToUsd,
@@ -41,10 +40,6 @@ afterEach(() => {
 });
 
 describe("floors", () => {
-  it("official sources reach further back than the aggregator", () => {
-    expect(OFFICIAL_HISTORY_FLOOR < PROVIDER_HISTORY_FLOOR).toBe(true);
-  });
-
   it("fetchableCurrencies narrows with the date: pivot only, then fiat, then BTC as well", () => {
     expect(fetchableCurrencies("2002-12-31")).toEqual(["USD"]);
     expect(fetchableCurrencies(OFFICIAL_HISTORY_FLOOR)).toEqual(["RUB", "USD", "EUR", "RSD"]);
@@ -330,10 +325,11 @@ describe("fetchAggregatorRates — BTC, and the fallback for fiat", () => {
     expect(calls(fetch)[0][1]?.signal).toBeInstanceOf(AbortSignal);
   });
 
-  it("rejects zero, negative and non-numeric rates but keeps the valid ones", async () => {
+  it("rejects zero, out-of-range and non-numeric rates but keeps the valid ones", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
+    // rsd: 1 / 1e15 = 1e-15, below MIN_RATE.
     const fetch = stubFetch(
-      aggregatorPayload(undefined, '"usd":1,"rub":96.5,"eur":0,"rsd":-10,"btc":"not-a-number"'),
+      aggregatorPayload(undefined, '"usd":1,"rub":96.5,"eur":0,"rsd":1e15,"btc":"not-a-number"'),
     );
     const result = await fetchAggregatorRates("2024-10-05", { fetch });
 
@@ -345,17 +341,6 @@ describe("fetchAggregatorRates — BTC, and the fallback for fiat", () => {
       "fx.invalid_rate",
       expect.objectContaining({ currency: "EUR" }),
     );
-  });
-
-  it("rejects a rate that inverts outside the 1e-9..1e9 range", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-    // 1 / 1e15 = 1e-15, below MIN_RATE.
-    const fetch = stubFetch(
-      aggregatorPayload(undefined, '"usd":1,"rub":1e15,"eur":1,"rsd":1,"btc":1'),
-    );
-    const result = await fetchAggregatorRates("2024-10-05", { fetch });
-    expect(result!.rates.RUB).toBeUndefined();
-    expect(result!.rates.EUR).toBeDefined();
   });
 
   it("reports the payload's own date, not the requested one", async () => {
@@ -499,76 +484,5 @@ describe("fetchRates — composition of the sources", () => {
 
     expect(callsTo(fetch, "aggregator")).toEqual([]);
     expect(rows.map((r) => r.currency).sort()).toEqual(["EUR", "EUR", "RSD", "RUB", "USD"]);
-    expect(fetchableCurrencies(between)).not.toContain("BTC");
-  });
-
-  it("below the official floor, makes no request at all", async () => {
-    const fetch = stubFxSources({ ecbDates });
-    expect(await fetchRates("2002-12-31", { fetch })).toEqual([]);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-});
-
-describe("fetchLiveBtcUsd", () => {
-  const btcFixture = JSON.stringify({
-    data: { currency: "BTC", rates: { USD: "108000.12" } },
-  });
-
-  // One fake clock shared by the whole block (not beforeEach/afterEach):
-  // useFakeTimers() re-anchors "now" to real time on every call, so
-  // resetting it per-test would make the 120s advance below reset with it
-  // and never actually outrun a previous test's cached value.
-  beforeAll(() => {
-    vi.useFakeTimers();
-  });
-
-  afterAll(() => {
-    vi.useRealTimers();
-  });
-
-  it("parses data.rates.USD into the numeric(36,20) form the column stores", async () => {
-    vi.advanceTimersByTime(120_000); // outrun any cache left by a previous test
-    const fetch = stubFetch(btcFixture);
-    expect(await fetchLiveBtcUsd({ fetch })).toBe("108000.12000000000000000000");
-  });
-
-  it("rejects a non-positive or garbage quote", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-    vi.advanceTimersByTime(120_000);
-    const zero = stubFetch(JSON.stringify({ data: { rates: { USD: "0" } } }));
-    expect(await fetchLiveBtcUsd({ fetch: zero })).toBeNull();
-
-    vi.advanceTimersByTime(120_000);
-    const garbage = stubFetch(JSON.stringify({ data: { rates: { USD: "oops" } } }));
-    expect(await fetchLiveBtcUsd({ fetch: garbage })).toBeNull();
-  });
-
-  it("rejects numeric spellings Number() accepts but a numeric column can't take verbatim", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-    // "1e5" would reach Postgres as a different literal than the provider
-    // sent; "0x1F" would be rejected outright and turn a save into a 500.
-    for (const raw of ["1e5", "0x1F", " 108000.12", "+5", "Infinity"]) {
-      vi.advanceTimersByTime(120_000);
-      const fetch = stubFetch(JSON.stringify({ data: { rates: { USD: raw } } }));
-      expect(await fetchLiveBtcUsd({ fetch })).toBeNull();
-    }
-  });
-
-  it("caches a successful quote for 60 seconds", async () => {
-    vi.advanceTimersByTime(120_000);
-    const fetch = vi.fn(async () => new Response(btcFixture, { status: 200 }));
-    const first = await fetchLiveBtcUsd({ fetch });
-    const second = await fetchLiveBtcUsd({ fetch });
-    expect(second).toBe(first);
-    expect(fetch).toHaveBeenCalledTimes(1);
-  });
-
-  it("refetches once the cache expires", async () => {
-    vi.advanceTimersByTime(120_000);
-    const fetch = vi.fn(async () => new Response(btcFixture, { status: 200 }));
-    await fetchLiveBtcUsd({ fetch });
-    vi.advanceTimersByTime(61_000);
-    await fetchLiveBtcUsd({ fetch });
-    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });

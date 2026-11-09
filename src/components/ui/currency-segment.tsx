@@ -11,25 +11,21 @@ import { cn } from "@/lib/utils";
 // Segmented control over currency codes. `role="radiogroup"` + roving
 // tabindex (only the checked option sits in the tab order — Tab skips past
 // the whole group in one stop, arrow keys move *and* select within it),
-// matching the WAI-ARIA radiogroup keyboard pattern. `options` narrows the
-// choices — the charged-amount fixation excludes the entry's own currency
-// (see charged-amount-field.tsx) — and defaults to all five.
+// matching the WAI-ARIA radiogroup keyboard pattern.
 export function CurrencySegment({
   value,
   onChange,
-  options = CURRENCY_CODES,
   label,
 }: {
-  value: CurrencyCode | undefined;
+  value: CurrencyCode;
   onChange: (value: CurrencyCode) => void;
-  options?: readonly CurrencyCode[];
   label: string;
 }) {
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   return (
     <div role="radiogroup" aria-label={label} className="flex gap-1.5">
-      {options.map((code, index) => {
+      {CURRENCY_CODES.map((code, index) => {
         const checked = code === value;
         return (
           <button
@@ -41,21 +37,20 @@ export function CurrencySegment({
             role="radio"
             aria-checked={checked}
             aria-label={code}
-            // Roving tabindex: the checked option owns the tab stop; with nothing
-            // checked yet the first option takes it so the group stays reachable.
-            tabIndex={checked || (value === undefined && index === 0) ? 0 : -1}
+            // Roving tabindex: the checked option owns the tab stop.
+            tabIndex={checked ? 0 : -1}
             onClick={() => onChange(code)}
             onKeyDown={(e) => {
               let next = -1;
               if (e.key === "ArrowRight" || e.key === "ArrowDown") {
-                next = (index + 1) % options.length;
+                next = (index + 1) % CURRENCY_CODES.length;
               } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
-                next = (index - 1 + options.length) % options.length;
+                next = (index - 1 + CURRENCY_CODES.length) % CURRENCY_CODES.length;
               } else {
                 return;
               }
               e.preventDefault();
-              onChange(options[next]);
+              onChange(CURRENCY_CODES[next]);
               buttonRefs.current[next]?.focus();
             }}
             className={cn(

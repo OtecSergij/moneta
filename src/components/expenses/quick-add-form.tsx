@@ -24,13 +24,11 @@ export function QuickAddForm({
   initialCategories,
   initialCategoryId,
   initialCurrency,
-  initialChargedCurrency,
   displayCurrency,
 }: {
   initialCategories: Category[];
   initialCategoryId: string;
   initialCurrency: CurrencyCode;
-  initialChargedCurrency: CurrencyCode | null;
   displayCurrency: CurrencyCode;
 }) {
   const router = useRouter();
@@ -40,14 +38,6 @@ export function QuickAddForm({
   // is the only in-app mutation path and it updates this state directly.
   const [categories, setCategories] = useState(initialCategories);
 
-  // Bumped after every successful submit and used as ExpenseFormFields' key,
-  // forcing a remount — the same pattern use-expense-editor.tsx uses
-  // (key={selected.id}) to reset a form's local state. methods.reset() below
-  // only clears RHF-registered fields; ExpenseFormFields' chargedOpen panel
-  // visibility is local useState that reset() can't reach, so without this
-  // the fixation panel stays open into the next entry.
-  const [submitCount, setSubmitCount] = useState(0);
-
   const methods = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
     defaultValues: {
@@ -56,10 +46,6 @@ export function QuickAddForm({
       categoryId: initialCategoryId,
       note: "",
       spentAt: todayISO(),
-      // Carried in form state rather than component state so it survives the
-      // key={submitCount} remount below. Harmless without a charged amount:
-      // toExpenseInput only sends a complete pair (@/lib/expense-form).
-      chargedCurrency: initialChargedCurrency ?? undefined,
     },
   });
 
@@ -73,18 +59,13 @@ export function QuickAddForm({
     // Keep the just-used category and currency selected so adding several
     // similar expenses in a row doesn't require re-picking them
     // (business-spec §5.1) — a week of dinar entries costs zero extra taps.
-    // The charged currency is kept for the same reason (the card doesn't
-    // change between entries); the charged *amount* is not — it belongs to
-    // the one expense that was just saved.
     methods.reset({
       amount: "",
       currency: values.currency,
       categoryId: values.categoryId,
       note: "",
       spentAt: todayISO(),
-      chargedCurrency: values.chargedCurrency,
     });
-    setSubmitCount((n) => n + 1);
     router.refresh();
   }
 
@@ -96,10 +77,8 @@ export function QuickAddForm({
         noValidate
       >
         <ExpenseFormFields
-          key={submitCount}
           categories={categories}
           displayCurrency={displayCurrency}
-          initialChargedCurrency={initialChargedCurrency}
           onCategoryCreated={(c) => {
             setCategories((prev) =>
               [...prev, c].sort((a, b) => a.name.localeCompare(b.name, "ru")),

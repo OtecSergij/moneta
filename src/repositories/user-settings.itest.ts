@@ -1,40 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { getUserSettings, setSalaryDays } from "@/repositories/user-settings";
+import {
+  getUserSettings,
+  setDisplayCurrency,
+} from "@/repositories/user-settings";
 import { mkUser } from "@/test/factories";
 
 describe("user-settings repository", () => {
-  it("returns empty salary days for a user with no settings row", async () => {
+  it("returns the default display currency for a user with no settings row", async () => {
     const u = await mkUser();
-    expect(await getUserSettings(u.id)).toEqual({ salaryDays: [], displayCurrency: "RUB" });
-  });
-
-  it("persists and reads back salary days", async () => {
-    const u = await mkUser();
-    await setSalaryDays(u.id, [3, 17]);
-    expect(await getUserSettings(u.id)).toEqual({ salaryDays: [3, 17], displayCurrency: "RUB" });
+    expect(await getUserSettings(u.id)).toEqual({ displayCurrency: "RUB" });
   });
 
   it("upserts — a second save overwrites the first", async () => {
     const u = await mkUser();
-    await setSalaryDays(u.id, [3, 17]);
-    const stored = await setSalaryDays(u.id, [10]);
-    expect(stored).toEqual([10]);
-    expect(await getUserSettings(u.id)).toEqual({ salaryDays: [10], displayCurrency: "RUB" });
-  });
-
-  it("clearing to an empty list is allowed", async () => {
-    const u = await mkUser();
-    await setSalaryDays(u.id, [5]);
-    await setSalaryDays(u.id, []);
-    expect(await getUserSettings(u.id)).toEqual({ salaryDays: [], displayCurrency: "RUB" });
+    await setDisplayCurrency(u.id, "USD");
+    const stored = await setDisplayCurrency(u.id, "RSD");
+    expect(stored).toBe("RSD");
+    expect(await getUserSettings(u.id)).toEqual({ displayCurrency: "RSD" });
   });
 
   it("isolates settings per user", async () => {
     const a = await mkUser();
     const b = await mkUser();
-    await setSalaryDays(a.id, [1, 15]);
+    await setDisplayCurrency(a.id, "EUR");
 
-    expect(await getUserSettings(a.id)).toEqual({ salaryDays: [1, 15], displayCurrency: "RUB" });
-    expect(await getUserSettings(b.id)).toEqual({ salaryDays: [], displayCurrency: "RUB" });
+    expect(await getUserSettings(a.id)).toEqual({ displayCurrency: "EUR" });
+    expect(await getUserSettings(b.id)).toEqual({ displayCurrency: "RUB" });
   });
 });

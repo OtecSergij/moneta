@@ -3,6 +3,7 @@ import {
   bigint,
   check,
   date,
+  foreignKey,
   index,
   pgEnum,
   pgTable,
@@ -13,6 +14,7 @@ import {
 import { CURRENCY_CODES } from "../../lib/currency";
 import { user } from "./auth";
 import { categories } from "./categories";
+import { spaces } from "./spaces";
 
 // Postgres ENUM for currency. Five values per business-spec.md §7: RUB
 // (default), USD, EUR, RSD, BTC.
@@ -47,14 +49,13 @@ export const expenses = pgTable(
   "expenses",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id")
+    spaceId: uuid("space_id")
       .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    // RESTRICT — нельзя удалить категорию, к которой есть траты.
-    // business-spec §5.3: «запрещаем удалять непустую категорию».
-    categoryId: uuid("category_id")
+      .references(() => spaces.id, { onDelete: "cascade" }),
+    createdBy: uuid("created_by")
       .notNull()
-      .references(() => categories.id, { onDelete: "restrict" }),
+      .references(() => user.id, { onDelete: "restrict" }),
+    categoryId: uuid("category_id").notNull(),
     // BIGINT, not INTEGER: BTC's 8-decimal exponent puts 21M BTC at
     // 2.1e15 satoshis, above INTEGER's ~2.1e9 ceiling. `number` mode is
     // exact up to 2^53 (drizzle-orm/pg-core/columns/bigint.js), well above
@@ -73,8 +74,19 @@ export const expenses = pgTable(
       .defaultNow(),
   },
   (t) => [
-    index("expenses_user_spent_idx").on(t.userId, t.spentAt.desc()),
     index("expenses_category_idx").on(t.categoryId),
+    index("expenses_space_spent_idx").on(t.spaceId, t.spentAt.desc()),
+    index("expenses_space_author_created_idx").on(
+      t.spaceId,
+      t.createdBy,
+      t.createdAt.desc(),
+    ),
+    // RESTRICT: a category with expenses can't be deleted (business-spec §5.3).
+    foreignKey({
+      name: "expenses_category_same_space_fk",
+      columns: [t.categoryId, t.spaceId],
+      foreignColumns: [categories.id, categories.spaceId],
+    }).onDelete("restrict"),
     check("expenses_amount_positive", sql`${t.amountMinor} > 0`),
     check(
       "expenses_note_len",

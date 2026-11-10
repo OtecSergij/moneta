@@ -12,6 +12,8 @@ import {
   sumConverted,
 } from "@/lib/fx/convert";
 import { maxEntryDate } from "@/lib/fx/provider";
+import { isForeignKeyViolation } from "@/lib/db-errors";
+import type { SpaceId } from "@/lib/space-id";
 import { loadRateIndex } from "@/repositories/fx-rates";
 
 // Shared by the form (react-hook-form + zod) and the repo.
@@ -56,12 +58,12 @@ export interface ListExpensesOpts {
 // most expensive read in the request — see loadRateIndex) reuse it instead of
 // repeating the query.
 export async function listExpenses(
-  userId: string,
+  spaceId: SpaceId,
   display: CurrencyCode,
   opts: ListExpensesOpts = {},
   index?: RateIndex,
 ): Promise<ExpenseWithConversion[]> {
-  const conds = [eq(expenses.userId, userId)];
+  const conds = [eq(expenses.spaceId, spaceId)];
   if (opts.from && opts.to) {
     conds.push(between(expenses.spentAt, opts.from, opts.to));
   } else if (opts.from) {
@@ -99,17 +101,18 @@ export async function listExpenses(
   }));
 }
 
-// Category of the user's most recently created expense — pre-selects the
-// quick-add form so adding several similar expenses doesn't require re-picking
-// the category (business-spec §5.1). Ordered by creation, not spending date, so
-// a backdated entry doesn't change "last used". Null when there are no expenses.
+// Category of the most recent expense this user created in the space —
+// pre-selects the quick-add form (business-spec §5.1). Personal: a partner's
+// entries don't change it. Ordered by creation, not spending date, so a
+// backdated entry doesn't change "last used". Null when there are none.
 export async function lastUsedCategoryId(
+  spaceId: SpaceId,
   userId: string,
 ): Promise<string | null> {
   const rows = await db
     .select({ categoryId: expenses.categoryId })
     .from(expenses)
-    .where(eq(expenses.userId, userId))
+    .where(and(eq(expenses.spaceId, spaceId), eq(expenses.createdBy, userId)))
     .orderBy(desc(expenses.createdAt))
     .limit(1);
   return rows[0]?.categoryId ?? null;
@@ -119,40 +122,40 @@ export async function lastUsedCategoryId(
 // lastUsedCategoryId above. Null when there are no expenses; the caller
 // falls back to the display currency (AC-4).
 export async function lastUsedCurrency(
+  spaceId: SpaceId,
   userId: string,
 ): Promise<CurrencyCode | null> {
   const rows = await db
     .select({ currency: expenses.currency })
     .from(expenses)
-    .where(eq(expenses.userId, userId))
+    .where(and(eq(expenses.spaceId, spaceId), eq(expenses.createdBy, userId)))
     .orderBy(desc(expenses.createdAt))
     .limit(1);
   return rows[0]?.currency ?? null;
 }
 
 export async function getExpense(
-  userId: string,
+  spaceId: SpaceId,
   id: string,
 ): Promise<Expense | null> {
   const rows = await db
     .select()
     .from(expenses)
-    .where(and(eq(expenses.id, id), eq(expenses.userId, userId)))
+    .where(and(eq(expenses.id, id), eq(expenses.spaceId, spaceId)))
     .limit(1);
   return rows[0] ?? null;
 }
 
-// Verifies the category belongs to the same user before inserting. Without
-// this check a malicious caller could attach an expense to someone else's
-// category (FK alone enforces existence, not ownership).
-async function userOwnsCategory(
-  userId: string,
+// The composite FK (category_id, space_id) would reject a foreign category too;
+// checking first turns the common case into a plain null instead of a 23503.
+async function categoryInSpace(
+  spaceId: SpaceId,
   categoryId: string,
 ): Promise<boolean> {
   const rows = await db
     .select({ id: categories.id })
     .from(categories)
-    .where(and(eq(categories.id, categoryId), eq(categories.userId, userId)))
+    .where(and(eq(categories.id, categoryId), eq(categories.spaceId, spaceId)))
     .limit(1);
   return rows.length > 0;
 }
@@ -168,58 +171,69 @@ function spentAtIsValid(spentAt: string): boolean {
 }
 
 export async function createExpense(
+  spaceId: SpaceId,
   userId: string,
   input: ExpenseInput,
 ): Promise<Expense | null> {
-  if (!(await userOwnsCategory(userId, input.categoryId))) return null;
+  if (!(await categoryInSpace(spaceId, input.categoryId))) return null;
   if (!spentAtIsValid(input.spentAt)) return null;
 
-  const [row] = await db
-    .insert(expenses)
-    .values({
-      userId,
-      categoryId: input.categoryId,
-      amountMinor: input.amountMinor,
-      currency: input.currency,
-      note: input.note,
-      spentAt: input.spentAt,
-    })
-    .returning();
-  return row;
+  try {
+    const [row] = await db
+      .insert(expenses)
+      .values({
+        spaceId,
+        createdBy: userId,
+        categoryId: input.categoryId,
+        amountMinor: input.amountMinor,
+        currency: input.currency,
+        note: input.note,
+        spentAt: input.spentAt,
+      })
+      .returning();
+    return row;
+  } catch (err) {
+    if (isForeignKeyViolation(err)) return null;
+    throw err;
+  }
 }
 
 export async function updateExpense(
-  userId: string,
+  spaceId: SpaceId,
   id: string,
   patch: ExpensePatch,
 ): Promise<Expense | null> {
   if (Object.keys(patch).length === 0) {
-    return getExpense(userId, id);
+    return getExpense(spaceId, id);
   }
 
-  // If reassigning the category, verify the new one belongs to the user.
-  if (patch.categoryId && !(await userOwnsCategory(userId, patch.categoryId))) {
+  if (patch.categoryId && !(await categoryInSpace(spaceId, patch.categoryId))) {
     return null;
   }
   if (patch.spentAt !== undefined && !spentAtIsValid(patch.spentAt)) {
     return null;
   }
 
-  const [updated] = await db
-    .update(expenses)
-    .set(patch)
-    .where(and(eq(expenses.id, id), eq(expenses.userId, userId)))
-    .returning();
-  return updated ?? null;
+  try {
+    const [updated] = await db
+      .update(expenses)
+      .set(patch)
+      .where(and(eq(expenses.id, id), eq(expenses.spaceId, spaceId)))
+      .returning();
+    return updated ?? null;
+  } catch (err) {
+    if (isForeignKeyViolation(err)) return null;
+    throw err;
+  }
 }
 
 export async function deleteExpense(
-  userId: string,
+  spaceId: SpaceId,
   id: string,
 ): Promise<{ ok: boolean }> {
   const deleted = await db
     .delete(expenses)
-    .where(and(eq(expenses.id, id), eq(expenses.userId, userId)))
+    .where(and(eq(expenses.id, id), eq(expenses.spaceId, spaceId)))
     .returning({ id: expenses.id });
   return { ok: deleted.length > 0 };
 }
@@ -242,7 +256,7 @@ export interface Summary extends ConvertedTotal {
 }
 
 export async function summary(
-  userId: string,
+  spaceId: SpaceId,
   display: CurrencyCode,
   opts: { from: string; to: string },
   index?: RateIndex,
@@ -260,7 +274,7 @@ export async function summary(
     .innerJoin(categories, eq(expenses.categoryId, categories.id))
     .where(
       and(
-        eq(expenses.userId, userId),
+        eq(expenses.spaceId, spaceId),
         between(expenses.spentAt, opts.from, opts.to),
       ),
     );

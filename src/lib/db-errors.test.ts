@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isUniqueViolation } from "@/lib/db-errors";
+import { isForeignKeyViolation, isUniqueViolation } from "@/lib/db-errors";
 
 describe("isUniqueViolation", () => {
   it("matches a top-level SQLSTATE 23505", () => {
@@ -23,5 +23,34 @@ describe("isUniqueViolation", () => {
     expect(isUniqueViolation(null)).toBe(false);
     expect(isUniqueViolation("boom")).toBe(false);
     expect(isUniqueViolation(new Error("nope"))).toBe(false);
+  });
+});
+
+describe("isForeignKeyViolation", () => {
+  it("matches a top-level SQLSTATE 23503", () => {
+    expect(isForeignKeyViolation({ code: "23503" })).toBe(true);
+  });
+
+  it("matches 23503 anywhere in the .cause chain", () => {
+    expect(isForeignKeyViolation({ cause: { code: "23503" } })).toBe(true);
+    expect(isForeignKeyViolation({ cause: { cause: { code: "23503" } } })).toBe(
+      true,
+    );
+  });
+
+  it("matches 23001, raised by an ON DELETE RESTRICT key", () => {
+    expect(isForeignKeyViolation({ cause: { code: "23001" } })).toBe(true);
+  });
+
+  it("ignores other Postgres error codes", () => {
+    expect(isForeignKeyViolation({ code: "23505", cause: { code: "23502" } })).toBe(
+      false,
+    );
+  });
+
+  it("is safe on null, primitives and plain errors", () => {
+    expect(isForeignKeyViolation(null)).toBe(false);
+    expect(isForeignKeyViolation("boom")).toBe(false);
+    expect(isForeignKeyViolation(new Error("nope"))).toBe(false);
   });
 });

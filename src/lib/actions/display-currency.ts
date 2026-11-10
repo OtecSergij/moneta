@@ -1,14 +1,14 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { requireSession } from "@/lib/dal";
+import { requireSpace } from "@/lib/dal";
 import type { CurrencyCode } from "@/lib/currency";
 import {
   DisplayCurrencyInput,
   setDisplayCurrency,
 } from "@/repositories/user-settings";
-import { syncUserRates } from "@/repositories/fx-rates";
+import { syncSpaceRates } from "@/repositories/fx-rates";
+import { revalidateFor } from "./revalidate";
 import type { ActionResult } from "./types";
 
 // Like every action: reachable via direct POST, so verify auth and re-validate
@@ -16,7 +16,7 @@ import type { ActionResult } from "./types";
 export async function setDisplayCurrencyAction(
   input: unknown,
 ): Promise<ActionResult<CurrencyCode>> {
-  const { user } = await requireSession();
+  const { user, spaceId } = await requireSpace();
   const parsed = DisplayCurrencyInput.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Проверьте выбранную валюту" };
@@ -24,14 +24,11 @@ export async function setDisplayCurrencyAction(
 
   const displayCurrency = await setDisplayCurrency(user.id, parsed.data);
 
-  // The switcher appears on both pages that render totals.
-  revalidatePath("/");
-  revalidatePath("/history");
+  revalidateFor("displayCurrency");
 
   // cookies()/headers() aren't callable inside an after() callback, so the
-  // user id is resolved here and closed over rather than re-derived inside.
-  const userId = user.id;
-  after(() => syncUserRates(userId));
+  // space id is resolved here and closed over rather than re-derived inside.
+  after(() => syncSpaceRates(spaceId));
 
   return { ok: true, data: displayCurrency };
 }

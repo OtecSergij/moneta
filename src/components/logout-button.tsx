@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/kit/button";
 
 export function LogoutButton() {
   const router = useRouter();
@@ -19,7 +19,7 @@ export function LogoutButton() {
 
   return (
     <Button variant="secondary" onClick={onLogout} loading={loading}>
-      {loading ? null : <LogOut className="size-4" />}
+      <LogOut className="size-5" strokeWidth={1.75} aria-hidden />
       Выйти
     </Button>
   );

@@ -73,6 +73,39 @@
     sans-serif;
 }
 
+@theme {
+  --color-page: #f4f4f5;
+  --color-card: #ffffff;
+  --color-line: #e4e4e7;
+  --color-row-line: #f0f0f2;
+  --color-control-line: #d4d4d8;
+  --color-ink: #09090b;
+  --color-ink-2: #52525b;
+  --color-ink-3: #71717a;
+  --color-ink-badge: #3f3f46;
+  --color-bar-past: #a1a1aa;
+  --color-select: #18181b;
+  --color-primary: #2563eb;
+  --color-primary-ink: #1d4ed8;
+  --color-primary-soft: #e8effd;
+  --color-error: #dc2626;
+  --color-danger-ink: #b91c1c;
+  --color-danger-soft: #fef2f2;
+  --color-danger-deep: #7f1d1d;
+  --color-ok: #16a34a;
+  --color-warn-soft: #fef3c7;
+  --color-warn-ink: #92400e;
+  --color-overlay: rgba(9, 9, 11, 0.45);
+
+  --shadow-sheet: 0 -12px 32px rgba(0, 0, 0, 0.14);
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.08);
+
+  --radius-chip: 999px;
+  --radius-field: 14px;
+  --radius-card: 20px;
+  --radius-sheet: 24px;
+}
+
 body {
   background: var(--bg);
   color: var(--text);

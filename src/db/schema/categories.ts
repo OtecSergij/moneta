@@ -1,14 +1,14 @@
 import { sql } from "drizzle-orm";
 import {
   check,
-  index,
   pgTable,
   text,
   timestamp,
-  uniqueIndex,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth";
+import { spaces } from "./spaces";
 
 // User-defined spending category (e.g. "Еда", "Транспорт", "Кафе").
 // Per docs/business-spec.md §4.1.
@@ -16,9 +16,12 @@ export const categories = pgTable(
   "categories",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id")
+    spaceId: uuid("space_id")
       .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
+      .references(() => spaces.id, { onDelete: "cascade" }),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
     name: text("name").notNull(),
     description: text("description"),
     // 15-color palette is defined in design-system/moneta/MASTER.md; we
@@ -30,8 +33,8 @@ export const categories = pgTable(
       .defaultNow(),
   },
   (t) => [
-    uniqueIndex("categories_user_name_uniq").on(t.userId, t.name),
-    index("categories_user_id_idx").on(t.userId),
+    unique("categories_space_name_uniq").on(t.spaceId, t.name),
+    unique("categories_id_space_uniq").on(t.id, t.spaceId),
     check(
       "categories_name_len",
       sql`char_length(trim(${t.name})) between 1 and 40`,

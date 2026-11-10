@@ -2,6 +2,7 @@ import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
 import { db } from "@/db";
 import { expenses, fxRates } from "@/db/schema";
 import { type CurrencyCode } from "@/lib/currency";
+import type { SpaceId } from "@/lib/space-id";
 import { type RateIndex, type RatePoint, parseRate } from "@/lib/fx/convert";
 import {
   type FxDeps,
@@ -15,10 +16,10 @@ const BACKFILL_MAX_DATES = 400;
 const NEGATIVE_CACHE_MS = 60_000;
 
 /**
- * How long a page-render-triggered sync stays quiet for a user. The write
+ * How long a page-render-triggered sync stays quiet for a space. The write
  * paths pass no throttle at all (they know something changed); this only
  * bounds the "opening the app is the retry" path, which would otherwise
- * re-scan the user's whole expense history on every single render.
+ * re-scan the space's whole expense history on every single render.
  */
 export const PAGE_SYNC_THROTTLE_MS = 5 * 60_000;
 
@@ -211,7 +212,7 @@ async function datesFullyCovered(dates: string[]): Promise<Set<string>> {
 }
 
 /**
- * Fills `fx_rates` for every distinct date the user has spent on, at or
+ * Fills `fx_rates` for every distinct date anyone in the space spent on, at or
  * after `OFFICIAL_HISTORY_FLOOR`, that isn't already fully covered. Runs up
  * to `BACKFILL_CONCURRENCY` dates at once, caps a single call at
  * `BACKFILL_MAX_DATES` (the remainder is picked up by the next call), and
@@ -219,7 +220,7 @@ async function datesFullyCovered(dates: string[]): Promise<Set<string>> {
  * the number of dates that ended up fully filled.
  */
 export async function backfillRates(
-  userId: string,
+  spaceId: SpaceId,
   deps: FxDeps = defaultDeps,
 ): Promise<number> {
   try {
@@ -228,7 +229,7 @@ export async function backfillRates(
       .from(expenses)
       .where(
         and(
-          eq(expenses.userId, userId),
+          eq(expenses.spaceId, spaceId),
           gte(expenses.spentAt, OFFICIAL_HISTORY_FLOOR),
         ),
       );
@@ -257,10 +258,10 @@ export async function backfillRates(
       Array.from({ length: Math.min(BACKFILL_CONCURRENCY, pending.length) }, worker),
     );
 
-    console.info("fx.backfill_done", { userId, filled });
+    console.info("fx.backfill_done", { spaceId, filled });
     return filled;
   } catch (err) {
-    console.warn("fx.fetch_failed", { userId, err });
+    console.warn("fx.fetch_failed", { spaceId, err });
     return 0;
   }
 }
@@ -268,17 +269,17 @@ export async function backfillRates(
 const lastSyncAt = new Map<string, number>();
 
 /**
- * The background fill: the snapshots the user's expense dates need.
+ * The background fill: the snapshots the space's expense dates need.
  *
  * `throttleMs` is for callers that fire on plain navigation — the page
  * renders that make "opening the app" the retry for a provider outage. Write
  * paths pass nothing: they know state changed and must converge immediately.
  */
-export async function syncUserRates(
-  userId: string,
+export async function syncSpaceRates(
+  spaceId: SpaceId,
   { throttleMs }: { throttleMs?: number } = {},
 ): Promise<void> {
-  const last = lastSyncAt.get(userId);
+  const last = lastSyncAt.get(spaceId);
   if (
     throttleMs !== undefined &&
     last !== undefined &&
@@ -288,7 +289,7 @@ export async function syncUserRates(
   }
   // Recorded on every pass, throttled or not, so the page render that follows
   // a save is covered by the save's own converged sync.
-  lastSyncAt.set(userId, Date.now());
+  lastSyncAt.set(spaceId, Date.now());
 
-  await backfillRates(userId);
+  await backfillRates(spaceId);
 }

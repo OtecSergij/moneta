@@ -5,14 +5,19 @@ import { useFormContext, useWatch } from "react-hook-form";
 import { todayISO } from "@/lib/dates";
 import { type ExpenseFormValues } from "@/lib/expense-form";
 import { EXPENSE_NOTE_MAX } from "@/lib/expense-constants";
-import type { Category } from "@/repositories/categories";
+import type {
+  Category,
+  CategoryWithUsage,
+} from "@/repositories/categories";
 import { type CurrencyCode } from "@/lib/currency";
 import { formatMoney, parseMoney } from "@/lib/money";
 import { quoteConversionAction } from "@/lib/actions/fx";
 import { Field } from "@/components/ui/field";
 import { TextInput } from "@/components/ui/text-input";
 import { CurrencySegment } from "@/components/ui/currency-segment";
-import { CategorySelect } from "@/components/expenses/category-select";
+import { CategoryChips } from "@/components/categories/category-chips";
+import { NewCategoryPanel } from "@/components/categories/new-category-panel";
+import { CategoryEditSheet } from "@/components/categories/category-edit-sheet";
 
 const PREVIEW_DEBOUNCE_MS = 300;
 
@@ -29,15 +34,22 @@ function previewLabel(preview: VisiblePreview): string {
   return preview.status === "unavailable" ? "курс недоступен" : "…";
 }
 
+type CategoryProps =
+  | {
+      categoriesEditable: true;
+      categories: CategoryWithUsage[];
+      onCategoriesChange: (next: CategoryWithUsage[]) => void;
+    }
+  | { categoriesEditable?: false; categories: Category[] };
+
+function sortByName<T extends Category>(list: T[]): T[] {
+  return [...list].sort((a, b) => a.name.localeCompare(b.name, "ru"));
+}
+
 export function ExpenseFormFields({
-  categories,
   displayCurrency,
-  onCategoryCreated,
-}: {
-  categories: Category[];
-  displayCurrency: CurrencyCode;
-  onCategoryCreated: (category: Category) => void;
-}) {
+  ...categoryProps
+}: { displayCurrency: CurrencyCode } & CategoryProps) {
   const {
     register,
     control,
@@ -56,6 +68,10 @@ export function ExpenseFormFields({
   // date. The plain ref sets `max` post-render (hydration-safe, no setState),
   // and again whenever the date changes, so the quick-add reset() after
   // midnight lifts the cap to the new today.
+  function selectCategory(id: string) {
+    setValue("categoryId", id, { shouldValidate: true });
+  }
+
   const spentAtRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
     if (spentAtRef.current) spentAtRef.current.max = todayISO();
@@ -156,15 +172,27 @@ export function ExpenseFormFields({
           ) : null}
         </div>
 
-        <CategorySelect
-          categories={categories}
-          value={categoryId}
-          onChange={(id) =>
-            setValue("categoryId", id, { shouldValidate: true })
-          }
-          onCreated={onCategoryCreated}
-          error={errors.categoryId?.message}
-        />
+        <div>
+          {categoryProps.categoriesEditable ? (
+            <EditableCategories
+              categories={categoryProps.categories}
+              onCategoriesChange={categoryProps.onCategoriesChange}
+              value={categoryId}
+              onChange={selectCategory}
+              error={errors.categoryId?.message}
+              onRemoved={(id) => {
+                if (id === categoryId) setValue("categoryId", "");
+              }}
+            />
+          ) : (
+            <CategoryChips
+              categories={categoryProps.categories}
+              value={categoryId}
+              onChange={selectCategory}
+              error={errors.categoryId?.message}
+            />
+          )}
+        </div>
       </div>
 
       <Field label="Описание" htmlFor="note" error={errors.note?.message}>
@@ -188,6 +216,83 @@ export function ExpenseFormFields({
           aria-invalid={!!errors.spentAt}
         />
       </Field>
+    </>
+  );
+}
+
+function EditableCategories({
+  categories,
+  onCategoriesChange,
+  value,
+  onChange,
+  error,
+  onRemoved,
+}: {
+  categories: CategoryWithUsage[];
+  onCategoriesChange: (next: CategoryWithUsage[]) => void;
+  value: string;
+  onChange: (id: string) => void;
+  error?: string;
+  onRemoved: (id: string) => void;
+}) {
+  const [newOpen, setNewOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const empty = categories.length === 0;
+  const editing = categories.find((c) => c.id === editingId) ?? null;
+
+  return (
+    <>
+      <CategoryChips
+        editable
+        categories={categories}
+        value={value}
+        onChange={onChange}
+        error={error}
+        onEdit={setEditingId}
+        newOpen={newOpen || empty}
+        onNewToggle={() => setNewOpen(!newOpen)}
+      >
+        {newOpen || empty ? (
+          <NewCategoryPanel
+            categories={categories}
+            onCancel={empty ? undefined : () => setNewOpen(false)}
+            onCreated={(c) => {
+              onCategoriesChange(
+                sortByName([...categories, { ...c, hasExpenses: false }]),
+              );
+              onChange(c.id);
+              setNewOpen(false);
+            }}
+          />
+        ) : null}
+      </CategoryChips>
+      <CategoryEditSheet
+        category={editing}
+        onClose={() => setEditingId(null)}
+        onSaved={(c) => {
+          onCategoriesChange(
+            sortByName(
+              categories.map((prev) =>
+                prev.id === c.id ? { ...c, hasExpenses: prev.hasExpenses } : prev,
+              ),
+            ),
+          );
+          setEditingId(null);
+        }}
+        onRemoved={(id) => {
+          onCategoriesChange(categories.filter((c) => c.id !== id));
+          onRemoved(id);
+          setEditingId(null);
+        }}
+        onRemoveRejected={() => {
+          onCategoriesChange(
+            categories.map((c) =>
+              c.id === editingId ? { ...c, hasExpenses: true } : c,
+            ),
+          );
+          setEditingId(null);
+        }}
+      />
     </>
   );
 }

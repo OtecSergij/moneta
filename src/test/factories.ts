@@ -1,17 +1,28 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { db } from "@/db";
-import { fxRates, user } from "@/db/schema";
+import {
+  fxRates,
+  spaceInvites,
+  spaceMembers,
+  spaces,
+  user,
+} from "@/db/schema";
 import { todayISO } from "@/lib/dates";
+import type { SpaceId } from "@/lib/space-id";
 import { CATEGORY_COLORS, createCategory } from "@/repositories/categories";
 import {
   type Expense,
   type ExpenseInput,
   createExpense,
 } from "@/repositories/expenses";
+import { getMembership, resolveSpace } from "@/repositories/spaces";
+
+type User = typeof user.$inferSelect;
+export type SpaceUser = { user: User; spaceId: SpaceId };
 
 export async function mkUser(
   overrides: Partial<typeof user.$inferInsert> = {},
-): Promise<typeof user.$inferSelect> {
+): Promise<User> {
   const email = `${randomUUID()}@test.local`;
   const [row] = await db
     .insert(user)
@@ -25,31 +36,79 @@ export async function mkUser(
   return row;
 }
 
-// Creates an expense for `userId`, auto-creating a throwaway category when
-// `overrides.categoryId` is omitted — most itest scenarios don't care which
-// category a row lands in, only that createExpense accepts it. Throws (rather
-// than returning null) on failure, since a test that's just seeding data has
-// no use for the null case createExpense reserves for a rejected categoryId.
+async function membershipOf(userId: string): Promise<SpaceId> {
+  const membership = await getMembership(userId);
+  if (!membership) throw new Error("factories: membership row is missing");
+  return membership.spaceId;
+}
+
+// A user who signed up after phase 1: their space is a fresh random uuid, so
+// space id !== user id.
+export async function mkSpaceUser(
+  overrides: Partial<typeof user.$inferInsert> = {},
+): Promise<SpaceUser> {
+  const u = await mkUser(overrides);
+  const { spaceId } = await resolveSpace(u.id);
+  return { user: u, spaceId };
+}
+
+// A user whose space came out of the phase-1 data migration (space id = user id).
+export async function mkMigratedOwner(
+  overrides: Partial<typeof user.$inferInsert> = {},
+): Promise<SpaceUser> {
+  const u = await mkUser(overrides);
+  await db.insert(spaces).values({ id: u.id, createdAt: u.createdAt });
+  await db
+    .insert(spaceMembers)
+    .values({ spaceId: u.id, userId: u.id, role: "owner", joinedAt: u.createdAt });
+  return { user: u, spaceId: await membershipOf(u.id) };
+}
+
+export async function mkMember(
+  spaceId: SpaceId,
+  overrides: Partial<typeof user.$inferInsert> = {},
+): Promise<SpaceUser> {
+  const u = await mkUser(overrides);
+  await db.insert(spaceMembers).values({ spaceId, userId: u.id, role: "member" });
+  return { user: u, spaceId: await membershipOf(u.id) };
+}
+
+export async function mkInvite(
+  spaceId: SpaceId,
+  ownerId: string,
+  overrides: Partial<typeof spaceInvites.$inferInsert> = {},
+): Promise<typeof spaceInvites.$inferSelect> {
+  const [row] = await db
+    .insert(spaceInvites)
+    .values({
+      spaceId,
+      createdBy: ownerId,
+      token: randomBytes(16).toString("base64url"),
+      ...overrides,
+    })
+    .returning();
+  return row;
+}
+
+// Auto-creates a throwaway category when `overrides.categoryId` is omitted.
+// Throws instead of returning null: a seeding test has no use for the null
+// createExpense reserves for a rejected categoryId.
 export async function mkExpense(
+  spaceId: SpaceId,
   userId: string,
   overrides: Partial<ExpenseInput> = {},
 ): Promise<Expense> {
-  // Unique per call, not a fixed "Test": categories has a unique index on
-  // (user_id, name) (db/schema/categories.ts), and a caller creating several
-  // expenses for the same user without a categoryId override would otherwise
-  // collide on the second call. Sliced to 8 hex chars — categories.name is
-  // capped at 40 (CATEGORY_NAME_MAX / the categories_name_len CHECK), and a
-  // full UUID alone would already blow past that.
+  // Unique name per call: (space_id, name) is unique, and names are capped at 40.
   const categoryId =
     overrides.categoryId ??
     (
-      await createCategory(userId, {
+      await createCategory(spaceId, userId, {
         name: `Test ${randomUUID().slice(0, 8)}`,
         color: CATEGORY_COLORS[0],
       })
     ).id;
 
-  const row = await createExpense(userId, {
+  const row = await createExpense(spaceId, userId, {
     amountMinor: 1000,
     currency: "RUB",
     note: "тест",

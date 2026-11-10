@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { z } from "zod";
-import { requireSession } from "@/lib/dal";
+import { requireSpace } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
 import {
   listExpenses,
@@ -36,7 +36,7 @@ export default async function HistoryPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
-  const { user } = await requireSession();
+  const { user, spaceId } = await requireSpace();
   const { from, to } = await searchParams;
   const range = resolveRange(from, to);
 
@@ -46,16 +46,16 @@ export default async function HistoryPage({
   // depends only on the range, so it goes in this first batch rather than
   // waiting on the settings lookup.
   const [categories, settings, rateIndex] = await Promise.all([
-    listCategories(user.id),
+    listCategories(spaceId),
     getUserSettings(user.id),
     loadRateIndex([...CURRENCY_CODES], range.to),
   ]);
   const displayCurrency = settings.displayCurrency;
 
   const [periodSummary, expenses] = await Promise.all([
-    summary(user.id, displayCurrency, range, rateIndex),
+    summary(spaceId, displayCurrency, range, rateIndex),
     listExpenses(
-      user.id,
+      spaceId,
       displayCurrency,
       { from: range.from, to: range.to },
       rateIndex,

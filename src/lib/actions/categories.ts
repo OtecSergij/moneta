@@ -1,8 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { revalidatePath } from "next/cache";
-import { requireSession } from "@/lib/dal";
+import { requireSpace } from "@/lib/dal";
 import { isUniqueViolation } from "@/lib/db-errors";
 import {
   CategoryInput,
@@ -12,27 +11,23 @@ import {
   updateCategory,
   type Category,
 } from "@/repositories/categories";
+import { revalidateFor } from "./revalidate";
 import type { ActionResult } from "./types";
 
 // Server actions are reachable via direct POST (Next.js docs: "Mutating Data" —
 // always verify auth inside every action), so each one starts with
-// requireSession() and re-validates input server-side. Never trust the client.
-
-function revalidateCategoryViews(): void {
-  revalidatePath("/"); // home: category Select
-  revalidatePath("/settings"); // settings: category list
-}
+// requireSpace() and re-validates input server-side. Never trust the client.
 
 export async function createCategoryAction(
   input: unknown,
 ): Promise<ActionResult<Category>> {
-  const { user } = await requireSession();
+  const { user, spaceId } = await requireSpace();
   const parsed = CategoryInput.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Проверьте поля формы" };
 
   try {
-    const category = await createCategory(user.id, parsed.data);
-    revalidateCategoryViews();
+    const category = await createCategory(spaceId, user.id, parsed.data);
+    revalidateFor("category");
     return { ok: true, data: category };
   } catch (err) {
     if (isUniqueViolation(err)) {
@@ -46,7 +41,7 @@ export async function updateCategoryAction(
   id: string,
   patch: unknown,
 ): Promise<ActionResult<Category>> {
-  const { user } = await requireSession();
+  const { spaceId } = await requireSpace();
   if (!z.uuid().safeParse(id).success) {
     return { ok: false, error: "Категория не найдена" };
   }
@@ -54,9 +49,9 @@ export async function updateCategoryAction(
   if (!parsed.success) return { ok: false, error: "Проверьте поля формы" };
 
   try {
-    const category = await updateCategory(user.id, id, parsed.data);
+    const category = await updateCategory(spaceId, id, parsed.data);
     if (!category) return { ok: false, error: "Категория не найдена" };
-    revalidateCategoryViews();
+    revalidateFor("category");
     return { ok: true, data: category };
   } catch (err) {
     if (isUniqueViolation(err)) {
@@ -69,11 +64,11 @@ export async function updateCategoryAction(
 export async function deleteCategoryAction(
   id: string,
 ): Promise<ActionResult<{ id: string }>> {
-  const { user } = await requireSession();
+  const { spaceId } = await requireSpace();
   if (!z.uuid().safeParse(id).success) {
     return { ok: false, error: "Категория не найдена" };
   }
-  const result = await deleteCategory(user.id, id);
+  const result = await deleteCategory(spaceId, id);
   if (!result.ok) {
     return {
       ok: false,
@@ -83,6 +78,6 @@ export async function deleteCategoryAction(
           : "Категория не найдена",
     };
   }
-  revalidateCategoryViews();
+  revalidateFor("category");
   return { ok: true, data: { id } };
 }

@@ -50,6 +50,11 @@ export const CATEGORY_COLOR_NAMES: Record<CategoryColor, string> = {
 // Default selection in the colour picker — named, not a magic palette index.
 export const DEFAULT_CATEGORY_COLOR: CategoryColor = "#3B82F6"; // Blue
 
+export function firstFreeColor(usedColors: string[]): CategoryColor {
+  const used = new Set(usedColors.map((c) => c.toUpperCase()));
+  return CATEGORY_COLORS.find((c) => !used.has(c)) ?? DEFAULT_CATEGORY_COLOR;
+}
+
 // Max length for a category name — shared by the schema and the create form so
 // the bound lives in one place (the form reuses it for validation + maxLength).
 export const CATEGORY_NAME_MAX = 40;

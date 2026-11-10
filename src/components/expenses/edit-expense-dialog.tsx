@@ -45,7 +45,6 @@ export function EditExpenseDialog({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const [categoryList, setCategoryList] = useState(categories);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -87,16 +86,8 @@ export function EditExpenseDialog({
           noValidate
         >
           <ExpenseFormFields
-            categories={categoryList}
+            categories={categories}
             displayCurrency={displayCurrency}
-            onCategoryCreated={(c) => {
-              setCategoryList((prev) =>
-                [...prev, c].sort((a, b) => a.name.localeCompare(b.name, "ru")),
-              );
-              methods.setValue("categoryId", c.id, {
-                shouldValidate: true,
-              });
-            }}
           />
 
           <div className="mt-2 flex items-center justify-between gap-2">

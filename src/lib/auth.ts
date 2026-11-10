@@ -1,9 +1,15 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
 import { env, hasGoogleOAuth } from "@/env";
+import {
+  afterUserCreate,
+  beforeUserCreate,
+  inviteGuard,
+} from "@/lib/auth-invite-hook";
 import { sendEmail } from "@/lib/email";
 
 // Full spec: docs/auth-decisions.md. Key invariants encoded here:
@@ -55,6 +61,16 @@ export const auth = betterAuth({
         text: `Подтвердите email по ссылке: ${url}`,
         html: `<p>Подтвердите email по <a href="${url}">ссылке</a>.</p>`,
       });
+    },
+  },
+
+  hooks: {
+    before: createAuthMiddleware(inviteGuard),
+  },
+
+  databaseHooks: {
+    user: {
+      create: { before: beforeUserCreate, after: afterUserCreate },
     },
   },
 

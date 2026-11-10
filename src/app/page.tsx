@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { after } from "next/server";
 import { ChevronRight, Settings } from "lucide-react";
-import { requireSession } from "@/lib/dal";
+import { requireSpace } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
 import {
   lastUsedCategoryId,
@@ -13,7 +13,7 @@ import { getUserSettings } from "@/repositories/user-settings";
 import {
   PAGE_SYNC_THROTTLE_MS,
   loadRateIndex,
-  syncUserRates,
+  syncSpaceRates,
 } from "@/repositories/fx-rates";
 import { CURRENCY_CODES } from "@/lib/currency";
 import { maxEntryDate } from "@/lib/fx/provider";
@@ -24,7 +24,7 @@ import { QuickAddForm } from "@/components/expenses/quick-add-form";
 import { RecentList } from "@/components/expenses/recent-list";
 
 export default async function HomePage() {
-  const { user } = await requireSession();
+  const { user, spaceId } = await requireSpace();
   const week = currentWeekFromMonday();
 
   // One load for both consumers below. Bounded by maxEntryDate() rather than
@@ -38,22 +38,21 @@ export default async function HomePage() {
 
   const [categories, weekSummary, recent, lastCategoryId, lastCurrency] =
     await Promise.all([
-      listCategories(user.id),
-      summary(user.id, displayCurrency, week, rateIndex),
-      listExpenses(user.id, displayCurrency, { limit: 10 }, rateIndex),
-      lastUsedCategoryId(user.id),
-      lastUsedCurrency(user.id),
+      listCategories(spaceId),
+      summary(spaceId, displayCurrency, week, rateIndex),
+      listExpenses(spaceId, displayCurrency, { limit: 10 }, rateIndex),
+      lastUsedCategoryId(spaceId, user.id),
+      lastUsedCurrency(spaceId, user.id),
     ]);
 
   // The save path schedules its own rate fetch, but that one is
   // fire-and-forget: if the provider was down, nothing retried it. Opening
   // the app is the retry. Throttled, because this fires on plain navigation
-  // too and the scan is over the user's whole expense history — the write
-  // paths call syncUserRates without a throttle, so a real change still
+  // too and the scan is over the space's whole expense history — the write
+  // paths call syncSpaceRates without a throttle, so a real change still
   // converges immediately. cookies()/headers() aren't callable inside
   // after(), hence the closure.
-  const userId = user.id;
-  after(() => syncUserRates(userId, { throttleMs: PAGE_SYNC_THROTTLE_MS }));
+  after(() => syncSpaceRates(spaceId, { throttleMs: PAGE_SYNC_THROTTLE_MS }));
 
   return (
     <main className="mx-auto w-full max-w-md px-4 py-6 sm:max-w-2xl">

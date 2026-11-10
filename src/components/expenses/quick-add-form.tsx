@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,7 +13,7 @@ import {
   type ExpenseFormValues,
 } from "@/lib/expense-form";
 import { createExpenseAction } from "@/lib/actions/expenses";
-import type { Category } from "@/repositories/categories";
+import type { CategoryWithUsage } from "@/repositories/categories";
 import { Button } from "@/components/ui/button";
 import { ExpenseFormFields } from "@/components/expenses/expense-form-fields";
 
@@ -26,17 +26,18 @@ export function QuickAddForm({
   initialCurrency,
   displayCurrency,
 }: {
-  initialCategories: Category[];
+  initialCategories: CategoryWithUsage[];
   initialCategoryId: string;
   initialCurrency: CurrencyCode;
   displayCurrency: CurrencyCode;
 }) {
   const router = useRouter();
-  // Seeded from props so onCreated can append + select a new category instantly
-  // (optimistic). NOTE: this won't reflect category changes made elsewhere (e.g.
-  // another tab) until a full reload — acceptable because the inline create form
-  // is the only in-app mutation path and it updates this state directly.
   const [categories, setCategories] = useState(initialCategories);
+  const [seenCategories, setSeenCategories] = useState(initialCategories);
+  if (seenCategories !== initialCategories) {
+    setSeenCategories(initialCategories);
+    setCategories(initialCategories);
+  }
 
   const methods = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
@@ -49,6 +50,13 @@ export function QuickAddForm({
     },
   });
 
+  useEffect(() => {
+    const selected = methods.getValues("categoryId");
+    if (selected && !categories.some((c) => c.id === selected)) {
+      methods.setValue("categoryId", "");
+    }
+  }, [categories, methods]);
+
   async function onSubmit(values: ExpenseFormValues) {
     const res = await createExpenseAction(toExpenseInput(values));
     if (!res.ok) {
@@ -56,6 +64,11 @@ export function QuickAddForm({
       return;
     }
     toast.success("Трата добавлена");
+    setCategories((prev) =>
+      prev.map((c) =>
+        c.id === values.categoryId ? { ...c, hasExpenses: true } : c,
+      ),
+    );
     // Keep the just-used category and currency selected so adding several
     // similar expenses in a row doesn't require re-picking them
     // (business-spec §5.1) — a week of dinar entries costs zero extra taps.
@@ -77,14 +90,10 @@ export function QuickAddForm({
         noValidate
       >
         <ExpenseFormFields
+          categoriesEditable
           categories={categories}
+          onCategoriesChange={setCategories}
           displayCurrency={displayCurrency}
-          onCategoryCreated={(c) => {
-            setCategories((prev) =>
-              [...prev, c].sort((a, b) => a.name.localeCompare(b.name, "ru")),
-            );
-            methods.setValue("categoryId", c.id, { shouldValidate: true });
-          }}
         />
 
         <Button

@@ -1,37 +1,62 @@
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import { requireSession } from "@/lib/dal";
-import { listCategories } from "@/repositories/categories";
-import { CategoryManager } from "@/components/settings/category-manager";
+import type { Metadata } from "next";
+import { env } from "@/env";
+import { requireSpace } from "@/lib/dal";
+import { inviteUrl } from "@/lib/invites";
+import { getActiveInviteForOwner } from "@/repositories/invites";
+import { listMembers } from "@/repositories/spaces";
 import { LogoutButton } from "@/components/logout-button";
+import { BackButton } from "@/components/settings/back-button";
+import { SharingSection } from "@/components/settings/sharing-section";
+
+export const metadata: Metadata = { title: "Настройки — moneta" };
 
 export default async function SettingsPage() {
-  const { user } = await requireSession();
-
-  const categories = await listCategories(user.id);
+  const { user, spaceId, role } = await requireSpace();
+  const isOwner = role === "owner";
+  const [members, invite] = await Promise.all([
+    listMembers(spaceId),
+    isOwner ? getActiveInviteForOwner(spaceId, user.id) : null,
+  ]);
 
   return (
-    <main className="mx-auto w-full max-w-md px-4 py-6 sm:max-w-2xl">
-      <header className="mb-6">
-        <Link
-          href="/"
-          className="inline-flex min-h-11 items-center gap-1.5 text-sm text-text-muted transition-colors hover:text-text"
+    <div className="flex-1 bg-page">
+      <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col pb-8 text-ink">
+        <div className="pt-3 pr-2.5 pl-1.5">
+          <BackButton />
+        </div>
+        <h1 className="mx-5 mt-1 text-[28px] leading-9 font-bold tracking-[-0.02em]">
+          Настройки
+        </h1>
+
+        <SharingSection
+          members={members}
+          currentUserId={user.id}
+          isOwner={isOwner}
+          inviteUrl={
+            invite ? inviteUrl(env.BETTER_AUTH_URL, invite.token) : null
+          }
+        />
+
+        <section
+          aria-labelledby="settings-account"
+          className="mx-4 mt-7 flex flex-col gap-2"
         >
-          <ArrowLeft className="size-4" /> На главную
-        </Link>
-        <h1 className="mt-1 text-2xl font-semibold text-text">Настройки</h1>
-      </header>
-
-      <section className="mb-6 rounded-lg border border-border bg-surface p-4 sm:p-6">
-        <h2 className="mb-4 text-lg font-semibold text-text">Категории</h2>
-        <CategoryManager initialCategories={categories} />
-      </section>
-
-      <section className="rounded-lg border border-border bg-surface p-4 sm:p-6">
-        <h2 className="mb-4 text-lg font-semibold text-text">Аккаунт</h2>
-        <p className="mb-4 truncate text-sm text-text-muted">{user.email}</p>
-        <LogoutButton />
-      </section>
-    </main>
+          <h2 id="settings-account" className="mx-1 text-[17px] font-semibold">
+            Аккаунт
+          </h2>
+          <div className="overflow-hidden rounded-card bg-card">
+            <div className="flex min-h-14 items-center justify-between gap-3 px-4">
+              <span className="text-base">Email</span>
+              <span className="min-w-0 truncate text-[15px] text-ink-2">
+                {user.email}
+              </span>
+            </div>
+            <div className="flex flex-col border-t border-row-line p-4">
+              <LogoutButton />
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
   );
 }

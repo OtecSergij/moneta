@@ -23,3 +23,13 @@ export function isUniqueViolation(err: unknown): boolean {
   }
   return false;
 }
+
+// True if `err`, or any error in its `.cause` chain, is a Postgres
+// foreign-key violation: 23503, or 23001 which an ON DELETE RESTRICT key
+// raises instead.
+export function isForeignKeyViolation(err: unknown): boolean {
+  for (let e: unknown = err; e != null; e = (e as { cause?: unknown }).cause) {
+    if (hasErrorCode(e, "23503") || hasErrorCode(e, "23001")) return true;
+  }
+  return false;
+}

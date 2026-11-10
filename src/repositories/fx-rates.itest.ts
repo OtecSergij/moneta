@@ -11,7 +11,12 @@ import {
   loadRateIndex,
 } from "@/repositories/fx-rates";
 import { callsTo, stubFxSources } from "@/test/fx-fixtures";
-import { clearRates, mkExpense, mkUser } from "@/test/factories";
+import {
+  clearRates,
+  mkExpense,
+  mkMember,
+  mkSpaceUser,
+} from "@/test/factories";
 
 // Every fetch stub here routes by URL to a document of the real source's
 // shape (src/test/fx-fixtures.ts). The ECB answer is a batch, so each test
@@ -167,15 +172,17 @@ describe("ensureRates", () => {
 });
 
 describe("backfillRates", () => {
-  it("fills every distinct expense date for the user (AC-25)", async () => {
-    const u = await mkUser();
-    const cat = await createCategory(u.id, {
+  it("fills every distinct expense date of both members of the space (AC-25)", async () => {
+    const owner = await mkSpaceUser();
+    const member = await mkMember(owner.spaceId);
+    const cat = await createCategory(owner.spaceId, owner.user.id, {
       name: "Food",
       color: CATEGORY_COLORS[0],
     });
     const dates = ["2024-11-01", "2024-11-02", "2024-11-03"]; // Fri, Sat, Sun
-    for (const spentAt of dates) {
-      await createExpense(u.id, {
+    const authors = [owner, member, member];
+    for (const [i, spentAt] of dates.entries()) {
+      await createExpense(owner.spaceId, authors[i].user.id, {
         categoryId: cat.id,
         amountMinor: 1000,
         currency: "RUB",
@@ -187,7 +194,7 @@ describe("backfillRates", () => {
     const fetch = stubFxSources({
       ecbDates: ["2024-10-30", "2024-10-31", "2024-11-01"],
     });
-    const filled = await backfillRates(u.id, { fetch });
+    const filled = await backfillRates(owner.spaceId, { fetch });
     expect(filled).toBe(3);
 
     for (const date of dates) {
@@ -196,12 +203,12 @@ describe("backfillRates", () => {
   });
 
   it("between the floors a fiat-only date counts as covered, so it is filled once and never re-fetched", async () => {
-    const u = await mkUser();
+    const u = await mkSpaceUser();
     const date = "2024-08-14"; // Wednesday: official sources yes, aggregator not yet
-    await mkExpense(u.id, { spentAt: date });
+    await mkExpense(u.spaceId, u.user.id, { spentAt: date });
 
     const fetch = stubFxSources({ ecbDates: ["2024-08-13", "2024-08-14"] });
-    expect(await backfillRates(u.id, { fetch })).toBe(1);
+    expect(await backfillRates(u.spaceId, { fetch })).toBe(1);
     expect(callsTo(fetch, "aggregator")).toEqual([]);
     expect(await sourcesFor(date)).toEqual({
       RUB: "cbr",
@@ -213,7 +220,7 @@ describe("backfillRates", () => {
     // Four rows are all this date can ever have; expecting a fifth would
     // make every pass re-fetch it.
     const callsAfterFill = fetch.mock.calls.length;
-    expect(await backfillRates(u.id, { fetch })).toBe(0);
+    expect(await backfillRates(u.spaceId, { fetch })).toBe(0);
     expect(fetch.mock.calls.length).toBe(callsAfterFill);
   });
 });

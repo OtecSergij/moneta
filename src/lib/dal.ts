@@ -2,7 +2,9 @@ import "server-only";
 import { cache } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { auth, type Session } from "@/lib/auth";
+import type { SpaceId } from "@/lib/space-id";
+import { resolveSpace, type SpaceRole } from "@/repositories/spaces";
 
 // Data Access Layer for Server Components. `server-only` guards against this
 // module ever being pulled into a client bundle.
@@ -21,3 +23,15 @@ export async function requireSession() {
   if (!session) redirect("/login");
   return session;
 }
+
+export type SpaceContext = {
+  user: Session["user"];
+  spaceId: SpaceId;
+  role: SpaceRole;
+};
+
+export const requireSpace = cache(async (): Promise<SpaceContext> => {
+  const s = await requireSession();
+  const { spaceId, role } = await resolveSpace(s.user.id);
+  return { user: s.user, spaceId, role };
+});

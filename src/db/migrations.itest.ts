@@ -1,5 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -155,6 +164,172 @@ describe("migrations — AC-24: applied in production shape", () => {
       } finally {
         await cleanup.end();
       }
+    }
+  });
+});
+
+async function withScratchDatabase(
+  run: (url: string) => Promise<void>,
+): Promise<void> {
+  const baseUrl = new URL(process.env.DATABASE_URL as string);
+  const dbName = `moneta_phase1_${randomUUID().replace(/-/g, "")}`;
+  const url = new URL(baseUrl.toString());
+  url.pathname = `/${dbName}`;
+
+  const admin = postgres(baseUrl.toString(), { max: 1 });
+  try {
+    await admin.unsafe(`CREATE DATABASE "${dbName}"`);
+  } finally {
+    await admin.end();
+  }
+  try {
+    await run(url.toString());
+  } finally {
+    const cleanup = postgres(baseUrl.toString(), { max: 1 });
+    try {
+      await cleanup.unsafe(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+    } finally {
+      await cleanup.end();
+    }
+  }
+}
+
+function migrationsUpTo(lastIdx: number): string {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "moneta-migrations-"));
+  mkdirSync(path.join(dir, "meta"));
+  const journal = JSON.parse(
+    readFileSync(path.join(MIGRATIONS_DIR, "meta/_journal.json"), "utf8"),
+  ) as { entries: { idx: number; tag: string }[] };
+  const entries = journal.entries.filter((e) => e.idx <= lastIdx);
+  for (const e of entries) {
+    copyFileSync(
+      path.join(MIGRATIONS_DIR, `${e.tag}.sql`),
+      path.join(dir, `${e.tag}.sql`),
+    );
+  }
+  writeFileSync(
+    path.join(dir, "meta/_journal.json"),
+    JSON.stringify({ ...journal, entries }),
+  );
+  return dir;
+}
+
+describe("phase-1 data migration", () => {
+  it("moves every user's categories and expenses into a space with id = user.id", async () => {
+    const oldFolder = migrationsUpTo(2);
+    try {
+      await withScratchDatabase(async (url) => {
+        const sql = postgres(url, { max: 1, onnotice: () => {} });
+        try {
+          await migrate(drizzle(sql), { migrationsFolder: oldFolder });
+
+          const [withData, noData, unverified, twinA, twinB] = await sql<
+            { id: string }[]
+          >`
+            insert into "user" (name, email, email_verified) values
+              ('with-data', ${`${randomUUID()}@t.local`}, true),
+              ('no-data', ${`${randomUUID()}@t.local`}, true),
+              ('unverified', ${`${randomUUID()}@t.local`}, false),
+              ('twin-a', ${`${randomUUID()}@t.local`}, true),
+              ('twin-b', ${`${randomUUID()}@t.local`}, true)
+            returning id
+          `;
+          const userIds = [withData, noData, unverified, twinA, twinB].map(
+            (u) => u.id,
+          );
+
+          const cats = await sql<{ id: string; user_id: string }[]>`
+            insert into categories (user_id, name, color) values
+              (${withData.id}, 'Еда', '#10B981'),
+              (${withData.id}, 'Кафе', '#F97316'),
+              (${twinA.id}, 'Дом', '#F59E0B'),
+              (${twinB.id}, 'Дом', '#F59E0B')
+            returning id, user_id
+          `;
+          const catOf = (userId: string) =>
+            cats.find((c) => c.user_id === userId)!.id;
+          const exps = await sql<{ id: string; user_id: string }[]>`
+            insert into expenses (user_id, category_id, amount_minor, note, spent_at) values
+              (${withData.id}, ${cats[0].id}, 1000, 'a', '2026-01-01'),
+              (${withData.id}, ${cats[1].id}, 2000, 'b', '2026-01-02'),
+              (${twinA.id}, ${catOf(twinA.id)}, 3000, 'c', '2026-01-03'),
+              (${twinB.id}, ${catOf(twinB.id)}, 4000, 'd', '2026-01-04')
+            returning id, user_id
+          `;
+
+          await migrate(drizzle(sql), {
+            migrationsFolder: "./src/db/migrations",
+          });
+
+          const spaceRows = await sql<{ id: string }[]>`select id from spaces`;
+          expect(spaceRows.map((r) => r.id).sort()).toEqual([...userIds].sort());
+
+          const members = await sql<
+            { space_id: string; user_id: string; role: string }[]
+          >`select space_id, user_id, role from space_members`;
+          expect(members).toHaveLength(userIds.length);
+          for (const id of userIds) {
+            expect(members.filter((m) => m.user_id === id)).toEqual([
+              { space_id: id, user_id: id, role: "owner" },
+            ]);
+          }
+
+          const catsAfter = await sql<
+            { id: string; space_id: string; created_by: string }[]
+          >`select id, space_id, created_by from categories`;
+          expect(catsAfter).toHaveLength(cats.length);
+          for (const c of cats) {
+            expect(catsAfter.find((r) => r.id === c.id)).toEqual({
+              id: c.id,
+              space_id: c.user_id,
+              created_by: c.user_id,
+            });
+          }
+
+          const expsAfter = await sql<
+            { id: string; space_id: string; created_by: string }[]
+          >`select id, space_id, created_by from expenses`;
+          expect(expsAfter).toHaveLength(exps.length);
+          for (const e of exps) {
+            expect(expsAfter.find((r) => r.id === e.id)).toEqual({
+              id: e.id,
+              space_id: e.user_id,
+              created_by: e.user_id,
+            });
+          }
+
+          const columns = await sql<
+            { table_name: string; column_name: string; is_nullable: string }[]
+          >`
+            select table_name, column_name, is_nullable
+            from information_schema.columns
+            where table_schema = 'public'
+              and table_name in ('categories', 'expenses')
+              and column_name in ('space_id', 'created_by', 'user_id')
+            order by table_name, column_name
+          `;
+          expect(columns).toEqual([
+            { table_name: "categories", column_name: "created_by", is_nullable: "NO" },
+            { table_name: "categories", column_name: "space_id", is_nullable: "NO" },
+            { table_name: "expenses", column_name: "created_by", is_nullable: "NO" },
+            { table_name: "expenses", column_name: "space_id", is_nullable: "NO" },
+          ]);
+
+          await expect(
+            sql`insert into categories (space_id, created_by, name, color)
+                values (${twinA.id}, ${twinA.id}, 'Дом', '#F59E0B')`,
+          ).rejects.toMatchObject({ code: "23505" });
+
+          await expect(
+            sql`insert into expenses (space_id, created_by, category_id, amount_minor, note, spent_at)
+                values (${twinA.id}, ${twinA.id}, ${catOf(twinB.id)}, 100, 'x', '2026-01-05')`,
+          ).rejects.toMatchObject({ code: "23503" });
+        } finally {
+          await sql.end();
+        }
+      });
+    } finally {
+      rmSync(oldFolder, { recursive: true, force: true });
     }
   });
 });

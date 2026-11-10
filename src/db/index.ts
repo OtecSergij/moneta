@@ -18,3 +18,5 @@ if (env.NODE_ENV !== "production") {
 
 export const db = drizzle(client, { schema });
 export type DB = typeof db;
+export type DbExecutor = Pick<DB, "select">;
+export type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];

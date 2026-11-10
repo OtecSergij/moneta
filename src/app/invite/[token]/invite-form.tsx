@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,6 +12,7 @@ import { AvatarInitial } from "@/components/kit/avatar-initial";
 import { Button } from "@/components/kit/button";
 import { GoogleContinueButton } from "@/components/kit/google-continue-button";
 import { TextField } from "@/components/kit/text-field";
+import { StatusCard } from "@/components/ui/status-card";
 
 const inviteSignUpSchema = signUpSchema.pick({ email: true, password: true });
 type InviteSignUpValues = { email: string; password: string };
@@ -98,28 +98,16 @@ export function InviteForm({
 
   if (submittedEmail) {
     return (
-      <main className="mt-24 flex flex-col items-center gap-3.5 rounded-sheet bg-card px-6 py-8 text-center">
-        <span
-          aria-hidden
-          className="flex size-16 items-center justify-center rounded-chip bg-primary-soft text-primary-ink"
-        >
-          <MailCheck className="size-[30px]" strokeWidth={1.75} />
-        </span>
-        <h1 className="mt-1 text-2xl leading-[30px] font-bold tracking-[-0.02em]">
-          Проверьте почту
-        </h1>
-        <p className="text-[15px] leading-[22px] text-ink-2">
-          Мы отправили ссылку подтверждения на{" "}
-          <span className="font-medium text-ink">{submittedEmail}</span>.
-          Откройте письмо и нажмите на ссылку, чтобы войти.
-        </p>
-        <Link
-          href="/login"
-          className="mt-2.5 flex h-13 items-center justify-center self-stretch rounded-field bg-page text-base font-semibold text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-        >
-          Вернуться ко входу
-        </Link>
-      </main>
+      <StatusCard
+        as="main"
+        icon={MailCheck}
+        title="Проверьте почту"
+        action={{ href: "/login", label: "Вернуться ко входу" }}
+      >
+        Мы отправили ссылку подтверждения на{" "}
+        <span className="font-medium text-ink">{submittedEmail}</span>.
+        Откройте письмо и нажмите на ссылку, чтобы войти.
+      </StatusCard>
     );
   }
 

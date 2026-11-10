@@ -1,13 +1,11 @@
 import { and, asc, eq, getTableColumns, gt, sql, type SQL } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbExecutor } from "@/db";
 import { accounts, expenses } from "@/db/schema";
 import type { AccountInput, AccountPatch } from "@/lib/accounts";
 import type { SpaceId } from "@/lib/space-id";
 
 export type Account = typeof accounts.$inferSelect;
 export type AccountWithBalance = Account & { balanceMinor: number };
-
-type Executor = Pick<typeof db, "select">;
 
 function toSafeInteger(value: string): number {
   const n = Number(value);
@@ -16,7 +14,7 @@ function toSafeInteger(value: string): number {
 }
 
 async function selectWithBalance(
-  executor: Executor,
+  executor: DbExecutor,
   where: SQL | undefined,
 ): Promise<AccountWithBalance[]> {
   const rows = await executor

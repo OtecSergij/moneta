@@ -81,9 +81,9 @@ describe("lists actions", () => {
       resetListAction(bad),
       deleteListAction(bad),
       addItemAction(bad, "Пункт"),
-      setItemTextAction(bad, "Пункт"),
-      setItemCheckedAction(bad, true),
-      deleteItemAction(bad),
+      setItemTextAction(bad, bad, "Пункт"),
+      setItemCheckedAction(bad, bad, true),
+      deleteItemAction(bad, bad),
     ]);
     for (const r of results) expect(r.ok).toBe(false);
   });
@@ -99,8 +99,8 @@ describe("lists actions", () => {
       renameListAction(list.id, ""),
       setListVisibilityAction(list.id, "everyone"),
       addItemAction(list.id, "x".repeat(201)),
-      setItemTextAction(item.id, "  "),
-      setItemCheckedAction(item.id, "yes"),
+      setItemTextAction(list.id, item.id, "  "),
+      setItemCheckedAction(list.id, item.id, "yes"),
     ]);
     for (const r of results) expect(r.ok).toBe(false);
 
@@ -123,9 +123,9 @@ describe("lists actions", () => {
       resetListAction(list.id),
       deleteListAction(list.id),
       addItemAction(list.id, "Пункт"),
-      setItemTextAction(item.id, "Чужое"),
-      setItemCheckedAction(item.id, true),
-      deleteItemAction(item.id),
+      setItemTextAction(list.id, item.id, "Чужое"),
+      setItemCheckedAction(list.id, item.id, true),
+      deleteItemAction(list.id, item.id),
     ]);
     for (const r of results) {
       expect(r).toMatchObject({ ok: false, notFound: true });
@@ -136,6 +136,23 @@ describe("lists actions", () => {
     expect(row).toMatchObject({ name: list.name, visibility: "private" });
     const items = await db.select().from(listItems).where(eq(listItems.listId, list.id));
     expect(items).toEqual([expect.objectContaining({ text: "Секрет", checked: false })]);
+  });
+
+  it("keeps the user in a visible list when only the item is gone", async () => {
+    const list = await mkList(me.spaceId, me.user.id, { visibility: "shared" });
+    const item = await mkItem(list, me.user.id, { text: "Молоко" });
+    await db.delete(listItems).where(eq(listItems.id, item.id));
+
+    const results = await Promise.all([
+      setItemTextAction(list.id, item.id, "Кефир"),
+      setItemCheckedAction(list.id, item.id, true),
+      deleteItemAction(list.id, item.id),
+    ]);
+
+    for (const r of results) {
+      expect(r).toEqual({ ok: false, error: "Пункт не найден" });
+    }
+    expect(revalidatePath).toHaveBeenCalledWith("/lists");
   });
 
   it("lets only the author change visibility", async () => {

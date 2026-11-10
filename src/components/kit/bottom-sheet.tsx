@@ -112,7 +112,7 @@ export function BottomSheet({
           aria-describedby={undefined}
           onOpenAutoFocus={onOpenAutoFocus}
           className={cn(
-            "fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[calc(100dvh-24px)] w-full max-w-md flex-col rounded-t-sheet text-ink shadow-sheet outline-none",
+            "fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[calc(100dvh-24px)] w-full max-w-[480px] flex-col rounded-t-sheet text-ink shadow-sheet outline-none",
             dragY === 0 && "transition-transform duration-200",
             tone === "white" ? "bg-card" : "bg-page",
           )}

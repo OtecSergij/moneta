@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { unstable_rethrow, useRouter } from "next/navigation";
 import { Lock } from "lucide-react";
 import { toast } from "sonner";
 import { createListAction } from "@/lib/actions/lists";
@@ -37,6 +37,9 @@ function ListNewForm({ onCreated }: { onCreated: (id: string) => void }) {
         return;
       }
       onCreated(res.data.id);
+    } catch (error) {
+      unstable_rethrow(error);
+      toast.error("Не удалось создать список");
     } finally {
       setSaving(false);
     }
@@ -61,7 +64,7 @@ function ListNewForm({ onCreated }: { onCreated: (id: string) => void }) {
         autoFocus
         error={error}
       />
-      <div className="flex items-center gap-4 rounded-[16px] bg-page px-4 py-3.5">
+      <div className="flex items-center gap-4 rounded-panel bg-page px-4 py-3.5">
         <span
           id="list-new-private"
           className="flex flex-1 items-center gap-1.5 text-[15px] font-semibold"

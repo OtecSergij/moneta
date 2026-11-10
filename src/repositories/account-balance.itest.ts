@@ -1,6 +1,6 @@
 import { subDays } from "date-fns";
 import { eq } from "drizzle-orm";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { accounts, expenses } from "@/db/schema";
 import type { SpaceId } from "@/lib/space-id";
@@ -13,6 +13,10 @@ import {
   updateExpense,
 } from "@/repositories/expenses";
 import { mkAccount, mkExpense, mkMember, mkSpaceUser } from "@/test/factories";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const now = new Date();
 const BEFORE_ANCHOR = subDays(now, 20);
@@ -182,11 +186,10 @@ describe("account balance", () => {
 
     const rejections = log.mock.calls.filter(([event]) => event === "expense.account_rejected");
     expect(rejections).toHaveLength(5);
-    log.mockRestore();
   });
 
   it("7a. concurrent patches of the account and the currency never leave a mismatched pair", async () => {
-    const log = vi.spyOn(console, "info").mockImplementation(() => {});
+    vi.spyOn(console, "info").mockImplementation(() => {});
     const a = await mkSpaceUser();
     const rub = await anchoredAccount(a.spaceId, a.user.id, 10000);
     for (let i = 0; i < 10; i++) {
@@ -198,7 +201,6 @@ describe("account balance", () => {
       const row = await getExpense(a.spaceId, expense.id);
       if (row?.accountId) expect(row.currency).toBe(rub.currency);
     }
-    log.mockRestore();
   });
 
   it("8. renaming with a stale loaded balance keeps the anchor; editing the value moves it", async () => {

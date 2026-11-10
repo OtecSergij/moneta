@@ -1,6 +1,6 @@
 import { and, between, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "@/db";
+import { db, type DbExecutor } from "@/db";
 import { accounts, categories, currencyEnum, expenses } from "@/db/schema";
 import { CURRENCY_CODES, type CurrencyCode } from "@/lib/currency";
 import { EXPENSE_NOTE_MAX } from "@/lib/expense-constants";
@@ -181,7 +181,7 @@ async function accountAccepts(
   spaceId: SpaceId,
   accountId: string,
   currency: CurrencyCode,
-  executor: Pick<typeof db, "select"> = db,
+  executor: DbExecutor = db,
 ): Promise<boolean> {
   const [account] = await executor
     .select({ currency: accounts.currency })

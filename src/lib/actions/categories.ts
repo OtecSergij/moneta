@@ -1,6 +1,5 @@
 "use server";
 
-import { z } from "zod";
 import { requireSpace } from "@/lib/dal";
 import { isUniqueViolation } from "@/lib/db-errors";
 import {
@@ -12,7 +11,7 @@ import {
   type Category,
 } from "@/repositories/categories";
 import { revalidateFor } from "./revalidate";
-import type { ActionResult } from "./types";
+import { INVALID, isUuid, type ActionResult } from "./types";
 
 // Server actions are reachable via direct POST (Next.js docs: "Mutating Data" —
 // always verify auth inside every action), so each one starts with
@@ -23,7 +22,7 @@ export async function createCategoryAction(
 ): Promise<ActionResult<Category>> {
   const { user, spaceId } = await requireSpace();
   const parsed = CategoryInput.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Проверьте поля формы" };
+  if (!parsed.success) return INVALID;
 
   try {
     const category = await createCategory(spaceId, user.id, parsed.data);
@@ -42,11 +41,11 @@ export async function updateCategoryAction(
   patch: unknown,
 ): Promise<ActionResult<Category>> {
   const { spaceId } = await requireSpace();
-  if (!z.uuid().safeParse(id).success) {
+  if (!isUuid(id)) {
     return { ok: false, error: "Категория не найдена" };
   }
   const parsed = CategoryPatch.safeParse(patch);
-  if (!parsed.success) return { ok: false, error: "Проверьте поля формы" };
+  if (!parsed.success) return INVALID;
 
   try {
     const category = await updateCategory(spaceId, id, parsed.data);
@@ -65,7 +64,7 @@ export async function deleteCategoryAction(
   id: string,
 ): Promise<ActionResult<{ id: string }>> {
   const { spaceId } = await requireSpace();
-  if (!z.uuid().safeParse(id).success) {
+  if (!isUuid(id)) {
     return { ok: false, error: "Категория не найдена" };
   }
   const result = await deleteCategory(spaceId, id);

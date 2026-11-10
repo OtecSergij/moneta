@@ -57,14 +57,14 @@ function ItemEditor({
         onBlur={(e) => {
           if (!rowRef.current?.contains(e.relatedTarget)) onCancel();
         }}
-        className="h-11 min-w-0 flex-1 rounded-[12px] bg-card px-3 text-base text-ink shadow-[inset_0_0_0_2px_var(--color-primary)] outline-none"
+        className="h-11 min-w-0 flex-1 rounded-control bg-card px-3 text-base text-ink shadow-[inset_0_0_0_2px_var(--color-primary)] outline-none"
       />
       <button
         type="button"
         aria-label="Удалить пункт"
         onMouseDown={keepFocus}
         onClick={onRemove}
-        className="flex size-11 flex-none cursor-pointer items-center justify-center rounded-[12px] bg-danger-soft text-danger-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        className="flex size-11 flex-none cursor-pointer items-center justify-center rounded-control bg-danger-soft text-danger-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
         <Trash2 aria-hidden className="size-5" strokeWidth={1.75} />
       </button>
@@ -73,7 +73,7 @@ function ItemEditor({
         aria-label="Сохранить"
         onMouseDown={keepFocus}
         onClick={save}
-        className="flex size-11 flex-none cursor-pointer items-center justify-center rounded-[12px] bg-primary text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        className="flex size-11 flex-none cursor-pointer items-center justify-center rounded-control bg-primary text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
         <Check aria-hidden className="size-5" strokeWidth={1.75} />
       </button>

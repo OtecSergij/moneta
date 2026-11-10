@@ -1,4 +1,4 @@
-import { useId, type ComponentProps, type ReactNode } from "react";
+import { useId, type ComponentProps } from "react";
 import { cn } from "@/lib/utils";
 
 type TextFieldProps = Omit<ComponentProps<"input">, "size"> & {
@@ -6,7 +6,6 @@ type TextFieldProps = Omit<ComponentProps<"input">, "size"> & {
   labelHidden?: boolean;
   variant?: "default" | "title";
   size?: "md" | "lg";
-  suffix?: ReactNode;
   error?: string;
 };
 
@@ -15,7 +14,6 @@ export function TextField({
   labelHidden = false,
   variant = "default",
   size = "md",
-  suffix,
   error,
   id,
   className,
@@ -64,9 +62,6 @@ export function TextField({
           )}
           {...props}
         />
-        {suffix ? (
-          <span className="flex-none text-base text-ink-2">{suffix}</span>
-        ) : null}
       </div>
       {error ? (
         <p id={errorId} className="text-[13px] text-error">

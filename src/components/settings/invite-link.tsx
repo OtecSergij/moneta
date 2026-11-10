@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Check, Copy, Link as LinkIcon, RotateCcw } from "lucide-react";
+import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import { createInviteAction } from "@/lib/actions/invites";
 import { displayInviteUrl } from "@/lib/invites";
@@ -23,7 +24,14 @@ export function InviteLink({ initialUrl }: { initialUrl: string | null }) {
 
   function create() {
     startTransition(async () => {
-      const res = await createInviteAction();
+      let res;
+      try {
+        res = await createInviteAction();
+      } catch (error) {
+        unstable_rethrow(error);
+        toast.error("Не удалось создать ссылку");
+        return;
+      }
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -86,7 +94,7 @@ export function InviteLink({ initialUrl }: { initialUrl: string | null }) {
         type="button"
         onClick={create}
         disabled={pending}
-        className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-[12px] bg-page text-[15px] font-medium text-ink transition-colors hover:bg-line focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-control bg-page text-[15px] font-medium text-ink transition-colors hover:bg-line focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60"
       >
         <RotateCcw className="size-4" strokeWidth={1.75} aria-hidden />
         Создать новую ссылку

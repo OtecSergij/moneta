@@ -32,7 +32,7 @@ export function CurrencySheet({
       <div
         role="radiogroup"
         aria-label={TITLE}
-        className="overflow-hidden rounded-[18px] bg-card"
+        className="overflow-hidden rounded-group bg-card"
       >
         {CURRENCY_CODES.map((code, index) => {
           const { symbol, name } = currencyMeta(code);

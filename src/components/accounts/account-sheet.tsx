@@ -17,7 +17,7 @@ import { TextField } from "@/components/kit/text-field";
 import { BalanceField } from "@/components/accounts/balance-field";
 
 const CONFIRM_BUTTON =
-  "h-12 cursor-pointer rounded-[12px] text-[15px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60";
+  "h-12 cursor-pointer rounded-control text-[15px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60";
 
 export function AccountSheet({
   account,
@@ -128,7 +128,7 @@ export function AccountSheet({
           error={errors.balance}
         />
         {confirming ? (
-          <div className="flex flex-col gap-3.5 rounded-[16px] bg-danger-soft p-4 text-danger-deep">
+          <div className="flex flex-col gap-3.5 rounded-panel bg-danger-soft p-4 text-danger-deep">
             <div className="flex flex-col gap-1">
               <span className="text-base font-semibold">
                 Удалить «{account.name}»?

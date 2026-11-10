@@ -15,7 +15,7 @@ import {
   loadRateIndex,
 } from "@/repositories/fx-rates";
 import { getUserSettings } from "@/repositories/user-settings";
-import type { ActionResult } from "./types";
+import { INVALID, type ActionResult } from "./types";
 
 // A thunk, not a captured reference — see src/repositories/fx-rates.ts.
 const defaultDeps: FxDeps = { fetch: (...args) => globalThis.fetch(...args) };
@@ -79,7 +79,7 @@ export async function quoteConversionAction(
 > {
   const { user } = await requireSession();
   const parsed = QuoteConversionInput.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Проверьте поля формы" };
+  if (!parsed.success) return INVALID;
   const { amountMinor, currency, spentAt } = parsed.data;
 
   // Display currency lives behind the session — never accepted from the

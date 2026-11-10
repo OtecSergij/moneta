@@ -23,14 +23,14 @@ export function NewCategoryPanel({
     });
 
   return (
-    <div className="mt-3 flex flex-col gap-3 rounded-[16px] bg-page p-3.5">
+    <div className="mt-3 flex flex-col gap-3 rounded-panel bg-page p-3.5">
       <TextField
         label="Название категории"
         labelHidden
         value={name}
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") {
+          if (e.key === "Enter" && !e.nativeEvent.isComposing) {
             e.preventDefault();
             submit();
           }
@@ -38,7 +38,7 @@ export function NewCategoryPanel({
         maxLength={CATEGORY_NAME_MAX}
         error={nameError}
         autoFocus
-        className="[&>div]:h-11 [&>div]:rounded-[12px] [&>div]:bg-card [&>div]:px-3.5"
+        className="[&>div]:h-11 [&>div]:rounded-control [&>div]:bg-card [&>div]:px-3.5"
       />
       <ColorSwatches value={color} onChange={setColor} size="panel" />
       <div className="flex justify-end gap-2">
@@ -46,7 +46,7 @@ export function NewCategoryPanel({
           <button
             type="button"
             onClick={onCancel}
-            className="h-11 cursor-pointer rounded-[12px] px-4 text-[15px] font-medium text-ink focus-visible:outline-2 focus-visible:outline-primary"
+            className="h-11 cursor-pointer rounded-control px-4 text-[15px] font-medium text-ink focus-visible:outline-2 focus-visible:outline-primary"
           >
             Отмена
           </button>
@@ -56,7 +56,7 @@ export function NewCategoryPanel({
           onClick={submit}
           disabled={saving}
           aria-busy={saving || undefined}
-          className="inline-flex h-11 min-w-[104px] cursor-pointer items-center justify-center rounded-[12px] bg-primary px-[18px] text-[15px] font-semibold text-white hover:bg-primary-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex h-11 min-w-[104px] cursor-pointer items-center justify-center rounded-control bg-primary px-[18px] text-[15px] font-semibold text-white hover:bg-primary-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60"
         >
           {saving ? (
             <Loader2

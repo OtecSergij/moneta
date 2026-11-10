@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import {
   CATEGORY_COLORS,
@@ -65,6 +66,9 @@ export function useCategoryForm({
       }
       toast.success(category ? "Категория обновлена" : "Категория создана");
       onSaved(res.data);
+    } catch (error) {
+      unstable_rethrow(error);
+      toast.error("Не удалось сохранить категорию");
     } finally {
       busy.current = false;
       setSaving(false);
@@ -84,6 +88,9 @@ export function useCategoryForm({
       }
       toast.success("Категория удалена");
       onRemoved?.(category.id);
+    } catch (error) {
+      unstable_rethrow(error);
+      toast.error("Не удалось удалить категорию");
     } finally {
       busy.current = false;
       setRemoving(false);

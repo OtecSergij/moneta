@@ -1,6 +1,5 @@
 "use server";
 
-import { z } from "zod";
 import { after } from "next/server";
 import { requireSpace } from "@/lib/dal";
 import {
@@ -13,7 +12,7 @@ import {
 } from "@/repositories/expenses";
 import { ensureRates, syncSpaceRates } from "@/repositories/fx-rates";
 import { revalidateFor } from "./revalidate";
-import type { ActionResult } from "./types";
+import { INVALID, isUuid, type ActionResult } from "./types";
 
 // See categories.ts for the auth/validation rationale — same rules apply.
 
@@ -22,7 +21,7 @@ export async function createExpenseAction(
 ): Promise<ActionResult<Expense>> {
   const { user, spaceId } = await requireSpace();
   const parsed = ExpenseInput.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Проверьте поля формы" };
+  if (!parsed.success) return INVALID;
 
   // Repo returns null for any rejected write: an unowned category, an
   // out-of-range date, or an account of another space or currency. The form
@@ -50,11 +49,11 @@ export async function updateExpenseAction(
   patch: unknown,
 ): Promise<ActionResult<Expense>> {
   const { spaceId } = await requireSpace();
-  if (!z.uuid().safeParse(id).success) {
+  if (!isUuid(id)) {
     return { ok: false, error: "Трата не найдена" };
   }
   const parsed = ExpensePatch.safeParse(patch);
-  if (!parsed.success) return { ok: false, error: "Проверьте поля формы" };
+  if (!parsed.success) return INVALID;
 
   const expense = await updateExpense(spaceId, id, parsed.data);
   if (!expense) return { ok: false, error: "Не удалось обновить трату" };
@@ -73,7 +72,7 @@ export async function deleteExpenseAction(
   id: string,
 ): Promise<ActionResult<{ id: string }>> {
   const { spaceId } = await requireSpace();
-  if (!z.uuid().safeParse(id).success) {
+  if (!isUuid(id)) {
     return { ok: false, error: "Трата не найдена" };
   }
   const result = await deleteExpense(spaceId, id);

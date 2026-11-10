@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbExecutor } from "@/db";
 import {
   pendingSpaceJoins,
   spaceInvites,
@@ -21,10 +21,8 @@ export type SpaceMember = {
   joinedAt: Date;
 };
 
-type Executor = Pick<typeof db, "select">;
-
 async function readMembership(
-  executor: Executor,
+  executor: DbExecutor,
   userId: string,
 ): Promise<Membership | null> {
   const [row] = await executor

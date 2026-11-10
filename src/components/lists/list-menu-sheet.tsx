@@ -68,7 +68,7 @@ export function ListMenuSheet({
 }) {
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange} tone="gray" title={name}>
-      <div className="overflow-hidden rounded-[18px] bg-card">
+      <div className="overflow-hidden rounded-group bg-card">
         <MenuButton onClick={onReset} className="min-h-[60px] text-ink">
           <Tile Icon={RotateCcw} className="bg-primary-soft text-primary-ink" />
           <span className="text-base font-medium">Сбросить галочки</span>
@@ -91,7 +91,7 @@ export function ListMenuSheet({
           </div>
         ) : null}
       </div>
-      <div className="overflow-hidden rounded-[18px] bg-card">
+      <div className="overflow-hidden rounded-group bg-card">
         <MenuButton onClick={onDelete} className="min-h-14 text-danger-ink">
           <Tile Icon={Trash2} className="bg-danger-soft" />
           <span className="text-base font-medium">Удалить список</span>

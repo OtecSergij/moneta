@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
-import { unstable_rethrow, useRouter } from "next/navigation";
+import { unstable_rethrow } from "next/navigation";
 import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -49,7 +49,6 @@ export function ExpenseSheet({
   displayCurrency: CurrencyCode;
   onClose: () => void;
 }) {
-  const router = useRouter();
   const [deleting, setDeleting] = useState(false);
 
   const methods = useForm<ExpenseFormValues>({
@@ -72,7 +71,6 @@ export function ExpenseSheet({
       return;
     }
     toast.success("Трата обновлена");
-    router.refresh();
     onClose();
   }
 
@@ -93,7 +91,6 @@ export function ExpenseSheet({
       return;
     }
     toast.success("Трата удалена");
-    router.refresh();
     onClose();
   }
 

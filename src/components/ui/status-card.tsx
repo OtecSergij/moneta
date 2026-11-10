@@ -3,29 +3,35 @@ import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const TONES = {
+  accent: "bg-primary-soft text-primary-ink",
+  danger: "bg-danger-soft text-danger-ink",
+  warn: "bg-warn-soft text-warn-ink",
+} as const;
+
 export function StatusCard({
+  as: Root = "div",
   icon: Icon,
   tone = "accent",
   title,
   children,
   action,
 }: {
+  as?: "div" | "main";
   icon?: LucideIcon;
-  tone?: "accent" | "danger";
+  tone?: keyof typeof TONES;
   title: string;
   children?: ReactNode;
   action?: { href: string; label: string };
 }) {
   return (
-    <div className="mt-24 flex flex-col items-center gap-3.5 rounded-sheet bg-card px-6 py-8 text-center">
+    <Root className="mt-24 flex flex-col items-center gap-3.5 rounded-sheet bg-card px-6 py-8 text-center">
       {Icon ? (
         <span
           aria-hidden
           className={cn(
             "flex size-16 items-center justify-center rounded-chip",
-            tone === "danger"
-              ? "bg-danger-soft text-danger-ink"
-              : "bg-primary-soft text-primary-ink",
+            TONES[tone],
           )}
         >
           <Icon className="size-[30px]" strokeWidth={1.75} />
@@ -50,6 +56,6 @@ export function StatusCard({
           {action.label}
         </Link>
       ) : null}
-    </div>
+    </Root>
   );
 }

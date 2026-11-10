@@ -1,10 +1,8 @@
 import { and, asc, desc, eq, or, sql, type SQL } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type Tx } from "@/db";
 import { listItems, lists } from "@/db/schema";
 import type { ListInput, ListVisibility } from "@/lib/lists";
 import type { SpaceId } from "@/lib/space-id";
-
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export type ListSummary = {
   id: string;
@@ -82,6 +80,18 @@ export async function getList(
     .where(and(eq(listItems.listId, listId), visibleList(spaceId, userId)))
     .orderBy(asc(listItems.checked), asc(listItems.createdAt), asc(listItems.id));
   return { ...summary, items };
+}
+
+export async function isListVisible(
+  spaceId: SpaceId,
+  userId: string,
+  listId: string,
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: lists.id })
+    .from(lists)
+    .where(and(eq(lists.id, listId), visibleList(spaceId, userId)));
+  return rows.length > 0;
 }
 
 export async function createList(

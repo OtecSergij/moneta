@@ -42,7 +42,7 @@ export function TabBar({ active }: { active: TabKey | "none" }) {
               href={href}
               aria-current={on ? "page" : undefined}
               className={cn(
-                "flex min-h-[54px] flex-col items-center justify-center gap-[3px] rounded-[12px] text-[11px] focus-visible:outline-2 focus-visible:outline-primary",
+                "flex min-h-[54px] flex-col items-center justify-center gap-[3px] rounded-control text-[11px] focus-visible:outline-2 focus-visible:outline-primary",
                 on
                   ? "font-semibold text-primary-ink"
                   : "font-medium text-ink-3",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { unstable_rethrow } from "next/navigation";
 import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -19,9 +19,8 @@ import { Button } from "@/components/kit/button";
 import { ExpenseFormFields } from "@/components/expenses/expense-form-fields";
 import type { ExpenseAccount } from "@/components/expenses/account-chips";
 
-// Home screen quick-add form (business-spec §5.1.3). On success it revalidates
-// (server action) and refreshes the route so the summary + recent list update
-// without a manual reload.
+// Home screen quick-add form (business-spec §5.1.3). The server action
+// revalidates the route, so the summary and recent list update in place.
 export function QuickAddForm({
   initialCategories,
   initialCategoryId,
@@ -37,7 +36,6 @@ export function QuickAddForm({
   accounts: ExpenseAccount[];
   displayCurrency: CurrencyCode;
 }) {
-  const router = useRouter();
   const [categories, setCategories] = useState(initialCategories);
   const [seenCategories, setSeenCategories] = useState(initialCategories);
   if (seenCategories !== initialCategories) {
@@ -76,7 +74,14 @@ export function QuickAddForm({
   }, [accounts, methods]);
 
   async function onSubmit(values: ExpenseFormValues) {
-    const res = await createExpenseAction(toExpenseInput(values));
+    let res;
+    try {
+      res = await createExpenseAction(toExpenseInput(values));
+    } catch (error) {
+      unstable_rethrow(error);
+      toast.error("Не удалось добавить трату");
+      return;
+    }
     if (!res.ok) {
       toast.error(res.error);
       return;
@@ -98,7 +103,6 @@ export function QuickAddForm({
       note: "",
       spentAt: todayISO(),
     });
-    router.refresh();
   }
 
   return (

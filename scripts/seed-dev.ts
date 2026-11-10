@@ -140,6 +140,19 @@ const LISTS: Array<{ name: string; done: string[]; todo: string[]; isPrivate?: t
   },
 ];
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
+// reset() wipes every user, so refuse anything that isn't a local dev database.
+function assertLocalDatabase() {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("seed-dev refuses to run with NODE_ENV=production");
+  }
+  const host = new URL(process.env.DATABASE_URL ?? "").hostname;
+  if (!LOCAL_HOSTS.has(host)) {
+    throw new Error(`seed-dev refuses to wipe a non-local database (host "${host}")`);
+  }
+}
+
 async function reset() {
   await db.delete(accounts);
   await db.delete(listItems);
@@ -170,6 +183,7 @@ async function mkSeedUser(email: string, name: string, passwordHash: string) {
 }
 
 async function main() {
+  assertLocalDatabase();
   await reset();
 
   const passwordHash = await hashPassword(SEED_PASSWORD);

@@ -156,7 +156,7 @@ export function ListScreen({ list: serverList }: { list: ListWithItems }) {
       <div className="flex items-center justify-between pt-3 pr-2.5 pl-1.5">
         <Link
           href="/lists"
-          className="flex h-11 items-center gap-0.5 rounded-[12px] pr-2.5 pl-1 text-base font-medium text-primary-ink focus-visible:outline-2 focus-visible:outline-primary"
+          className="flex h-11 items-center gap-0.5 rounded-control pr-2.5 pl-1 text-base font-medium text-primary-ink focus-visible:outline-2 focus-visible:outline-primary"
         >
           <ChevronLeft aria-hidden className="size-[22px]" strokeWidth={1.75} />
           Списки
@@ -253,7 +253,8 @@ export function ListScreen({ list: serverList }: { list: ListWithItems }) {
                   onToggle={() =>
                     mutate(
                       { type: "checked", id: item.id, checked: !item.checked },
-                      () => setItemCheckedAction(item.id, !item.checked),
+                      () =>
+                        setItemCheckedAction(list.id, item.id, !item.checked),
                     )
                   }
                   onEdit={() => setEditingId(item.id)}
@@ -261,13 +262,13 @@ export function ListScreen({ list: serverList }: { list: ListWithItems }) {
                   onSave={(text) => {
                     setEditingId(null);
                     mutate({ type: "text", id: item.id, text }, () =>
-                      setItemTextAction(item.id, text),
+                      setItemTextAction(list.id, item.id, text),
                     );
                   }}
                   onRemove={() => {
                     setEditingId(null);
                     mutate({ type: "remove", id: item.id }, () =>
-                      deleteItemAction(item.id),
+                      deleteItemAction(list.id, item.id),
                     );
                   }}
                 />

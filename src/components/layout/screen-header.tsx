@@ -32,7 +32,7 @@ export function ScreenHeader({
         <Link
           href="/settings"
           aria-label="Настройки"
-          className="flex size-11 items-center justify-center rounded-[12px] text-ink focus-visible:outline-2 focus-visible:outline-primary"
+          className="flex size-11 items-center justify-center rounded-control text-ink focus-visible:outline-2 focus-visible:outline-primary"
         >
           <Settings aria-hidden className="size-[22px]" strokeWidth={1.75} />
         </Link>

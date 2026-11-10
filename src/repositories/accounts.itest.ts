@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import {
@@ -10,6 +10,10 @@ import {
   updateAccount,
 } from "@/repositories/accounts";
 import { mkAccount, mkMember, mkSpaceUser } from "@/test/factories";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 async function row(id: string) {
   const [r] = await db.select().from(accounts).where(eq(accounts.id, id));
@@ -99,7 +103,6 @@ describe("accounts repository — anchor", () => {
     expect(updated).toMatchObject({ anchorAmountMinor: 700 });
     expect(updated!.anchorAt).toEqual(account.anchorAt);
     expect(info).not.toHaveBeenCalledWith("account.reanchored", expect.anything());
-    info.mockRestore();
   });
 
   it("balanceMinor different from the loaded balance re-anchors", async () => {
@@ -119,7 +122,6 @@ describe("accounts repository — anchor", () => {
       accountId: account.id,
       spaceId: a.spaceId,
     });
-    info.mockRestore();
   });
 });
 

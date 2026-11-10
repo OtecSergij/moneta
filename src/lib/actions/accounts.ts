@@ -1,6 +1,5 @@
 "use server";
 
-import { z } from "zod";
 import { AccountInput, AccountPatch } from "@/lib/accounts";
 import { requireSpace } from "@/lib/dal";
 import { isUniqueViolation } from "@/lib/db-errors";
@@ -11,9 +10,8 @@ import {
   type AccountWithBalance,
 } from "@/repositories/accounts";
 import { revalidateFor } from "./revalidate";
-import type { ActionResult } from "./types";
+import { INVALID, isUuid, type ActionResult } from "./types";
 
-const INVALID = { ok: false, error: "Проверьте поля формы" } as const;
 const NOT_FOUND = { ok: false, error: "Счёт не найден" } as const;
 const DUPLICATE = { ok: false, error: "Счёт с таким названием уже есть" } as const;
 
@@ -38,7 +36,7 @@ export async function updateAccountAction(
   patch: unknown,
 ): Promise<ActionResult<AccountWithBalance>> {
   const { spaceId } = await requireSpace();
-  if (!z.uuid().safeParse(id).success) return NOT_FOUND;
+  if (!isUuid(id)) return NOT_FOUND;
   const parsed = AccountPatch.safeParse(patch);
   if (!parsed.success) return INVALID;
   try {
@@ -56,7 +54,7 @@ export async function deleteAccountAction(
   id: string,
 ): Promise<ActionResult<{ id: string }>> {
   const { spaceId } = await requireSpace();
-  if (!z.uuid().safeParse(id).success) return NOT_FOUND;
+  if (!isUuid(id)) return NOT_FOUND;
   const result = await deleteAccount(spaceId, id);
   if (!result.ok) return NOT_FOUND;
   revalidateFor("account");

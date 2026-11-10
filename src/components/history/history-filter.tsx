@@ -102,7 +102,9 @@ function DateField({
         onClick={(e) => {
           try {
             e.currentTarget.showPicker();
-          } catch {}
+          } catch {
+            // The click already lands on the native input, which opens its own picker.
+          }
         }}
         onChange={(e) => {
           if (e.target.value) onChange(e.target.value);

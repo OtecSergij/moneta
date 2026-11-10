@@ -31,15 +31,15 @@ Better Auth на бэке. Оба сервиса крутятся в Coolify н�
   [`docs/acceptance-checklist.md`](./docs/acceptance-checklist.md) — приёмка фаз.
 - [`docs/auth-decisions.md`](./docs/auth-decisions.md) — стек, параметры
   сессии, OAuth, account linking, email verification, rate limiting.
-- [`design-system/moneta/MASTER.md`](./design-system/moneta/MASTER.md) —
-  токены, типографика, layout-паттерны, компонентные правила. При создании
-  страницы сначала проверь `design-system/moneta/pages/<page>.md` — он
-  переопределяет MASTER, если есть.
+- [Холст «moneta — новые фичи»](https://claude.ai/artifact/9o9CcCapwUEJNtu4SoZE3C) —
+  дизайн всех экранов и состояний; доска «Система» на нём — цвета, шрифт,
+  скругления, компоненты и правила интерфейса. Это приватный артефакт
+  claude.ai: читать через Artifact tool (`action: "read"`), не через WebFetch.
 
 ## Стек (коротко)
 
 - **Next.js 16** App Router, TypeScript, Turbopack dev
-- **Tailwind last** (токены в `@theme` блоке `globals.css`, согласованы с MASTER.md)
+- **Tailwind last** (токены в `@theme` блоке `globals.css`; пока старые, новые — на доске «Система» в холсте)
 - **react-hook-form + zod** для форм
 - **@tanstack/react-query** для серверного состояния
 - **lucide-react** для иконок (никаких эмодзи в UI)

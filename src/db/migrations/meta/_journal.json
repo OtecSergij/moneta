@@ -50,6 +50,13 @@
       "when": 1794323103111,
       "tag": "0006_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794324093400,
+      "tag": "0007_expense_account",
+      "breakpoints": true
     }
   ]
 }

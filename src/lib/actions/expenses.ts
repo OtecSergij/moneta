@@ -24,12 +24,13 @@ export async function createExpenseAction(
   const parsed = ExpenseInput.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Проверьте поля формы" };
 
-  // Repo returns null for any rejected write: an unowned category or an
-  // out-of-range date. The form prevents both, so a single message covers the
-  // direct-POST case without claiming a cause that may be wrong.
+  // Repo returns null for any rejected write: an unowned category, an
+  // out-of-range date, or an account of another space or currency. The form
+  // prevents all three, so a single message covers the direct-POST case
+  // without claiming a cause that may be wrong.
   const expense = await createExpense(spaceId, user.id, parsed.data);
   if (!expense) {
-    return { ok: false, error: "Не удалось сохранить трату. Проверьте категорию и дату" };
+    return { ok: false, error: "Не удалось сохранить трату. Проверьте категорию, дату и счёт" };
   }
   revalidateFor("expense");
   // Snapshot top-up after the response, so a save never waits on a provider.

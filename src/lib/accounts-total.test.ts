@@ -90,6 +90,20 @@ describe("summarizeAccounts", () => {
     expect(Math.abs(sum - 1000)).toBeLessThanOrEqual(s.rows.length);
   });
 
+  it("counts a negative account in another currency in the total, not in shares", () => {
+    const s = summarizeAccounts(
+      [acc("Карта USD", "USD", 124050), acc("Наличные EUR", "EUR", -62000)],
+      "USD",
+      index,
+      TODAY,
+    );
+    expect(s.totalMinor).toBe(124050 - 68200);
+    expect(s.rows.map((r) => [r.name, r.convertedMinor, r.sharePermille])).toEqual([
+      ["Карта USD", 124050, 1000],
+      ["Наличные EUR", -68200, 0],
+    ]);
+  });
+
   it("handles a zero total", () => {
     expect(summarizeAccounts([], "RUB", index, TODAY)).toEqual({
       totalMinor: 0,

@@ -6,15 +6,18 @@ import type { ExpenseWithConversion } from "@/repositories/expenses";
 import { formatRelativeDay } from "@/lib/dates";
 import { ExpenseListRow } from "@/components/expenses/expense-list-row";
 import { useExpenseEditor } from "@/components/expenses/use-expense-editor";
+import type { ExpenseAccount } from "@/components/expenses/account-chips";
 
 export function RecentList({
   expenses,
   categories,
+  accounts,
 }: {
   expenses: ExpenseWithConversion[];
   categories: Category[];
+  accounts: ExpenseAccount[];
 }) {
-  const { openEditor, editor } = useExpenseEditor(categories);
+  const { openEditor, editor } = useExpenseEditor(categories, accounts);
   const categoryById = useMemo(
     () => new Map(categories.map((c) => [c.id, c])),
     [categories],

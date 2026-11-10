@@ -12,6 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { CURRENCY_CODES } from "../../lib/currency";
+import { accounts } from "./accounts";
 import { user } from "./auth";
 import { categories } from "./categories";
 import { spaces } from "./spaces";
@@ -69,6 +70,9 @@ export const expenses = pgTable(
     // the timezone calculation lives in the app. Always set on insert.
     // Future-date validation is in the repository (zod).
     spentAt: date("spent_at", { mode: "string" }).notNull(),
+    accountId: uuid("account_id").references(() => accounts.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -81,6 +85,7 @@ export const expenses = pgTable(
       t.createdBy,
       t.createdAt.desc(),
     ),
+    index("expenses_account_created_idx").on(t.accountId, t.createdAt),
     // RESTRICT: a category with expenses can't be deleted (business-spec §5.3).
     foreignKey({
       name: "expenses_category_same_space_fk",

@@ -3,10 +3,13 @@ import { addDays } from "date-fns";
 import { requireSpace } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
 import {
+  lastUsedAccountId,
   lastUsedCategoryId,
   lastUsedCurrency,
   listExpenses,
 } from "@/repositories/expenses";
+import { listAccounts } from "@/repositories/accounts";
+import { defaultAccountSelection } from "@/lib/expense-account";
 import { getUserSettings } from "@/repositories/user-settings";
 import {
   PAGE_SYNC_THROTTLE_MS,
@@ -42,14 +45,31 @@ export default async function HomePage() {
   ]);
   const displayCurrency = settings.displayCurrency;
 
-  const [categories, weekRows, recent, lastCategoryId, lastCurrency] =
-    await Promise.all([
-      listCategories(spaceId),
-      listExpenses(spaceId, displayCurrency, elapsed, rateIndex),
-      listExpenses(spaceId, displayCurrency, { limit: 10 }, rateIndex),
-      lastUsedCategoryId(spaceId, user.id),
-      lastUsedCurrency(spaceId, user.id),
-    ]);
+  const [
+    categories,
+    accounts,
+    weekRows,
+    recent,
+    lastCategoryId,
+    lastCurrency,
+    lastAccountId,
+  ] = await Promise.all([
+    listCategories(spaceId),
+    listAccounts(spaceId).then((rows) =>
+      rows.map(({ id, name, currency }) => ({ id, name, currency })),
+    ),
+    listExpenses(spaceId, displayCurrency, elapsed, rateIndex),
+    listExpenses(spaceId, displayCurrency, { limit: 10 }, rateIndex),
+    lastUsedCategoryId(spaceId, user.id),
+    lastUsedCurrency(spaceId, user.id),
+    lastUsedAccountId(spaceId, user.id),
+  ]);
+  const selection = defaultAccountSelection({
+    accounts,
+    lastAccountId,
+    lastCurrency,
+    displayCurrency,
+  });
 
   const weekTotal = sumConverted(weekRows, displayCurrency, rateIndex);
   const byDay = new Map(
@@ -87,11 +107,17 @@ export default async function HomePage() {
       <QuickAddForm
         initialCategories={categories}
         initialCategoryId={lastCategoryId ?? ""}
-        initialCurrency={lastCurrency ?? displayCurrency}
+        initialCurrency={selection.currency}
+        initialAccountId={selection.accountId}
+        accounts={accounts}
         displayCurrency={displayCurrency}
       />
       {recent.length > 0 ? (
-        <RecentList expenses={recent} categories={categories} />
+        <RecentList
+          expenses={recent}
+          categories={categories}
+          accounts={accounts}
+        />
       ) : null}
     </AppScreen>
   );

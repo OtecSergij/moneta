@@ -10,6 +10,7 @@ import { Segment } from "@/components/kit/segment";
 import { SummaryBars } from "@/components/history/summary-bars";
 import { HistoryList, type DayGroup } from "@/components/history/history-list";
 import { useExpenseEditor } from "@/components/expenses/use-expense-editor";
+import type { ExpenseAccount } from "@/components/expenses/account-chips";
 
 type Tab = "categories" | "days";
 
@@ -26,6 +27,7 @@ export function PeriodTabs({
   expensesByCategory,
   days,
   categories,
+  accounts,
   displayCurrency,
 }: {
   totalMinor: number;
@@ -35,10 +37,11 @@ export function PeriodTabs({
   expensesByCategory: Record<string, ExpenseWithConversion[]>;
   days: DayGroup[];
   categories: Category[];
+  accounts: ExpenseAccount[];
   displayCurrency: CurrencyCode;
 }) {
   const [tab, setTab] = useState<Tab>("categories");
-  const { openEditor, editor } = useExpenseEditor(categories);
+  const { openEditor, editor } = useExpenseEditor(categories, accounts);
 
   return (
     <div className="flex flex-col pb-6">

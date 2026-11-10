@@ -13,9 +13,11 @@ import {
   type ExpenseFormValues,
 } from "@/lib/expense-form";
 import { createExpenseAction } from "@/lib/actions/expenses";
+import { knownAccountId } from "@/lib/expense-account";
 import type { CategoryWithUsage } from "@/repositories/categories";
 import { Button } from "@/components/kit/button";
 import { ExpenseFormFields } from "@/components/expenses/expense-form-fields";
+import type { ExpenseAccount } from "@/components/expenses/account-chips";
 
 // Home screen quick-add form (business-spec §5.1.3). On success it revalidates
 // (server action) and refreshes the route so the summary + recent list update
@@ -24,11 +26,15 @@ export function QuickAddForm({
   initialCategories,
   initialCategoryId,
   initialCurrency,
+  initialAccountId,
+  accounts,
   displayCurrency,
 }: {
   initialCategories: CategoryWithUsage[];
   initialCategoryId: string;
   initialCurrency: CurrencyCode;
+  initialAccountId: string | null;
+  accounts: ExpenseAccount[];
   displayCurrency: CurrencyCode;
 }) {
   const router = useRouter();
@@ -44,6 +50,7 @@ export function QuickAddForm({
     defaultValues: {
       amount: "",
       currency: initialCurrency,
+      accountId: initialAccountId,
       categoryId: initialCategoryId,
       note: "",
       spentAt: todayISO(),
@@ -61,6 +68,13 @@ export function QuickAddForm({
     }
   }, [categories, methods]);
 
+  useEffect(() => {
+    const selected = methods.getValues("accountId");
+    if (knownAccountId(accounts, selected) !== selected) {
+      methods.setValue("accountId", null);
+    }
+  }, [accounts, methods]);
+
   async function onSubmit(values: ExpenseFormValues) {
     const res = await createExpenseAction(toExpenseInput(values));
     if (!res.ok) {
@@ -73,12 +87,13 @@ export function QuickAddForm({
         c.id === values.categoryId ? { ...c, hasExpenses: true } : c,
       ),
     );
-    // Keep the just-used category and currency selected so adding several
-    // similar expenses in a row doesn't require re-picking them
+    // Keep the just-used account, category and currency selected so adding
+    // several similar expenses in a row doesn't require re-picking them
     // (business-spec §5.1) — a week of dinar entries costs zero extra taps.
     methods.reset({
       amount: "",
       currency: values.currency,
+      accountId: values.accountId,
       categoryId: values.categoryId,
       note: "",
       spentAt: todayISO(),
@@ -102,6 +117,7 @@ export function QuickAddForm({
           categoriesEditable
           categories={categories}
           onCategoriesChange={setCategories}
+          accounts={accounts}
           displayCurrency={displayCurrency}
         />
 

@@ -1,7 +1,7 @@
 import { and, between, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { categories, currencyEnum, expenses } from "@/db/schema";
+import { accounts, categories, currencyEnum, expenses } from "@/db/schema";
 import { CURRENCY_CODES, type CurrencyCode } from "@/lib/currency";
 import { EXPENSE_NOTE_MAX } from "@/lib/expense-constants";
 import {
@@ -32,6 +32,7 @@ export const ExpenseInput = z.object({
   // and the form's "Добавьте описание" rule (business-spec §4.2).
   note: z.string().trim().min(1).max(EXPENSE_NOTE_MAX),
   spentAt: z.iso.date(),
+  accountId: z.uuid().nullable().optional(),
 });
 export type ExpenseInput = z.infer<typeof ExpenseInput>;
 
@@ -134,6 +135,22 @@ export async function lastUsedCurrency(
   return rows[0]?.currency ?? null;
 }
 
+// Account of the user's most recently created expense in the space. Null when
+// that expense has no account — including one whose account was deleted
+// (account_id is SET NULL).
+export async function lastUsedAccountId(
+  spaceId: SpaceId,
+  userId: string,
+): Promise<string | null> {
+  const rows = await db
+    .select({ accountId: expenses.accountId })
+    .from(expenses)
+    .where(and(eq(expenses.spaceId, spaceId), eq(expenses.createdBy, userId)))
+    .orderBy(desc(expenses.createdAt))
+    .limit(1);
+  return rows[0]?.accountId ?? null;
+}
+
 export async function getExpense(
   spaceId: SpaceId,
   id: string,
@@ -160,6 +177,22 @@ async function categoryInSpace(
   return rows.length > 0;
 }
 
+async function accountAccepts(
+  spaceId: SpaceId,
+  accountId: string,
+  currency: CurrencyCode,
+  executor: Pick<typeof db, "select"> = db,
+): Promise<boolean> {
+  const [account] = await executor
+    .select({ currency: accounts.currency })
+    .from(accounts)
+    .where(and(eq(accounts.id, accountId), eq(accounts.spaceId, spaceId)))
+    .limit(1);
+  if (account?.currency === currency) return true;
+  console.info("expense.account_rejected", { spaceId, accountId });
+  return false;
+}
+
 // Upper bound on the entry date. The old rationale for leaving this to the UI
 // was that "today" depends on the user's timezone; maxEntryDate() now answers
 // that by allowing the client to be one day ahead of this server, so the
@@ -177,6 +210,9 @@ export async function createExpense(
 ): Promise<Expense | null> {
   if (!(await categoryInSpace(spaceId, input.categoryId))) return null;
   if (!spentAtIsValid(input.spentAt)) return null;
+  if (input.accountId && !(await accountAccepts(spaceId, input.accountId, input.currency))) {
+    return null;
+  }
 
   try {
     const [row] = await db
@@ -189,6 +225,7 @@ export async function createExpense(
         currency: input.currency,
         note: input.note,
         spentAt: input.spentAt,
+        accountId: input.accountId ?? null,
       })
       .returning();
     return row;
@@ -213,14 +250,24 @@ export async function updateExpense(
   if (patch.spentAt !== undefined && !spentAtIsValid(patch.spentAt)) {
     return null;
   }
+  const where = and(eq(expenses.id, id), eq(expenses.spaceId, spaceId));
 
   try {
-    const [updated] = await db
-      .update(expenses)
-      .set(patch)
-      .where(and(eq(expenses.id, id), eq(expenses.spaceId, spaceId)))
-      .returning();
-    return updated ?? null;
+    return await db.transaction(async (tx) => {
+      // Locked so a concurrent patch of the other half of the account/currency
+      // pair is checked against this one's result, not the row before it.
+      if (patch.accountId !== undefined || patch.currency !== undefined) {
+        const [current] = await tx.select().from(expenses).where(where).for("update");
+        if (!current) return null;
+        const accountId = patch.accountId === undefined ? current.accountId : patch.accountId;
+        const currency = patch.currency ?? current.currency;
+        if (accountId && !(await accountAccepts(spaceId, accountId, currency, tx))) {
+          return null;
+        }
+      }
+      const [updated] = await tx.update(expenses).set(patch).where(where).returning();
+      return updated ?? null;
+    });
   } catch (err) {
     if (isForeignKeyViolation(err)) return null;
     throw err;

@@ -94,12 +94,14 @@ export function parseMoney(input: string, currency: CurrencyCode): number | null
  */
 export function minorToInput(amountMinor: number, currency: CurrencyCode): string {
   const meta = currencyMeta(currency);
-  const abs = Math.abs(Math.trunc(amountMinor));
+  const truncated = Math.trunc(amountMinor);
+  const sign = truncated < 0 ? "-" : "";
+  const abs = Math.abs(truncated);
   const unit = 10 ** meta.exponent;
   const major = Math.floor(abs / unit);
   const fracValue = abs % unit;
 
   return fracValue === 0
-    ? String(major)
-    : `${major}.${String(fracValue).padStart(meta.exponent, "0")}`;
+    ? `${sign}${major}`
+    : `${sign}${major}.${String(fracValue).padStart(meta.exponent, "0")}`;
 }

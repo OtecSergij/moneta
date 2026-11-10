@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { requireSpace } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
+import { listAccounts } from "@/repositories/accounts";
 import {
   listExpenses,
   summary,
@@ -44,8 +45,11 @@ export default async function HistoryPage({
   // the day totals would each repeat the identical query otherwise. It
   // depends only on the range, so it goes in this first batch rather than
   // waiting on the settings lookup.
-  const [categories, settings, rateIndex] = await Promise.all([
+  const [categories, accounts, settings, rateIndex] = await Promise.all([
     listCategories(spaceId),
+    listAccounts(spaceId).then((rows) =>
+      rows.map(({ id, name, currency }) => ({ id, name, currency })),
+    ),
     getUserSettings(user.id),
     loadRateIndex([...CURRENCY_CODES], range.to),
   ]);
@@ -94,6 +98,7 @@ export default async function HistoryPage({
         expensesByCategory={expensesByCategory}
         days={days}
         categories={categories}
+        accounts={accounts}
         displayCurrency={displayCurrency}
       />
     </AppScreen>

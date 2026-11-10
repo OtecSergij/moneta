@@ -7,6 +7,7 @@ import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { minorToInput } from "@/lib/money";
+import { knownAccountId } from "@/lib/expense-account";
 import { type CurrencyCode } from "@/lib/currency";
 import {
   expenseFormSchema,
@@ -22,11 +23,13 @@ import type { Expense } from "@/repositories/expenses";
 import { BottomSheet } from "@/components/kit/bottom-sheet";
 import { Button } from "@/components/kit/button";
 import { ExpenseFormFields } from "@/components/expenses/expense-form-fields";
+import type { ExpenseAccount } from "@/components/expenses/account-chips";
 
-function toDefaults(e: Expense): ExpenseFormValues {
+function toDefaults(e: Expense, accounts: ExpenseAccount[]): ExpenseFormValues {
   return {
     amount: minorToInput(e.amountMinor, e.currency),
     currency: e.currency,
+    accountId: knownAccountId(accounts, e.accountId),
     categoryId: e.categoryId,
     note: e.note,
     spentAt: e.spentAt,
@@ -36,11 +39,13 @@ function toDefaults(e: Expense): ExpenseFormValues {
 export function ExpenseSheet({
   expense,
   categories,
+  accounts,
   displayCurrency,
   onClose,
 }: {
   expense: Expense;
   categories: Category[];
+  accounts: ExpenseAccount[];
   displayCurrency: CurrencyCode;
   onClose: () => void;
 }) {
@@ -49,7 +54,7 @@ export function ExpenseSheet({
 
   const methods = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
-    defaultValues: toDefaults(expense),
+    defaultValues: toDefaults(expense, accounts),
   });
   const saving = methods.formState.isSubmitting;
 
@@ -113,6 +118,7 @@ export function ExpenseSheet({
           <ExpenseFormFields
             size="sheet"
             categories={categories}
+            accounts={accounts}
             displayCurrency={displayCurrency}
           />
           <div className="mt-1 flex gap-2.5">

@@ -14,19 +14,24 @@ const ONE = BigInt(1);
 const TWO = BigInt(2);
 
 /**
- * `numerator / denominator`, rounded half to even. Every caller in this app
- * passes a non-negative numerator (the DB's CHECK constraints forbid amounts
- * <= 0), so plain truncating BigInt division already gives the floor and a
- * non-negative remainder to round from.
+ * `numerator / denominator`, rounded half to even. Rounds the magnitude and
+ * reapplies the sign, so ties stay symmetric: −7/2 is −4, as 7/2 is 4.
  */
 export function divRoundHalfEven(
   numerator: bigint,
   denominator: bigint,
 ): bigint {
-  const quotient = numerator / denominator;
-  const remainder = numerator - quotient * denominator;
-  const twice = remainder * TWO;
-  if (twice < denominator) return quotient;
-  if (twice > denominator) return quotient + ONE;
-  return quotient % TWO === ZERO ? quotient : quotient + ONE;
+  if (denominator < ZERO) {
+    numerator = -numerator;
+    denominator = -denominator;
+  }
+  const negative = numerator < ZERO;
+  const magnitude = negative ? -numerator : numerator;
+  const quotient = magnitude / denominator;
+  const twice = (magnitude - quotient * denominator) * TWO;
+  const rounded =
+    twice < denominator || (twice === denominator && quotient % TWO === ZERO)
+      ? quotient
+      : quotient + ONE;
+  return negative ? -rounded : rounded;
 }

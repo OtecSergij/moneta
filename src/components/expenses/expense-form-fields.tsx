@@ -11,9 +11,14 @@ import type {
 import { type CurrencyCode } from "@/lib/currency";
 import { formatMoney, parseMoney } from "@/lib/money";
 import { quoteConversionAction } from "@/lib/actions/fx";
+import { pickAccountCurrency } from "@/lib/expense-account";
 import { TextField } from "@/components/kit/text-field";
 import { CurrencySegment } from "@/components/currency/currency-segment";
 import { AmountField } from "@/components/expenses/amount-field";
+import {
+  AccountChips,
+  type ExpenseAccount,
+} from "@/components/expenses/account-chips";
 import { DateChips } from "@/components/expenses/date-chips";
 import { CategoryChips } from "@/components/categories/category-chips";
 import { NewCategoryPanel } from "@/components/categories/new-category-panel";
@@ -49,12 +54,18 @@ function sortByName<T extends Category>(list: T[]): T[] {
 export function ExpenseFormFields({
   displayCurrency,
   size,
+  accounts,
   ...categoryProps
-}: { displayCurrency: CurrencyCode; size: "main" | "sheet" } & CategoryProps) {
+}: {
+  displayCurrency: CurrencyCode;
+  size: "main" | "sheet";
+  accounts: ExpenseAccount[];
+} & CategoryProps) {
   const {
     register,
     control,
     setValue,
+    trigger,
     formState: { errors },
   } = useFormContext<ExpenseFormValues>();
 
@@ -62,9 +73,17 @@ export function ExpenseFormFields({
   const spentAt = useWatch({ control, name: "spentAt" });
   const amount = useWatch({ control, name: "amount" });
   const currency = useWatch({ control, name: "currency" });
+  const accountId = useWatch({ control, name: "accountId" });
 
   function selectCategory(id: string) {
     setValue("categoryId", id, { shouldValidate: true });
+  }
+
+  function selectAccount(id: string | null) {
+    setValue("accountId", id);
+    if (id === null) return;
+    setValue("currency", pickAccountCurrency(accounts, id, currency));
+    if (amount !== "") void trigger("amount");
   }
 
   // With matching currencies convert.ts's identity rule returns exactly the
@@ -142,11 +161,21 @@ export function ExpenseFormFields({
         {...register("amount")}
       />
 
-      <CurrencySegment
-        value={currency}
-        onChange={(c) => setValue("currency", c, { shouldValidate: true })}
-        label="Валюта"
-      />
+      {accounts.length > 0 ? (
+        <AccountChips
+          accounts={accounts}
+          value={accountId}
+          onChange={selectAccount}
+        />
+      ) : null}
+
+      {accounts.length === 0 || accountId === null ? (
+        <CurrencySegment
+          value={currency}
+          onChange={(c) => setValue("currency", c, { shouldValidate: true })}
+          label="Валюта"
+        />
+      ) : null}
 
       {categoryProps.categoriesEditable ? (
         <EditableCategories

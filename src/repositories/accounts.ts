@@ -1,35 +1,60 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, gt, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts } from "@/db/schema";
+import { accounts, expenses } from "@/db/schema";
 import type { AccountInput, AccountPatch } from "@/lib/accounts";
 import type { SpaceId } from "@/lib/space-id";
 
 export type Account = typeof accounts.$inferSelect;
 export type AccountWithBalance = Account & { balanceMinor: number };
 
-const withBalance = (a: Account): AccountWithBalance => ({
-  ...a,
-  balanceMinor: a.anchorAmountMinor,
-});
+type Executor = Pick<typeof db, "select">;
+
+function toSafeInteger(value: string): number {
+  const n = Number(value);
+  if (!Number.isSafeInteger(n)) throw new Error(`account balance out of range: ${value}`);
+  return n;
+}
+
+async function selectWithBalance(
+  executor: Executor,
+  where: SQL | undefined,
+): Promise<AccountWithBalance[]> {
+  const rows = await executor
+    .select({
+      ...getTableColumns(accounts),
+      spentMinor: sql<string>`coalesce(sum(${expenses.amountMinor}), 0)::bigint`,
+    })
+    .from(accounts)
+    .leftJoin(
+      expenses,
+      and(
+        eq(expenses.accountId, accounts.id),
+        eq(expenses.spaceId, accounts.spaceId),
+        gt(expenses.createdAt, accounts.anchorAt),
+      ),
+    )
+    .where(where)
+    .groupBy(accounts.id)
+    .orderBy(asc(accounts.createdAt), asc(accounts.id));
+  return rows.map(({ spentMinor, ...a }) => ({
+    ...a,
+    balanceMinor: a.anchorAmountMinor - toSafeInteger(spentMinor),
+  }));
+}
 
 export async function listAccounts(spaceId: SpaceId): Promise<AccountWithBalance[]> {
-  const rows = await db
-    .select()
-    .from(accounts)
-    .where(eq(accounts.spaceId, spaceId))
-    .orderBy(asc(accounts.createdAt), asc(accounts.id));
-  return rows.map(withBalance);
+  return selectWithBalance(db, eq(accounts.spaceId, spaceId));
 }
 
 export async function getAccount(
   spaceId: SpaceId,
   id: string,
 ): Promise<AccountWithBalance | null> {
-  const [row] = await db
-    .select()
-    .from(accounts)
-    .where(and(eq(accounts.id, id), eq(accounts.spaceId, spaceId)));
-  return row ? withBalance(row) : null;
+  const [row] = await selectWithBalance(
+    db,
+    and(eq(accounts.id, id), eq(accounts.spaceId, spaceId)),
+  );
+  return row ?? null;
 }
 
 export async function createAccount(
@@ -47,7 +72,7 @@ export async function createAccount(
       anchorAmountMinor: input.balanceMinor,
     })
     .returning();
-  return withBalance(row);
+  return { ...row, balanceMinor: row.anchorAmountMinor };
 }
 
 export async function updateAccount(
@@ -66,7 +91,7 @@ export async function updateAccount(
     const reanchor =
       patch.balanceMinor !== undefined &&
       patch.balanceMinor !== patch.loadedBalanceMinor;
-    const [row] = await tx
+    await tx
       .update(accounts)
       .set({
         ...(patch.name !== undefined && { name: patch.name }),
@@ -76,9 +101,9 @@ export async function updateAccount(
         }),
         updatedAt: sql`now()`,
       })
-      .where(eq(accounts.id, id))
-      .returning();
-    return { row: withBalance(row), reanchor };
+      .where(eq(accounts.id, id));
+    const [row] = await selectWithBalance(tx, eq(accounts.id, id));
+    return { row, reanchor };
   });
   if (result?.reanchor) console.info("account.reanchored", { accountId: id, spaceId });
   return result?.row ?? null;

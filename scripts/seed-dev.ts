@@ -1,5 +1,15 @@
 import { hashPassword } from "better-auth/crypto";
-import { addDays, differenceInCalendarDays, startOfWeek, subDays } from "date-fns";
+import {
+  addDays,
+  addMinutes,
+  differenceInCalendarDays,
+  setHours,
+  startOfDay,
+  startOfWeek,
+  subDays,
+  subSeconds,
+} from "date-fns";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   account,
@@ -15,7 +25,7 @@ import {
   user,
 } from "@/db/schema";
 import { todayISO } from "@/lib/dates";
-import { createAccount } from "@/repositories/accounts";
+import { createAccount, listAccounts } from "@/repositories/accounts";
 import { createCategory } from "@/repositories/categories";
 import { createExpense, type ExpenseInput } from "@/repositories/expenses";
 import { resolveSpace } from "@/repositories/spaces";
@@ -71,6 +81,7 @@ const THIS_WEEK: SeedExpense[] = [
 // daysAgo >= 7 is always before this week's Monday.
 const EARLIER: Array<SeedExpense & { daysAgo: number }> = [
   { category: "health", amountMinor: 350000, currency: "RUB", note: "Приём терапевта", by: "owner", daysAgo: 9 },
+  { category: "food", amountMinor: 120000, currency: "RSD", note: "Рынок в Белграде", by: "partner", daysAgo: 11 },
   { category: "home", amountMinor: 279000, currency: "RUB", note: "Икеа, полка и лампа", by: "partner", daysAgo: 12 },
   { category: "food", amountMinor: 312480, currency: "RUB", note: "Перекрёсток", by: "owner", daysAgo: 15 },
   { category: "cafe", amountMinor: 96000, currency: "RUB", note: "Завтрак в кафе", by: "partner", daysAgo: 19 },
@@ -80,10 +91,19 @@ const EARLIER: Array<SeedExpense & { daysAgo: number }> = [
 ];
 
 // Inserted in this order: created_at ascending follows the canvas chips.
-const ACCOUNTS: Array<{ name: string; currency: ExpenseInput["currency"]; balanceMinor: number }> = [
-  { name: "Карта USD", currency: "USD", balanceMinor: 124050 },
-  { name: "Наличные RSD", currency: "RSD", balanceMinor: 4830000 },
-  { name: "Наличные EUR", currency: "EUR", balanceMinor: 62000 },
+// Expenses in an account's currency are charged to it. The anchor is set
+// `anchorDaysAgo` back and sized so the computed balance lands on
+// `balanceMinor` (the canvas value); the 24-day-old EUR train ticket sits
+// before its account's anchor and doesn't count.
+const ACCOUNTS: Array<{
+  name: string;
+  currency: ExpenseInput["currency"];
+  balanceMinor: number;
+  anchorDaysAgo: number;
+}> = [
+  { name: "Карта USD", currency: "USD", balanceMinor: 124050, anchorDaysAgo: 1 },
+  { name: "Наличные RSD", currency: "RSD", balanceMinor: 4830000, anchorDaysAgo: 20 },
+  { name: "Наличные EUR", currency: "EUR", balanceMinor: 62000, anchorDaysAgo: 10 },
 ];
 
 const LISTS: Array<{ name: string; done: string[]; todo: string[]; isPrivate?: true; by: Author }> = [
@@ -169,6 +189,16 @@ async function main() {
   }
 
   const now = new Date();
+  const accountIds = new Map<ExpenseInput["currency"], string>();
+  for (const [i, a] of ACCOUNTS.entries()) {
+    const created = await createAccount(spaceId, owner.id, a);
+    await db
+      .update(accounts)
+      .set({ createdAt: addMinutes(subDays(now, 40), i) })
+      .where(eq(accounts.id, created.id));
+    accountIds.set(a.currency, created.id);
+  }
+
   const planned: Array<SeedExpense & { day: Date }> = [];
   for (const e of EARLIER) planned.push({ ...e, day: subDays(now, e.daysAgo) });
   const monday = startOfWeek(now, { weekStartsOn: 1 });
@@ -181,15 +211,43 @@ async function main() {
   }
   for (const e of TODAY) planned.push({ ...e, day: now });
 
-  for (const e of planned) {
+  const charged = new Map<string, Array<{ amountMinor: number; createdAt: Date }>>();
+  for (const [i, e] of planned.entries()) {
+    const accountId = accountIds.get(e.currency) ?? null;
     const row = await createExpense(spaceId, authorId[e.by], {
       categoryId: categoryIds.get(e.category)!,
       amountMinor: e.amountMinor,
       currency: e.currency,
       note: e.note,
       spentAt: todayISO(e.day),
+      accountId,
     });
     if (!row) throw new Error(`createExpense rejected: ${e.note}`);
+    // Recorded on the day it was spent; today's entries stay in the past.
+    const onDay = addMinutes(setHours(startOfDay(e.day), 9), i);
+    const createdAt = onDay < now ? onDay : subSeconds(now, planned.length - i);
+    await db.update(expenses).set({ createdAt }).where(eq(expenses.id, row.id));
+    if (accountId) {
+      charged.set(accountId, [...(charged.get(accountId) ?? []), { amountMinor: e.amountMinor, createdAt }]);
+    }
+  }
+
+  for (const a of ACCOUNTS) {
+    const id = accountIds.get(a.currency)!;
+    const anchorAt = subDays(now, a.anchorDaysAgo);
+    const spentAfter = (charged.get(id) ?? [])
+      .filter((c) => c.createdAt > anchorAt)
+      .reduce((sum, c) => sum + c.amountMinor, 0);
+    await db
+      .update(accounts)
+      .set({ anchorAmountMinor: a.balanceMinor + spentAfter, anchorAt })
+      .where(eq(accounts.id, id));
+  }
+  for (const listed of await listAccounts(spaceId)) {
+    const expected = ACCOUNTS.find((a) => a.currency === listed.currency)!.balanceMinor;
+    if (listed.balanceMinor !== expected) {
+      throw new Error(`${listed.name}: balance ${listed.balanceMinor}, expected ${expected}`);
+    }
   }
 
   // Inserted oldest first so the list order on screen follows LISTS.
@@ -215,8 +273,6 @@ async function main() {
         .values({ ...item, listId: list.id, spaceId, createdBy: authorId[l.by] });
     }
   }
-
-  for (const a of ACCOUNTS) await createAccount(spaceId, owner.id, a);
 
   console.log(
     `Seeded ${SEED_EMAIL} + ${PARTNER_EMAIL} in one space: ${CATEGORIES.length} categories, ${planned.length} expenses, ${LISTS.length} lists, ${ACCOUNTS.length} accounts`,

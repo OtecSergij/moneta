@@ -165,6 +165,44 @@ describe("sumConverted — the one remaining unconvertible case", () => {
   });
 });
 
+describe("negative amounts", () => {
+  const index = buildIndex({
+    RSD: [{ date: "2026-09-01", rate: "0.00988734312401027658" }],
+    RUB: [{ date: "2026-09-01", rate: "0.01158489241400153276" }],
+    BTC: [{ date: "2026-09-01", rate: "78783.80494894651871698368" }],
+  });
+
+  it("convertRow is symmetric around zero", () => {
+    const cases: Array<[number, CurrencyCode, CurrencyCode]> = [
+      [300000, "RSD", "RUB"],
+      [4500, "BTC", "RUB"],
+      [123457, "RUB", "RSD"],
+      [150, "RSD", "RUB"],
+    ];
+    for (const [amountMinor, currency, display] of cases) {
+      const positive = convertRow(row({ amountMinor, currency }), display, index)!;
+      const negative = convertRow(row({ amountMinor: -amountMinor, currency }), display, index)!;
+      expect(negative + positive).toBe(0);
+    }
+  });
+
+  it("sumConverted nets rows of mixed sign", () => {
+    const rows: ConvertibleRow[] = [
+      row({ amountMinor: 300000, currency: "RSD" }),
+      row({ amountMinor: -100000, currency: "RUB" }),
+      row({ amountMinor: -4500, currency: "BTC" }),
+    ];
+    expect(sumConverted(rows, "RUB", index)).toEqual({
+      totalMinor: 256041 - 100000 - 30603,
+      unconverted: 0,
+    });
+    expect(sumConverted(rows.map((r) => ({ ...r, amountMinor: -r.amountMinor })), "RUB", index)).toEqual({
+      totalMinor: -(256041 - 100000 - 30603),
+      unconverted: 0,
+    });
+  });
+});
+
 describe("aggregation over many rows", () => {
   const bulkIndex = buildIndex({
     RUB: [{ date: "2026-09-01", rate: "0.01000000000000000000" }],

@@ -43,6 +43,13 @@
       "when": 1794318308835,
       "tag": "0005_lists",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794323103111,
+      "tag": "0006_accounts",
+      "breakpoints": true
     }
   ]
 }

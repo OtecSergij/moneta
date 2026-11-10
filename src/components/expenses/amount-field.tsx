@@ -60,7 +60,7 @@ export function AmountField({
                 ? "text-[22px]"
                 : "text-[28px]"
               : long
-                ? "text-[19px]"
+                ? "text-[18px]"
                 : "text-2xl",
           )}
         >

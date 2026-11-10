@@ -20,11 +20,13 @@ export function ScreenHeader({
       <div
         className={cn(
           "flex items-center",
-          displayCurrency ? "gap-1" : "gap-0.5",
+          displayCurrency && !action ? "gap-1" : "gap-0.5",
         )}
       >
         {displayCurrency ? (
-          <DisplayCurrencyChip initialCurrency={displayCurrency} />
+          <span className={cn("flex", action ? "mr-1" : undefined)}>
+            <DisplayCurrencyChip initialCurrency={displayCurrency} />
+          </span>
         ) : null}
         {action}
         <Link

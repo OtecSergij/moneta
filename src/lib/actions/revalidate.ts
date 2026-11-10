@@ -1,13 +1,14 @@
 import { revalidatePath } from "next/cache";
 
-export type RevalidateEvent = "expense" | "category" | "displayCurrency" | "invite" | "list";
+export type RevalidateEvent = "expense" | "category" | "displayCurrency" | "invite" | "list" | "account";
 
 const PATHS: Record<RevalidateEvent, readonly string[]> = {
   expense: ["/", "/history"],
   category: ["/", "/history"],
-  displayCurrency: ["/", "/history"],
+  displayCurrency: ["/", "/history", "/accounts"],
   invite: ["/settings"],
   list: ["/lists"],
+  account: ["/accounts"],
 };
 
 export function revalidateFor(event: RevalidateEvent): void {

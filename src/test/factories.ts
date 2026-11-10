@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { db } from "@/db";
 import {
+  accounts,
   fxRates,
   listItems,
   lists,
@@ -175,6 +176,25 @@ export async function mkItem(
       spaceId: list.spaceId,
       createdBy: userId,
       text: "Пункт",
+      ...overrides,
+    })
+    .returning();
+  return row;
+}
+
+export async function mkAccount(
+  spaceId: SpaceId,
+  userId: string,
+  overrides: Partial<typeof accounts.$inferInsert> = {},
+): Promise<typeof accounts.$inferSelect> {
+  const [row] = await db
+    .insert(accounts)
+    .values({
+      spaceId,
+      createdBy: userId,
+      name: `Счёт ${randomUUID().slice(0, 8)}`,
+      currency: "RUB",
+      anchorAmountMinor: 0,
       ...overrides,
     })
     .returning();

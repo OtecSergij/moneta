@@ -3,6 +3,7 @@ import {
   ChartColumn,
   ListChecks,
   Receipt,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -11,6 +12,7 @@ const TABS = [
   { key: "main", href: "/", label: "Траты", Icon: Receipt },
   { key: "history", href: "/history", label: "История", Icon: ChartColumn },
   { key: "lists", href: "/lists", label: "Списки", Icon: ListChecks },
+  { key: "accounts", href: "/accounts", label: "Счета", Icon: Wallet },
 ] as const satisfies readonly {
   key: string;
   href: string;

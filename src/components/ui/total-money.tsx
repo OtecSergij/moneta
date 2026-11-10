@@ -13,19 +13,23 @@ export function TotalMoney({
   currency,
   unconverted,
   size = "default",
+  noteLabel = "Не пересчитано трат",
+  noteReason = "нет курса на дату",
   className,
 }: {
   minor: number;
   currency: CurrencyCode;
   unconverted: number;
   size?: "default" | "hero" | "period";
+  noteLabel?: string;
+  noteReason?: string;
   className?: string;
 }) {
   // Count after the noun, so the phrase needs no Russian plural agreement.
   const note =
     unconverted === 0
       ? null
-      : `Не пересчитано трат: ${unconverted} — нет курса на дату`;
+      : `${noteLabel}: ${unconverted} — ${noteReason}`;
 
   if (size !== "default") {
     const formatted = formatMoney(minor, currency);

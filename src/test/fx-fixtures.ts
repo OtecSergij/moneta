@@ -1,4 +1,6 @@
 import { vi } from "vitest";
+import type { CurrencyCode } from "@/lib/currency";
+import { type RateIndex, parseRate } from "@/lib/fx/convert";
 
 // Fixture builders for the FX sources, shared by the provider unit tests and
 // the fx_rates integration tests — one place that knows each source's shape
@@ -190,4 +192,25 @@ export function callsTo(
   return fetch.mock.calls
     .map((call) => String(call[0]))
     .filter((url) => fxSourceOf(url) === source);
+}
+
+export const FIXED_RATE_DATE = "2026-09-01";
+
+// USD per unit: 1 EUR = 1.1 $, 80 ₽ = 1 $, 100 RSD = 1 $, 1 ₿ = 100 000 $.
+export const FIXED_RATES: Record<CurrencyCode, string> = {
+  USD: "1",
+  EUR: "1.1",
+  RUB: "0.0125",
+  RSD: "0.01",
+  BTC: "100000",
+};
+
+export function fixedRateIndex(
+  rates: Partial<Record<CurrencyCode, string>> = FIXED_RATES,
+): RateIndex {
+  const index: RateIndex = new Map();
+  for (const [currency, rate] of Object.entries(rates) as Array<[CurrencyCode, string]>) {
+    index.set(currency, [{ effectiveDate: FIXED_RATE_DATE, rateToUsd: parseRate(rate) }]);
+  }
+  return index;
 }

@@ -3,6 +3,7 @@ import { addDays, differenceInCalendarDays, startOfWeek, subDays } from "date-fn
 import { db } from "@/db";
 import {
   account,
+  accounts,
   categories,
   expenses,
   listItems,
@@ -14,6 +15,7 @@ import {
   user,
 } from "@/db/schema";
 import { todayISO } from "@/lib/dates";
+import { createAccount } from "@/repositories/accounts";
 import { createCategory } from "@/repositories/categories";
 import { createExpense, type ExpenseInput } from "@/repositories/expenses";
 import { resolveSpace } from "@/repositories/spaces";
@@ -77,6 +79,13 @@ const EARLIER: Array<SeedExpense & { daysAgo: number }> = [
   { category: "food", amountMinor: 187650, currency: "RUB", note: "Ашан", by: "owner", daysAgo: 37 },
 ];
 
+// Inserted in this order: created_at ascending follows the canvas chips.
+const ACCOUNTS: Array<{ name: string; currency: ExpenseInput["currency"]; balanceMinor: number }> = [
+  { name: "Карта USD", currency: "USD", balanceMinor: 124050 },
+  { name: "Наличные RSD", currency: "RSD", balanceMinor: 4830000 },
+  { name: "Наличные EUR", currency: "EUR", balanceMinor: 62000 },
+];
+
 const LISTS: Array<{ name: string; done: string[]; todo: string[]; isPrivate?: true; by: Author }> = [
   {
     name: "Продукты на неделю",
@@ -112,6 +121,7 @@ const LISTS: Array<{ name: string; done: string[]; todo: string[]; isPrivate?: t
 ];
 
 async function reset() {
+  await db.delete(accounts);
   await db.delete(listItems);
   await db.delete(lists);
   await db.delete(expenses);
@@ -206,8 +216,10 @@ async function main() {
     }
   }
 
+  for (const a of ACCOUNTS) await createAccount(spaceId, owner.id, a);
+
   console.log(
-    `Seeded ${SEED_EMAIL} + ${PARTNER_EMAIL} in one space: ${CATEGORIES.length} categories, ${planned.length} expenses, ${LISTS.length} lists`,
+    `Seeded ${SEED_EMAIL} + ${PARTNER_EMAIL} in one space: ${CATEGORIES.length} categories, ${planned.length} expenses, ${LISTS.length} lists, ${ACCOUNTS.length} accounts`,
   );
 }
 

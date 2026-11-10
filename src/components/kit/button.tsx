@@ -2,7 +2,12 @@ import type { ComponentProps } from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type ButtonVariant = "primary" | "secondary" | "danger" | "select";
+export type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "danger"
+  | "danger-text"
+  | "select";
 
 type ButtonProps = ComponentProps<"button"> & {
   variant?: ButtonVariant;
@@ -17,6 +22,8 @@ const VARIANT_CLASS: Record<ButtonVariant, string> = {
     "h-12 rounded-field bg-card text-[15px] font-medium text-ink shadow-[inset_0_0_0_1px_var(--color-control-line)] hover:bg-page",
   danger:
     "h-13 rounded-field bg-danger-soft text-base font-semibold text-danger-ink",
+  "danger-text":
+    "h-12 rounded-field bg-transparent text-[15px] font-medium text-danger-ink",
   select:
     "h-10 rounded-[10px] bg-select text-sm font-semibold text-white",
 };

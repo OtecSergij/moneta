@@ -11,7 +11,6 @@ export interface CurrencyMeta {
   // Russian display name, shown where the symbol alone would be
   // redundant or unrecognisable (the currency switcher).
   name: string;
-  symbolFirst: boolean;
   // Storage precision: amount_minor is in units of 10^-exponent.
   exponent: number;
   // Print precision. Split from `exponent` because RSD stores para (ISO 4217)
@@ -25,7 +24,6 @@ export const CURRENCIES: Record<CurrencyCode, CurrencyMeta> = {
     code: "RUB",
     symbol: "₽",
     name: "Рубль",
-    symbolFirst: true,
     exponent: 2,
     displayDigits: 2,
     trimFraction: false,
@@ -34,7 +32,6 @@ export const CURRENCIES: Record<CurrencyCode, CurrencyMeta> = {
     code: "USD",
     symbol: "$",
     name: "Доллар",
-    symbolFirst: true,
     exponent: 2,
     displayDigits: 2,
     trimFraction: false,
@@ -43,7 +40,6 @@ export const CURRENCIES: Record<CurrencyCode, CurrencyMeta> = {
     code: "EUR",
     symbol: "€",
     name: "Евро",
-    symbolFirst: true,
     exponent: 2,
     displayDigits: 2,
     trimFraction: false,
@@ -55,7 +51,6 @@ export const CURRENCIES: Record<CurrencyCode, CurrencyMeta> = {
     // to the real signs.
     symbol: "RSD",
     name: "Динар",
-    symbolFirst: false,
     exponent: 2,
     displayDigits: 0,
     trimFraction: false,
@@ -64,7 +59,6 @@ export const CURRENCIES: Record<CurrencyCode, CurrencyMeta> = {
     code: "BTC",
     symbol: "₿",
     name: "Биткоин",
-    symbolFirst: true,
     exponent: 8,
     displayDigits: 8,
     trimFraction: true,
@@ -87,7 +81,6 @@ export function currencyMeta(code: CurrencyCode): CurrencyMeta {
     code,
     symbol: code,
     name: code,
-    symbolFirst: false,
     exponent: UNKNOWN_EXPONENT,
     displayDigits: UNKNOWN_EXPONENT,
     trimFraction: false,

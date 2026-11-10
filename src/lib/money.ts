@@ -4,8 +4,8 @@
 // Invariants:
 //   - Amounts are stored as INTEGER minor units at currency.exponent precision
 //     (kopecks for RUB, satoshi for BTC). Never floats.
-//   - Display: symbol left (right for RSD), NBSP between symbol and number,
-//     narrow no-break space (U+202F) between thousand groups, comma as decimal
+//   - Display: symbol after the number (Russian convention), NBSP between
+//     number and symbol, narrow no-break space (U+202F) between thousand groups, comma as decimal
 //     separator. Fraction is rounded (half-even) to currency.displayDigits and
 //     omitted entirely when it rounds to zero; BTC additionally strips
 //     trailing zeros from the remaining digits.
@@ -13,7 +13,7 @@
 import { type CurrencyCode, currencyMeta } from "@/lib/currency";
 import { divRoundHalfEven } from "@/lib/half-even";
 
-const NBSP = "\u00A0"; // U+00A0 non-breaking space — keeps the symbol glued to the number
+const NBSP = "\u00A0"; // U+00A0 non-breaking space — keeps the number glued to the symbol
 const THIN = "\u202F"; // U+202F narrow no-break space — thousands separator
 
 // "12480" -> "12 480" (THIN space between groups of three from the right).
@@ -30,7 +30,7 @@ function roundHalfEven(amount: number, scale: number): number {
 
 /**
  * Format INTEGER minor units for display: `formatMoney(1248050, "RUB")` ->
- * "₽ 12 480,50". Negative values get a leading minus (not expected in MVP,
+ * "12 480,50 ₽". Negative values get a leading minus (not expected in MVP,
  * handled defensively).
  */
 export function formatMoney(amountMinor: number, currency: CurrencyCode): string {
@@ -55,9 +55,7 @@ export function formatMoney(amountMinor: number, currency: CurrencyCode): string
   const body = fracStr === "" ? intPart : `${intPart},${fracStr}`;
   const sign = negative ? "-" : "";
 
-  return meta.symbolFirst
-    ? `${sign}${meta.symbol}${NBSP}${body}`
-    : `${sign}${body}${NBSP}${meta.symbol}`;
+  return `${sign}${body}${NBSP}${meta.symbol}`;
 }
 
 /**

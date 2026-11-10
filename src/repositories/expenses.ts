@@ -230,7 +230,7 @@ export async function deleteExpense(
 // `unconverted` counts the rows no rate could value. They are missing from the
 // total, so it is short by real money — the UI marks a total carrying one
 // rather than presenting it as exact (a category whose rows are all
-// unconverted would otherwise read as a plain, believable «₽ 0»).
+// unconverted would otherwise read as a plain, believable «0 ₽»).
 export interface SummaryRow extends ConvertedTotal {
   categoryId: string;
   name: string;

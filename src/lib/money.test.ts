@@ -7,11 +7,11 @@ const THIN = " ";
 
 describe("formatMoney", () => {
   it("formats the AC-2 table", () => {
-    expect(formatMoney(301000, "RUB")).toBe(`₽${NBSP}3${THIN}010`);
-    expect(formatMoney(2000, "USD")).toBe(`$${NBSP}20`);
-    expect(formatMoney(1550, "EUR")).toBe(`€${NBSP}15,50`);
+    expect(formatMoney(301000, "RUB")).toBe(`3${THIN}010${NBSP}₽`);
+    expect(formatMoney(2000, "USD")).toBe(`20${NBSP}$`);
+    expect(formatMoney(1550, "EUR")).toBe(`15,50${NBSP}€`);
     expect(formatMoney(300000, "RSD")).toBe(`3${THIN}000${NBSP}RSD`);
-    expect(formatMoney(45000, "BTC")).toBe(`₿${NBSP}0,00045`);
+    expect(formatMoney(45000, "BTC")).toBe(`0,00045${NBSP}₿`);
   });
 
   it("rounds RSD to zero display digits, half-even", () => {
@@ -22,15 +22,15 @@ describe("formatMoney", () => {
   });
 
   it("keeps grouping, zero, and negative handling for RUB", () => {
-    expect(formatMoney(1248000, "RUB")).toBe(`₽${NBSP}12${THIN}480`);
-    expect(formatMoney(1248050, "RUB")).toBe(`₽${NBSP}12${THIN}480,50`);
-    expect(formatMoney(0, "RUB")).toBe(`₽${NBSP}0`);
-    expect(formatMoney(-1248000, "RUB")).toBe(`-₽${NBSP}12${THIN}480`);
+    expect(formatMoney(1248000, "RUB")).toBe(`12${THIN}480${NBSP}₽`);
+    expect(formatMoney(1248050, "RUB")).toBe(`12${THIN}480,50${NBSP}₽`);
+    expect(formatMoney(0, "RUB")).toBe(`0${NBSP}₽`);
+    expect(formatMoney(-1248000, "RUB")).toBe(`-12${THIN}480${NBSP}₽`);
   });
 
   it("strips trailing zeros for BTC but never the whole fraction when non-zero", () => {
-    expect(formatMoney(100000000, "BTC")).toBe(`₿${NBSP}1`);
-    expect(formatMoney(1, "BTC")).toBe(`₿${NBSP}0,00000001`);
+    expect(formatMoney(100000000, "BTC")).toBe(`1${NBSP}₿`);
+    expect(formatMoney(1, "BTC")).toBe(`0,00000001${NBSP}₿`);
   });
 
   it("renders an unknown code instead of crashing on it", () => {

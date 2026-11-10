@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 // An aggregate plus the count of rows no rate could value. Those rows
 // contribute nothing to `minor`, so the figure is short by real money —
 // rendered bare it would read as an exact number, and a category whose rows
-// are all unconverted would read as a believable «₽ 0». The marker says the
+// are all unconverted would read as a believable «0 ₽». The marker says the
 // total is incomplete; the title says how many rows are missing from it.
 export function TotalMoney({
   minor,

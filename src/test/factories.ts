@@ -2,6 +2,8 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { db } from "@/db";
 import {
   fxRates,
+  listItems,
+  lists,
   spaceInvites,
   spaceMembers,
   spaces,
@@ -143,6 +145,36 @@ export async function mkRate(
     .values({
       rateToUsd: "1.00000000000000000000",
       source: "test",
+      ...overrides,
+    })
+    .returning();
+  return row;
+}
+
+export async function mkList(
+  spaceId: SpaceId,
+  userId: string,
+  overrides: Partial<typeof lists.$inferInsert> = {},
+): Promise<typeof lists.$inferSelect> {
+  const [row] = await db
+    .insert(lists)
+    .values({ spaceId, createdBy: userId, name: "Тестовый список", ...overrides })
+    .returning();
+  return row;
+}
+
+export async function mkItem(
+  list: Pick<typeof lists.$inferSelect, "id" | "spaceId">,
+  userId: string,
+  overrides: Partial<typeof listItems.$inferInsert> = {},
+): Promise<typeof listItems.$inferSelect> {
+  const [row] = await db
+    .insert(listItems)
+    .values({
+      listId: list.id,
+      spaceId: list.spaceId,
+      createdBy: userId,
+      text: "Пункт",
       ...overrides,
     })
     .returning();

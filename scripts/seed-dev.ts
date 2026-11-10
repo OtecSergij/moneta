@@ -5,6 +5,8 @@ import {
   account,
   categories,
   expenses,
+  listItems,
+  lists,
   pendingSpaceJoins,
   spaceInvites,
   spaceMembers,
@@ -75,7 +77,43 @@ const EARLIER: Array<SeedExpense & { daysAgo: number }> = [
   { category: "food", amountMinor: 187650, currency: "RUB", note: "Ашан", by: "owner", daysAgo: 37 },
 ];
 
+const LISTS: Array<{ name: string; done: string[]; todo: string[]; isPrivate?: true; by: Author }> = [
+  {
+    name: "Продукты на неделю",
+    by: "partner",
+    done: ["Молоко", "Хлеб", "Яйца", "Сыр", "Бананы"],
+    todo: ["Курица", "Гречка", "Помидоры", "Огурцы", "Йогурт", "Кофе", "Овсянка"],
+  },
+  {
+    name: "Подарки на Новый год",
+    by: "owner",
+    isPrivate: true,
+    done: ["Маме — шарф", "Папе — книга"],
+    todo: ["Анне — духи", "Брату — наушники", "Бабушке — плед", "Коллегам — чай", "Открытки"],
+  },
+  {
+    name: "Аптечка",
+    by: "owner",
+    done: ["Пластыри"],
+    todo: ["Ибупрофен", "Бинт", "Термометр"],
+  },
+  {
+    name: "Дом: хозтовары",
+    by: "partner",
+    done: [],
+    todo: ["Губки", "Средство для посуды", "Мешки для мусора", "Бумажные полотенца", "Стиральный порошок", "Лампочки"],
+  },
+  {
+    name: "Перед поездкой",
+    by: "owner",
+    done: ["Паспорт", "Билеты", "Страховка", "Зарядки", "Адаптер", "Аптечка", "Наличные", "Бронь отеля", "Полить цветы"],
+    todo: [],
+  },
+];
+
 async function reset() {
+  await db.delete(listItems);
+  await db.delete(lists);
   await db.delete(expenses);
   await db.delete(categories);
   await db.delete(pendingSpaceJoins);
@@ -144,8 +182,32 @@ async function main() {
     if (!row) throw new Error(`createExpense rejected: ${e.note}`);
   }
 
+  // Inserted oldest first so the list order on screen follows LISTS.
+  for (const l of [...LISTS].reverse()) {
+    const [list] = await db
+      .insert(lists)
+      .values({
+        spaceId,
+        createdBy: authorId[l.by],
+        name: l.name,
+        visibility: l.isPrivate ? "private" : "shared",
+      })
+      .returning();
+    const items = [
+      ...l.done.map((text) => ({ text, checked: true })),
+      ...l.todo.map((text) => ({ text, checked: false })),
+    ];
+    // One insert per item: rows of a single insert share created_at, and the
+    // screen orders items by it.
+    for (const item of items) {
+      await db
+        .insert(listItems)
+        .values({ ...item, listId: list.id, spaceId, createdBy: authorId[l.by] });
+    }
+  }
+
   console.log(
-    `Seeded ${SEED_EMAIL} + ${PARTNER_EMAIL} in one space: ${CATEGORIES.length} categories, ${planned.length} expenses`,
+    `Seeded ${SEED_EMAIL} + ${PARTNER_EMAIL} in one space: ${CATEGORIES.length} categories, ${planned.length} expenses, ${LISTS.length} lists`,
   );
 }
 

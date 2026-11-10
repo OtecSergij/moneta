@@ -1,27 +1,17 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { RANGE_PRESETS, type DateRange } from "@/lib/dates";
-import { TextInput } from "@/components/ui/text-input";
-import { cn } from "@/lib/utils";
+import { ChevronDown } from "lucide-react";
+import { RANGE_PRESETS, formatDayHeading, type DateRange } from "@/lib/dates";
+import { Chip } from "@/components/kit/chip";
 
-const PILL_BASE =
-  "inline-flex min-h-11 cursor-pointer items-center rounded-pill border px-4 text-sm transition-colors";
-const PILL_ACTIVE = "border-accent bg-accent text-white";
-const PILL_INACTIVE = "border-border text-text hover:bg-border/60";
-
-export function HistoryFilter({
-  from,
-  to,
-}: {
-  from: string;
-  to: string;
-}) {
+export function HistoryFilter({ from, to }: { from: string; to: string }) {
   const router = useRouter();
+  const [, startTransition] = useTransition();
 
   // Preset ranges are derived from "today", which only matches the server clock
-  // when both sit in the same timezone — so we decide which pill is active on
+  // when both sit in the same timezone — so we decide which chip is active on
   // the client using the user's local today. `mounted` is false during SSR and
   // the first hydration render, then true: that keeps the server HTML
   // highlight-free and avoids a hydration mismatch.
@@ -32,94 +22,93 @@ export function HistoryFilter({
   );
 
   function apply(range: DateRange) {
-    if (!range.from || !range.to) return;
-    router.push(`/history?from=${range.from}&to=${range.to}`);
-  }
-
-  function isActive(range: DateRange): boolean {
-    return mounted && range.from === from && range.to === to;
-  }
-
-  const presets = RANGE_PRESETS.map((p) => ({
-    key: p.key,
-    label: p.label,
-    range: p.range(),
-  }));
-
-  // Apply only when a field is committed (blur / Enter), never on every
-  // keystroke: navigating mid-edit changes the URL, which flips key={from-…}
-  // and remounts the input, stealing focus — so you can't finish typing a year.
-  // A native date input reports "" while the date is incomplete, so partial
-  // input is ignored here; the equality guard skips redundant navigations.
-  function commit(next: DateRange) {
-    if (!next.from || !next.to) return;
-    if (next.from === from && next.to === to) return;
-    apply(next);
+    if (range.from === from && range.to === to) return;
+    startTransition(() => {
+      router.push(`/history?from=${range.from}&to=${range.to}`);
+    });
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="flex items-center gap-3">
-          <label
-            htmlFor="from"
-            className="w-10 shrink-0 text-sm font-medium text-text"
-          >
-            От
-          </label>
-          <TextInput
-            key={`from-${from}`}
-            id="from"
-            type="date"
-            defaultValue={from}
-            max={to}
-            className="min-w-0"
-            onBlur={(e) => commit({ from: e.target.value, to })}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") e.currentTarget.blur();
-            }}
-          />
-        </div>
-        <div className="flex items-center gap-3">
-          <label
-            htmlFor="to"
-            className="w-10 shrink-0 text-sm font-medium text-text"
-          >
-            До
-          </label>
-          <TextInput
-            key={`to-${to}`}
-            id="to"
-            type="date"
-            defaultValue={to}
-            min={from}
-            className="min-w-0"
-            onBlur={(e) => commit({ from, to: e.target.value })}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") e.currentTarget.blur();
-            }}
-          />
-        </div>
+    <section
+      aria-label="Период"
+      className="mx-4 mt-2 flex flex-col gap-3 rounded-card bg-card p-4"
+    >
+      <div className="grid grid-cols-2 gap-2">
+        <DateField
+          label="От"
+          value={from}
+          onChange={(next) => apply({ from: next, to: next > to ? next : to })}
+        />
+        <DateField
+          label="До"
+          value={to}
+          min={from}
+          onChange={(next) =>
+            apply({ from: next < from ? next : from, to: next })
+          }
+        />
       </div>
-
-      <div className="flex flex-wrap gap-2">
-        {presets.map((preset) => {
-          const active = isActive(preset.range);
+      <div className="flex gap-2">
+        {RANGE_PRESETS.map((preset) => {
+          const range = preset.range();
+          const pressed =
+            mounted && range.from === from && range.to === to;
           return (
-            <button
+            <Chip
               key={preset.key}
-              type="button"
-              aria-pressed={active}
-              onClick={() => {
-                if (!active) apply(preset.range);
-              }}
-              className={cn(PILL_BASE, active ? PILL_ACTIVE : PILL_INACTIVE)}
+              pressed={pressed}
+              wide
+              onClick={() => apply(range)}
             >
               {preset.label}
-            </button>
+            </Chip>
           );
         })}
       </div>
-    </div>
+    </section>
+  );
+}
+
+function DateField({
+  label,
+  value,
+  min,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  min?: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="relative flex h-[58px] cursor-pointer items-center justify-between gap-2 rounded-field bg-page px-3.5 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-primary">
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-xs text-ink-2">{label}</span>
+        <span className="truncate text-[15px] font-medium tabular-nums">
+          {formatDayHeading(value)}
+        </span>
+      </span>
+      <ChevronDown
+        aria-hidden
+        className="size-[18px] shrink-0 text-ink-2"
+        strokeWidth={1.75}
+      />
+      <input
+        type="date"
+        aria-label={label}
+        value={value}
+        min={min}
+        required
+        onClick={(e) => {
+          try {
+            e.currentTarget.showPicker();
+          } catch {}
+        }}
+        onChange={(e) => {
+          if (e.target.value) onChange(e.target.value);
+        }}
+        className="absolute inset-0 size-full cursor-pointer opacity-0"
+      />
+    </label>
   );
 }

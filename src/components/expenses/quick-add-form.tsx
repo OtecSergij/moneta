@@ -14,7 +14,7 @@ import {
 } from "@/lib/expense-form";
 import { createExpenseAction } from "@/lib/actions/expenses";
 import type { CategoryWithUsage } from "@/repositories/categories";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/kit/button";
 import { ExpenseFormFields } from "@/components/expenses/expense-form-fields";
 
 // Home screen quick-add form (business-spec §5.1.3). On success it revalidates
@@ -49,6 +49,10 @@ export function QuickAddForm({
       spentAt: todayISO(),
     },
   });
+
+  useEffect(() => {
+    methods.resetField("spentAt", { defaultValue: todayISO() });
+  }, [methods]);
 
   useEffect(() => {
     const selected = methods.getValues("categoryId");
@@ -86,10 +90,15 @@ export function QuickAddForm({
     <FormProvider {...methods}>
       <form
         onSubmit={methods.handleSubmit(onSubmit)}
-        className="flex flex-col gap-4"
+        aria-labelledby="new-expense-title"
+        className="mx-4 mt-4 flex flex-col gap-5 rounded-card bg-card p-5"
         noValidate
       >
+        <h2 id="new-expense-title" className="sr-only">
+          Новая трата
+        </h2>
         <ExpenseFormFields
+          size="main"
           categoriesEditable
           categories={categories}
           onCategoriesChange={setCategories}
@@ -101,7 +110,7 @@ export function QuickAddForm({
           loading={methods.formState.isSubmitting}
           className="w-full"
         >
-          Добавить
+          Добавить трату
         </Button>
       </form>
     </FormProvider>

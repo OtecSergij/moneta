@@ -4,8 +4,13 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md">{children}</div>
-    </main>
+    <div className="flex-1 bg-page">
+      <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-5 px-4 pt-5 pb-8 text-ink">
+        <span className="px-1 text-[22px] font-bold tracking-[-0.03em]">
+          moneta
+        </span>
+        <main>{children}</main>
+      </div>
+    </div>
   );
 }

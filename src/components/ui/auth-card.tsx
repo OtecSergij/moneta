@@ -10,11 +10,15 @@ export function AuthCard({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-surface p-6 shadow-sm">
-      <h1 className="text-2xl font-semibold text-text">{title}</h1>
-      {subtitle ? (
-        <p className="mt-1 text-sm text-text-muted">{subtitle}</p>
-      ) : null}
+    <div className="flex flex-col gap-5 rounded-sheet bg-card px-5 py-6">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-2xl leading-[30px] font-bold tracking-[-0.02em]">
+          {title}
+        </h1>
+        {subtitle ? (
+          <p className="text-[15px] leading-[22px] text-ink-2">{subtitle}</p>
+        ) : null}
+      </div>
       {children}
     </div>
   );

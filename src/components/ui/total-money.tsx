@@ -1,4 +1,5 @@
 import { type CurrencyCode } from "@/lib/currency";
+import { formatMoney } from "@/lib/money";
 import { Money } from "@/components/ui/money";
 import { cn } from "@/lib/utils";
 
@@ -11,19 +12,51 @@ export function TotalMoney({
   minor,
   currency,
   unconverted,
+  size = "default",
   className,
 }: {
   minor: number;
   currency: CurrencyCode;
   unconverted: number;
+  size?: "default" | "hero" | "period";
   className?: string;
 }) {
-  if (unconverted === 0) {
-    return <Money minor={minor} currency={currency} className={className} />;
+  // Count after the noun, so the phrase needs no Russian plural agreement.
+  const note =
+    unconverted === 0
+      ? null
+      : `Не пересчитано трат: ${unconverted} — нет курса на дату`;
+
+  if (size !== "default") {
+    const formatted = formatMoney(minor, currency);
+    const split = formatted.lastIndexOf(" ");
+    return (
+      <span
+        className={cn(
+          "font-medium tracking-[-0.03em] tabular-nums",
+          size === "hero" ? "text-[44px]/[52px]" : "text-[40px]/[48px]",
+          className,
+        )}
+        title={note ?? undefined}
+      >
+        {note ? <span aria-hidden="true">≈ </span> : null}
+        {formatted.slice(0, split)}
+        <span
+          className={cn(
+            "ml-2 text-ink-3",
+            size === "hero" ? "text-[28px]" : "text-[26px]",
+          )}
+        >
+          {formatted.slice(split + 1)}
+        </span>
+        {note ? <span className="sr-only">{note}</span> : null}
+      </span>
+    );
   }
 
-  // Count after the noun, so the phrase needs no Russian plural agreement.
-  const note = `Не пересчитано трат: ${unconverted} — нет курса на дату`;
+  if (!note) {
+    return <Money minor={minor} currency={currency} className={className} />;
+  }
 
   return (
     <span

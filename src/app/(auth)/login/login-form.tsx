@@ -9,9 +9,8 @@ import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { loginSchema, type LoginValues } from "@/lib/auth-schemas";
 import { AuthCard } from "@/components/ui/auth-card";
-import { Field } from "@/components/ui/field";
-import { TextInput } from "@/components/ui/text-input";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/kit/button";
+import { TextField } from "@/components/kit/text-field";
 import { GoogleSignIn } from "@/components/google-sign-in";
 
 export function LoginForm({ hasGoogle }: { hasGoogle: boolean }) {
@@ -44,56 +43,6 @@ export function LoginForm({ hasGoogle }: { hasGoogle: boolean }) {
 
   return (
     <AuthCard title="Вход" subtitle="Войдите в свой аккаунт moneta">
-      <form
-        onSubmit={handleSubmit(onSubmit)}
-        className="mt-6 flex flex-col gap-4"
-        noValidate
-      >
-        <Field label="Email" htmlFor="email" error={errors.email?.message}>
-          <TextInput
-            id="email"
-            type="email"
-            inputMode="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            aria-invalid={!!errors.email}
-            {...register("email")}
-          />
-        </Field>
-
-        <Field
-          label="Пароль"
-          htmlFor="password"
-          error={errors.password?.message}
-        >
-          <TextInput
-            id="password"
-            type="password"
-            autoComplete="current-password"
-            aria-invalid={!!errors.password}
-            {...register("password")}
-          />
-        </Field>
-
-        <div className="-mt-1 text-right">
-          <Link
-            href="/forgot-password"
-            className="inline-flex min-h-11 items-center text-sm text-accent hover:text-accent-hover"
-          >
-            Забыли пароль?
-          </Link>
-        </div>
-
-        <Button
-          type="submit"
-          loading={isSubmitting}
-          disabled={googleBusy}
-          className="w-full"
-        >
-          Войти
-        </Button>
-      </form>
-
       <GoogleSignIn
         hasGoogle={hasGoogle}
         label="Продолжить с Google"
@@ -101,9 +50,51 @@ export function LoginForm({ hasGoogle }: { hasGoogle: boolean }) {
         onBusyChange={setGoogleBusy}
       />
 
-      <p className="mt-6 text-center text-sm text-text-muted">
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        className="flex flex-col gap-3.5"
+        noValidate
+      >
+        <TextField
+          label="Email"
+          id="email"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          placeholder="you@example.com"
+          error={errors.email?.message}
+          {...register("email")}
+        />
+
+        <TextField
+          label="Пароль"
+          id="password"
+          type="password"
+          autoComplete="current-password"
+          error={errors.password?.message}
+          {...register("password")}
+        />
+
+        <div className="-mt-1.5 -mb-1.5 text-right">
+          <Link
+            href="/forgot-password"
+            className="inline-flex min-h-11 items-center text-sm font-medium text-primary-ink hover:text-primary"
+          >
+            Забыли пароль?
+          </Link>
+        </div>
+
+        <Button type="submit" loading={isSubmitting} disabled={googleBusy}>
+          Войти
+        </Button>
+      </form>
+
+      <p className="text-center text-[15px] text-ink-2">
         Нет аккаунта?{" "}
-        <Link href="/sign-up" className="text-accent hover:text-accent-hover">
+        <Link
+          href="/sign-up"
+          className="font-medium text-primary-ink hover:text-primary"
+        >
           Создать аккаунт
         </Link>
       </p>

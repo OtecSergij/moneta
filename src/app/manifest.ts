@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { ACCENT } from "@/lib/brand";
+import { ACCENT, PAGE_BG } from "@/lib/brand";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -14,7 +14,7 @@ export default function manifest(): MetadataRoute.Manifest {
     lang: "ru",
     dir: "ltr",
     categories: ["finance"],
-    background_color: "#ffffff",
+    background_color: PAGE_BG,
     theme_color: ACCENT,
     // SVG covers modern installs; PNG 192/512 are the raster fallback for
     // surfaces that don't rasterise SVG (older Android, shortcuts, splash).

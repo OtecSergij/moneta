@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PROTECTED = ["/", "/history", "/settings"];
+const PROTECTED = ["/", "/history", "/settings", "/lists"];
 
 function matches(path: string, routes: string[]): boolean {
   return routes.some((p) => path === p || path.startsWith(p + "/"));

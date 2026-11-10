@@ -5,6 +5,7 @@ type TextFieldProps = Omit<ComponentProps<"input">, "size"> & {
   label: string;
   labelHidden?: boolean;
   variant?: "default" | "title";
+  size?: "md" | "lg";
   suffix?: ReactNode;
   error?: string;
 };
@@ -13,6 +14,7 @@ export function TextField({
   label,
   labelHidden = false,
   variant = "default",
+  size = "md",
   suffix,
   error,
   id,
@@ -37,7 +39,8 @@ export function TextField({
       </label>
       <div
         className={cn(
-          "flex h-12 items-center gap-2.5 rounded-field bg-page",
+          "flex items-center gap-2.5 rounded-field bg-page",
+          size === "lg" ? "h-[52px]" : "h-12",
           variant === "title" ? "px-3.5" : "px-4",
           error
             ? "shadow-[inset_0_0_0_2px_var(--color-error)]"
@@ -53,7 +56,11 @@ export function TextField({
           }
           className={cn(
             "h-full min-w-0 flex-1 bg-transparent text-ink tabular-nums outline-none placeholder:text-ink-3",
-            variant === "title" ? "text-xl font-semibold" : "text-base",
+            variant === "title"
+              ? "text-xl font-semibold"
+              : size === "lg"
+                ? "text-[17px]"
+                : "text-base",
           )}
           {...props}
         />

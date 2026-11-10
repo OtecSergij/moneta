@@ -1,5 +1,3 @@
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { z } from "zod";
 import { requireSpace } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
@@ -12,8 +10,9 @@ import { getUserSettings } from "@/repositories/user-settings";
 import { loadRateIndex } from "@/repositories/fx-rates";
 import { CURRENCY_CODES } from "@/lib/currency";
 import { sumConvertedByDay } from "@/lib/fx/convert";
-import { formatRelativeDay, todayRange } from "@/lib/dates";
-import { DisplayCurrencySwitcher } from "@/components/settings/display-currency-switcher";
+import { formatDayTitle, todayRange } from "@/lib/dates";
+import { AppScreen } from "@/components/layout/app-screen";
+import { ScreenHeader } from "@/components/layout/screen-header";
 import { HistoryFilter } from "@/components/history/history-filter";
 import { PeriodTabs } from "@/components/history/period-tabs";
 import type { DayGroup } from "@/components/history/history-list";
@@ -77,40 +76,26 @@ export default async function HistoryPage({
     rateIndex,
   ).map((bucket) => ({
     day: bucket.day,
-    heading: formatRelativeDay(bucket.day),
+    heading: formatDayTitle(bucket.day),
     totalMinor: bucket.totalMinor,
     unconverted: bucket.unconverted,
     items: bucket.items,
   }));
 
   return (
-    <main className="mx-auto w-full max-w-md px-4 py-6 sm:max-w-2xl">
-      <header className="mb-6">
-        <Link
-          href="/"
-          className="inline-flex min-h-11 items-center gap-1.5 text-sm text-text-muted transition-colors hover:text-text"
-        >
-          <ArrowLeft className="size-4" /> На главную
-        </Link>
-        <div className="mt-1 flex items-center justify-between gap-2">
-          <h1 className="text-2xl font-semibold text-text">История</h1>
-          <DisplayCurrencySwitcher initialDisplayCurrency={displayCurrency} />
-        </div>
-      </header>
-
-      <section className="mb-6 rounded-lg border border-border bg-surface p-4 sm:p-6">
-        <HistoryFilter from={range.from} to={range.to} />
-      </section>
-
+    <AppScreen tab="history">
+      <ScreenHeader title="История" displayCurrency={displayCurrency} />
+      <HistoryFilter from={range.from} to={range.to} />
       <PeriodTabs
         totalMinor={periodSummary.totalMinor}
         unconverted={periodSummary.unconverted}
+        count={expenses.length}
         byCategory={periodSummary.byCategory}
         expensesByCategory={expensesByCategory}
         days={days}
         categories={categories}
         displayCurrency={displayCurrency}
       />
-    </main>
+    </AppScreen>
   );
 }

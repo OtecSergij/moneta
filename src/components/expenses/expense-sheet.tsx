@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { unstable_rethrow, useRouter } from "next/navigation";
 import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -19,8 +19,8 @@ import {
 } from "@/lib/actions/expenses";
 import type { Category } from "@/repositories/categories";
 import type { Expense } from "@/repositories/expenses";
-import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
+import { BottomSheet } from "@/components/kit/bottom-sheet";
+import { Button } from "@/components/kit/button";
 import { ExpenseFormFields } from "@/components/expenses/expense-form-fields";
 
 function toDefaults(e: Expense): ExpenseFormValues {
@@ -33,7 +33,7 @@ function toDefaults(e: Expense): ExpenseFormValues {
   };
 }
 
-export function EditExpenseDialog({
+export function ExpenseSheet({
   expense,
   categories,
   displayCurrency,
@@ -45,16 +45,23 @@ export function EditExpenseDialog({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const methods = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
     defaultValues: toDefaults(expense),
   });
+  const saving = methods.formState.isSubmitting;
 
   async function onSubmit(values: ExpenseFormValues) {
-    const res = await updateExpenseAction(expense.id, toExpenseInput(values));
+    let res;
+    try {
+      res = await updateExpenseAction(expense.id, toExpenseInput(values));
+    } catch (error) {
+      unstable_rethrow(error);
+      toast.error("Не удалось обновить трату");
+      return;
+    }
     if (!res.ok) {
       toast.error(res.error);
       return;
@@ -66,8 +73,16 @@ export function EditExpenseDialog({
 
   async function onDelete() {
     setDeleting(true);
-    const res = await deleteExpenseAction(expense.id);
-    setDeleting(false);
+    let res;
+    try {
+      res = await deleteExpenseAction(expense.id);
+    } catch (error) {
+      unstable_rethrow(error);
+      toast.error("Не удалось удалить трату");
+      return;
+    } finally {
+      setDeleting(false);
+    }
     if (!res.ok) {
       toast.error(res.error);
       return;
@@ -78,7 +93,17 @@ export function EditExpenseDialog({
   }
 
   return (
-    <Modal title="Редактировать трату" onClose={onClose}>
+    <BottomSheet
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      ariaLabel="Трата"
+      onOpenAutoFocus={(e) => {
+        e.preventDefault();
+        (e.currentTarget as HTMLElement).focus();
+      }}
+    >
       <FormProvider {...methods}>
         <form
           onSubmit={methods.handleSubmit(onSubmit)}
@@ -86,49 +111,32 @@ export function EditExpenseDialog({
           noValidate
         >
           <ExpenseFormFields
+            size="sheet"
             categories={categories}
             displayCurrency={displayCurrency}
           />
-
-          <div className="mt-2 flex items-center justify-between gap-2">
-            {confirmDelete ? (
-              <div className="flex w-full items-center justify-between gap-2">
-                <span className="text-sm text-text-muted">Удалить трату?</span>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => setConfirmDelete(false)}
-                  >
-                    Отмена
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="danger"
-                    loading={deleting}
-                    onClick={onDelete}
-                  >
-                    Удалить
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setConfirmDelete(true)}
-                  className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-md px-3 text-sm font-medium text-danger transition-colors hover:bg-danger/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/30"
-                >
-                  <Trash2 className="size-4" /> Удалить
-                </button>
-                <Button type="submit" loading={methods.formState.isSubmitting}>
-                  Сохранить
-                </Button>
-              </>
-            )}
+          <div className="mt-1 flex gap-2.5">
+            <Button
+              variant="danger"
+              iconOnly
+              aria-label="Удалить трату"
+              loading={deleting}
+              disabled={saving}
+              onClick={onDelete}
+            >
+              <Trash2 className="size-[22px]" strokeWidth={1.75} aria-hidden />
+            </Button>
+            <Button
+              type="submit"
+              className="flex-1"
+              loading={saving}
+              disabled={deleting}
+            >
+              Сохранить
+            </Button>
           </div>
         </form>
       </FormProvider>
-    </Modal>
+    </BottomSheet>
   );
 }

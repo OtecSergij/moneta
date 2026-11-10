@@ -6,7 +6,6 @@ import type { ExpenseWithConversion } from "@/repositories/expenses";
 import type { CurrencyCode } from "@/lib/currency";
 import { TotalMoney } from "@/components/ui/total-money";
 import { ExpenseListRow } from "@/components/expenses/expense-list-row";
-import { useExpenseEditor } from "@/components/expenses/use-expense-editor";
 
 export interface DayGroup {
   day: string;
@@ -21,53 +20,49 @@ export function HistoryList({
   groups,
   categories,
   displayCurrency,
+  onSelect,
 }: {
   groups: DayGroup[];
   categories: Category[];
   displayCurrency: CurrencyCode;
+  onSelect: (expense: ExpenseWithConversion) => void;
 }) {
-  const { openEditor, editor } = useExpenseEditor(categories);
   const categoryById = useMemo(
     () => new Map(categories.map((c) => [c.id, c])),
     [categories],
   );
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="mx-4 mt-1 flex flex-col">
       {groups.map((group) => (
-        <div key={group.day}>
-          <div className="mb-1 flex items-center justify-between gap-2 px-2">
-            <h3 className="text-sm font-medium text-text-muted">
-              {group.heading}
-            </h3>
-            <span className="text-sm text-text">
-              <TotalMoney
-                minor={group.totalMinor}
-                currency={displayCurrency}
-                unconverted={group.unconverted}
-              />
-            </span>
+        <section key={group.day} className="flex flex-col">
+          <div className="flex items-baseline justify-between gap-2 px-1 pt-[18px] pb-2">
+            <h2 className="text-sm font-semibold">{group.heading}</h2>
+            <TotalMoney
+              minor={group.totalMinor}
+              currency={displayCurrency}
+              unconverted={group.unconverted}
+              className="text-[13px] text-ink-2"
+            />
           </div>
-          <ul className="flex flex-col gap-1">
+          <ul className="overflow-hidden rounded-card bg-card">
             {group.items.map((expense, i) => {
               const category = categoryById.get(expense.categoryId);
-              if (!category) return null;
               return (
                 <ExpenseListRow
                   key={expense.id}
                   expense={expense}
-                  color={category.color}
+                  color={category?.color}
                   title={expense.note}
-                  subtitle={category.name}
+                  subtitle={category?.name}
                   index={i}
-                  onClick={openEditor}
+                  onClick={onSelect}
                 />
               );
             })}
           </ul>
-        </div>
+        </section>
       ))}
-      {editor}
     </div>
   );
 }

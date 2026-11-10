@@ -1,13 +1,11 @@
-import Link from "next/link";
 import { after } from "next/server";
-import { ChevronRight, Settings } from "lucide-react";
+import { addDays } from "date-fns";
 import { requireSpace } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
 import {
   lastUsedCategoryId,
   lastUsedCurrency,
   listExpenses,
-  summary,
 } from "@/repositories/expenses";
 import { getUserSettings } from "@/repositories/user-settings";
 import {
@@ -17,17 +15,25 @@ import {
 } from "@/repositories/fx-rates";
 import { CURRENCY_CODES } from "@/lib/currency";
 import { maxEntryDate } from "@/lib/fx/provider";
-import { currentWeekFromMonday } from "@/lib/dates";
-import { TotalMoney } from "@/components/ui/total-money";
-import { DisplayCurrencySwitcher } from "@/components/settings/display-currency-switcher";
+import { sumConverted, sumConvertedByDay } from "@/lib/fx/convert";
+import {
+  currentWeekFromMonday,
+  parseISODate,
+  toISODate,
+  weekRange,
+} from "@/lib/dates";
+import { AppScreen } from "@/components/layout/app-screen";
+import { ScreenHeader } from "@/components/layout/screen-header";
+import { WeekCard } from "@/components/expenses/week-card";
 import { QuickAddForm } from "@/components/expenses/quick-add-form";
 import { RecentList } from "@/components/expenses/recent-list";
 
 export default async function HomePage() {
   const { user, spaceId } = await requireSpace();
-  const week = currentWeekFromMonday();
+  const week = weekRange();
+  const elapsed = currentWeekFromMonday();
 
-  // One load for both consumers below. Bounded by maxEntryDate() rather than
+  // One load for every consumer below. Bounded by maxEntryDate() rather than
   // the week: the recent list has no date filter of its own and its rows can
   // be dated up to a day ahead of this server (see provider.ts).
   const [settings, rateIndex] = await Promise.all([
@@ -36,14 +42,27 @@ export default async function HomePage() {
   ]);
   const displayCurrency = settings.displayCurrency;
 
-  const [categories, weekSummary, recent, lastCategoryId, lastCurrency] =
+  const [categories, weekRows, recent, lastCategoryId, lastCurrency] =
     await Promise.all([
       listCategories(spaceId),
-      summary(spaceId, displayCurrency, week, rateIndex),
+      listExpenses(spaceId, displayCurrency, elapsed, rateIndex),
       listExpenses(spaceId, displayCurrency, { limit: 10 }, rateIndex),
       lastUsedCategoryId(spaceId, user.id),
       lastUsedCurrency(spaceId, user.id),
     ]);
+
+  const weekTotal = sumConverted(weekRows, displayCurrency, rateIndex);
+  const byDay = new Map(
+    sumConvertedByDay(weekRows, displayCurrency, rateIndex).map((b) => [
+      b.day,
+      b.totalMinor,
+    ]),
+  );
+  const monday = parseISODate(week.from);
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const day = toISODate(addDays(monday, i));
+    return { day, totalMinor: byDay.get(day) ?? 0 };
+  });
 
   // The save path schedules its own rate fetch, but that one is
   // fire-and-forget: if the provider was down, nothing retried it. Opening
@@ -55,61 +74,25 @@ export default async function HomePage() {
   after(() => syncSpaceRates(spaceId, { throttleMs: PAGE_SYNC_THROTTLE_MS }));
 
   return (
-    <main className="mx-auto w-full max-w-md px-4 py-6 sm:max-w-2xl">
-      <header className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-text">moneta</h1>
-        <div className="flex items-center gap-2">
-          <DisplayCurrencySwitcher initialDisplayCurrency={displayCurrency} />
-          <Link
-            href="/settings"
-            aria-label="Настройки"
-            className="inline-flex size-11 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
-          >
-            <Settings className="size-5" />
-          </Link>
-        </div>
-      </header>
-
-      {/* Week total — taps through to the full breakdown in History. */}
-      <Link
-        href="/history"
-        aria-label="Траты за неделю — открыть историю"
-        className="mb-6 flex items-center justify-between gap-4 rounded-lg border border-border bg-surface p-6 transition-colors hover:bg-border/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
-      >
-        <span className="min-w-0">
-          <span className="block text-sm text-text-muted">На этой неделе</span>
-          <span className="mt-1 block text-3xl font-semibold text-text">
-            <TotalMoney
-              minor={weekSummary.totalMinor}
-              currency={displayCurrency}
-              unconverted={weekSummary.unconverted}
-            />
-          </span>
-        </span>
-        <ChevronRight
-          aria-hidden="true"
-          className="size-5 shrink-0 text-text-muted"
-        />
-      </Link>
-
-      <section className="mb-6 rounded-lg border border-border bg-surface p-4 sm:p-6">
-        <h2 className="mb-4 text-lg font-semibold text-text">Добавить трату</h2>
-        <QuickAddForm
-          initialCategories={categories}
-          initialCategoryId={lastCategoryId ?? ""}
-          initialCurrency={lastCurrency ?? displayCurrency}
-          displayCurrency={displayCurrency}
-        />
-      </section>
-
-      <section className="rounded-lg border border-border bg-surface p-4 sm:p-6">
-        <h2 className="mb-2 text-lg font-semibold text-text">Последние</h2>
-        {recent.length === 0 ? (
-          <p className="py-4 text-sm text-text-muted">Пока нет трат</p>
-        ) : (
-          <RecentList expenses={recent} categories={categories} />
-        )}
-      </section>
-    </main>
+    <AppScreen tab="main">
+      <ScreenHeader title="Траты" displayCurrency={displayCurrency} />
+      <WeekCard
+        range={week}
+        today={elapsed.to}
+        days={days}
+        totalMinor={weekTotal.totalMinor}
+        unconverted={weekTotal.unconverted}
+        currency={displayCurrency}
+      />
+      <QuickAddForm
+        initialCategories={categories}
+        initialCategoryId={lastCategoryId ?? ""}
+        initialCurrency={lastCurrency ?? displayCurrency}
+        displayCurrency={displayCurrency}
+      />
+      {recent.length > 0 ? (
+        <RecentList expenses={recent} categories={categories} />
+      ) : null}
+    </AppScreen>
   );
 }

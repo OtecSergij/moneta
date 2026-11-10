@@ -41,9 +41,9 @@ export function useLongPress(onLongPress: () => void) {
       e.preventDefault();
       controller().contextMenu();
     },
+    onKeyDownCapture: () => controller().keyDown(),
     onClickCapture: (e: MouseEvent<HTMLElement>) => {
-      // detail is 0 for keyboard and programmatic clicks, which follow no gesture.
-      if (controller().consumeClick(e.detail > 0)) {
+      if (controller().consumeClick()) {
         e.preventDefault();
         e.stopPropagation();
       }

@@ -8,6 +8,7 @@
 
 import {
   differenceInCalendarDays,
+  endOfWeek,
   format,
   startOfWeek,
   subDays,
@@ -57,6 +58,46 @@ export function currentWeekFromMonday(now: Date = new Date()): DateRange {
   };
 }
 
+/** The whole Monday–Sunday week containing `now`. */
+export function weekRange(now: Date = new Date()): DateRange {
+  return {
+    from: toISODate(startOfWeek(now, { weekStartsOn: 1 })),
+    to: toISODate(endOfWeek(now, { weekStartsOn: 1 })),
+  };
+}
+
+/** "9–15 ноября", "27 октября – 2 ноября", "29 декабря 2025 – 4 января 2026". */
+export function weekRangeLabel({ from, to }: DateRange): string {
+  const start = parseISODate(from);
+  const end = parseISODate(to);
+  const opts = { locale: ru };
+  if (from.slice(0, 4) !== to.slice(0, 4)) {
+    return `${format(start, "d MMMM yyyy", opts)} – ${format(end, "d MMMM yyyy", opts)}`;
+  }
+  if (from.slice(0, 7) !== to.slice(0, 7)) {
+    return `${format(start, "d MMMM", opts)} – ${format(end, "d MMMM", opts)}`;
+  }
+  return `${format(start, "d", opts)}–${format(end, "d MMMM", opts)}`;
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function weekday(iso: string, pattern: "EEEE" | "EEEEEE"): string {
+  return capitalize(format(parseISODate(iso), pattern, { locale: ru }));
+}
+
+/** Date chip label: "Вт, 10 ноября" (current year) or "Вт, 10 ноября 2025". */
+export function formatChipDate(iso: string, now: Date = new Date()): string {
+  return `${weekday(iso, "EEEEEE")}, ${formatDayHeading(iso, now)}`;
+}
+
+/** History day title: "Вторник, 10 ноября" (current year) or "Вторник, 10 ноября 2025". */
+export function formatDayTitle(iso: string, now: Date = new Date()): string {
+  return `${weekday(iso, "EEEE")}, ${formatDayHeading(iso, now)}`;
+}
+
 /** Quick range presets for the history screen (business-spec §5.2). */
 export const RANGE_PRESETS = [
   { key: "today", label: "Сегодня", range: (now?: Date) => todayRange(now) },
@@ -85,12 +126,8 @@ export function formatDayHeading(iso: string, now: Date = new Date()): string {
  * previous 6 days, otherwise the day heading ("1 июня" / "1 июня 2025").
  */
 export function formatRelativeDay(iso: string, now: Date = new Date()): string {
-  const d = parseISODate(iso);
-  const diff = differenceInCalendarDays(now, d);
+  const diff = differenceInCalendarDays(now, parseISODate(iso));
   if (diff === 0) return "Сегодня";
-  if (diff >= 1 && diff <= 6) {
-    const weekday = format(d, "EEEE", { locale: ru });
-    return weekday.charAt(0).toUpperCase() + weekday.slice(1);
-  }
+  if (diff >= 1 && diff <= 6) return weekday(iso, "EEEE");
   return formatDayHeading(iso, now);
 }

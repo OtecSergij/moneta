@@ -4,21 +4,24 @@ import { useState } from "react";
 import type { Category } from "@/repositories/categories";
 import type { ExpenseWithConversion, SummaryRow } from "@/repositories/expenses";
 import type { CurrencyCode } from "@/lib/currency";
+import { EXPENSE_FORMS, formatCount } from "@/lib/plural";
 import { TotalMoney } from "@/components/ui/total-money";
+import { Segment } from "@/components/kit/segment";
 import { SummaryBars } from "@/components/history/summary-bars";
 import { HistoryList, type DayGroup } from "@/components/history/history-list";
-import { cn } from "@/lib/utils";
+import { useExpenseEditor } from "@/components/expenses/use-expense-editor";
 
 type Tab = "categories" | "days";
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: "categories", label: "По категориям" },
-  { key: "days", label: "По дням" },
-];
+const TABS = [
+  { value: "categories", label: "По категориям" },
+  { value: "days", label: "По дням" },
+] as const;
 
 export function PeriodTabs({
   totalMinor,
   unconverted,
+  count,
   byCategory,
   expensesByCategory,
   days,
@@ -27,6 +30,7 @@ export function PeriodTabs({
 }: {
   totalMinor: number;
   unconverted: number;
+  count: number;
   byCategory: SummaryRow[];
   expensesByCategory: Record<string, ExpenseWithConversion[]>;
   days: DayGroup[];
@@ -34,74 +38,54 @@ export function PeriodTabs({
   displayCurrency: CurrencyCode;
 }) {
   const [tab, setTab] = useState<Tab>("categories");
-  const isEmpty = days.length === 0;
+  const { openEditor, editor } = useExpenseEditor(categories);
 
   return (
-    <section className="rounded-lg border border-border bg-surface p-4 sm:p-6">
-      <p className="text-3xl font-semibold text-text">
+    <div className="flex flex-col pb-6">
+      <section
+        aria-label="Итог за период"
+        className="mx-4 mt-3 flex flex-col gap-1 rounded-card bg-card p-5"
+      >
+        <span className="text-sm text-ink-2">Итого</span>
         <TotalMoney
           minor={totalMinor}
           currency={displayCurrency}
           unconverted={unconverted}
+          size="period"
         />
-      </p>
+        <span className="text-sm text-ink-2">
+          {formatCount(count, EXPENSE_FORMS)}
+        </span>
+      </section>
 
-      {isEmpty ? (
-        <p className="mt-4 text-sm text-text-muted">
-          Нет трат за выбранный период
-        </p>
-      ) : (
+      {count > 0 ? (
         <>
-          <div
-            role="tablist"
-            aria-label="Вид сводки"
-            className="mt-4 flex gap-4 border-b border-border"
-          >
-            {TABS.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                role="tab"
-                id={`period-tab-${t.key}`}
-                aria-selected={tab === t.key}
-                aria-controls="period-panel"
-                onClick={() => setTab(t.key)}
-                className={cn(
-                  "-mb-px min-h-11 cursor-pointer border-b-2 px-1 text-sm font-medium transition-colors",
-                  tab === t.key
-                    ? "border-accent text-text"
-                    : "border-transparent text-text-muted hover:text-text"
-                )}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          <div
-            id="period-panel"
-            role="tabpanel"
-            aria-labelledby={`period-tab-${tab}`}
-            className="mt-4"
-          >
-            {tab === "categories" ? (
-              <SummaryBars
-                rows={byCategory}
-                total={totalMinor}
-                expensesByCategory={expensesByCategory}
-                categories={categories}
-                displayCurrency={displayCurrency}
-              />
-            ) : (
-              <HistoryList
-                groups={days}
-                categories={categories}
-                displayCurrency={displayCurrency}
-              />
-            )}
-          </div>
+          <Segment
+            options={TABS}
+            value={tab}
+            onChange={setTab}
+            ariaLabel="Вид сводки"
+            className="mx-4 mt-4 bg-line!"
+          />
+          {tab === "categories" ? (
+            <SummaryBars
+              rows={byCategory}
+              total={totalMinor}
+              expensesByCategory={expensesByCategory}
+              displayCurrency={displayCurrency}
+              onSelect={openEditor}
+            />
+          ) : (
+            <HistoryList
+              groups={days}
+              categories={categories}
+              displayCurrency={displayCurrency}
+              onSelect={openEditor}
+            />
+          )}
         </>
-      )}
-    </section>
+      ) : null}
+      {editor}
+    </div>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -13,9 +12,8 @@ import {
 import { authClient } from "@/lib/auth-client";
 import { AuthCard } from "@/components/ui/auth-card";
 import { StatusCard } from "@/components/ui/status-card";
-import { Field } from "@/components/ui/field";
-import { TextInput } from "@/components/ui/text-input";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/kit/button";
+import { TextField } from "@/components/kit/text-field";
 
 export function ResetPasswordForm({
   token,
@@ -54,16 +52,9 @@ export function ResetPasswordForm({
         icon={TriangleAlert}
         tone="danger"
         title="Ссылка недействительна"
+        action={{ href: "/forgot-password", label: "Запросить новую ссылку" }}
       >
         Ссылка для сброса пароля истекла или некорректна. Запросите новую.
-        <p className="mt-6">
-          <Link
-            href="/forgot-password"
-            className="text-accent hover:text-accent-hover"
-          >
-            Запросить новую ссылку
-          </Link>
-        </p>
       </StatusCard>
     );
   }
@@ -72,38 +63,28 @@ export function ResetPasswordForm({
     <AuthCard title="Новый пароль" subtitle="Придумайте новый пароль для входа.">
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="mt-6 flex flex-col gap-4"
+        className="flex flex-col gap-3.5"
         noValidate
       >
-        <Field
+        <TextField
           label="Новый пароль"
-          htmlFor="password"
+          id="password"
+          type="password"
+          autoComplete="new-password"
           error={errors.password?.message}
-        >
-          <TextInput
-            id="password"
-            type="password"
-            autoComplete="new-password"
-            aria-invalid={!!errors.password}
-            {...register("password")}
-          />
-        </Field>
+          {...register("password")}
+        />
 
-        <Field
+        <TextField
           label="Повторите пароль"
-          htmlFor="confirm"
+          id="confirm"
+          type="password"
+          autoComplete="new-password"
           error={errors.confirm?.message}
-        >
-          <TextInput
-            id="confirm"
-            type="password"
-            autoComplete="new-password"
-            aria-invalid={!!errors.confirm}
-            {...register("confirm")}
-          />
-        </Field>
+          {...register("confirm")}
+        />
 
-        <Button type="submit" loading={isSubmitting} className="w-full">
+        <Button type="submit" loading={isSubmitting} className="mt-1.5">
           Сбросить пароль
         </Button>
       </form>

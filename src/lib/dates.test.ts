@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   currentWeekFromMonday,
+  formatChipDate,
+  formatDayTitle,
   formatRelativeDay,
   isFutureISO,
   lastNDays,
   parseISODate,
   toISODate,
   todayRange,
+  weekRange,
+  weekRangeLabel,
 } from "@/lib/dates";
 
 // Fixed reference: Sunday, 17 May 2026 (local).
@@ -24,7 +28,10 @@ describe("toISODate / parseISODate", () => {
 describe("range helpers", () => {
   it("lastNDays is inclusive of both ends", () => {
     expect(lastNDays(7, NOW)).toEqual({ from: "2026-05-11", to: "2026-05-17" });
-    expect(lastNDays(30, NOW)).toEqual({ from: "2026-04-18", to: "2026-05-17" });
+    expect(lastNDays(30, NOW)).toEqual({
+      from: "2026-04-18",
+      to: "2026-05-17",
+    });
     expect(lastNDays(1, NOW)).toEqual({ from: "2026-05-17", to: "2026-05-17" });
   });
 
@@ -78,5 +85,63 @@ describe("currentWeekFromMonday", () => {
       from: "2026-05-11",
       to: "2026-05-11",
     });
+  });
+});
+
+describe("weekRange", () => {
+  it("spans Monday through Sunday around a midweek day", () => {
+    expect(weekRange(new Date(2026, 10, 10))).toEqual({
+      from: "2026-11-09",
+      to: "2026-11-15",
+    });
+  });
+
+  it("keeps Sunday in the week that started on Monday", () => {
+    expect(weekRange(NOW)).toEqual({ from: "2026-05-11", to: "2026-05-17" });
+  });
+});
+
+describe("weekRangeLabel", () => {
+  it("collapses the month inside one month", () => {
+    expect(weekRangeLabel({ from: "2026-11-09", to: "2026-11-15" })).toBe(
+      "9–15 ноября",
+    );
+  });
+
+  it("names both months across a month boundary", () => {
+    expect(weekRangeLabel({ from: "2026-10-27", to: "2026-11-02" })).toBe(
+      "27 октября – 2 ноября",
+    );
+  });
+
+  it("adds years across a year boundary", () => {
+    expect(weekRangeLabel({ from: "2025-12-29", to: "2026-01-04" })).toBe(
+      "29 декабря 2025 – 4 января 2026",
+    );
+  });
+});
+
+describe("formatChipDate", () => {
+  const TUESDAY = new Date(2026, 10, 10);
+
+  it("shows a short weekday and the date without a year in the current year", () => {
+    expect(formatChipDate("2026-11-10", TUESDAY)).toBe("Вт, 10 ноября");
+    expect(formatChipDate("2026-11-08", TUESDAY)).toBe("Вс, 8 ноября");
+  });
+
+  it("adds the year outside the current year", () => {
+    expect(formatChipDate("2025-11-10", TUESDAY)).toBe("Пн, 10 ноября 2025");
+  });
+});
+
+describe("formatDayTitle", () => {
+  const TUESDAY = new Date(2026, 10, 10);
+
+  it("shows the full capitalized weekday and the date", () => {
+    expect(formatDayTitle("2026-11-10", TUESDAY)).toBe("Вторник, 10 ноября");
+  });
+
+  it("adds the year outside the current year", () => {
+    expect(formatDayTitle("2025-11-10", TUESDAY)).toBe("Понедельник, 10 ноября 2025");
   });
 });

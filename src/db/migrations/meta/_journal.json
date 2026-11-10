@@ -36,6 +36,13 @@
       "when": 1794311767822,
       "tag": "0004_drop_owner_user_id",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794318308835,
+      "tag": "0005_lists",
+      "breakpoints": true
     }
   ]
 }

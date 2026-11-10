@@ -2,138 +2,118 @@
 
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
-import type { Category } from "@/repositories/categories";
 import type { ExpenseWithConversion, SummaryRow } from "@/repositories/expenses";
 import type { CurrencyCode } from "@/lib/currency";
-import { formatRelativeDay } from "@/lib/dates";
+import { formatChipDate } from "@/lib/dates";
+import { EXPENSE_FORMS, formatCount } from "@/lib/plural";
 import { TotalMoney } from "@/components/ui/total-money";
-import { CategoryDot } from "@/components/ui/category-dot";
-import { ExpenseRowContent } from "@/components/expenses/expense-row-content";
-import { useExpenseEditor } from "@/components/expenses/use-expense-editor";
+import { ExpenseAmount } from "@/components/expenses/expense-amount";
 import { cn } from "@/lib/utils";
 
-// Horizontal category breakdown (MASTER "Charts"): one bar per category, width
-// proportional to its share of the total, sorted descending. Any number of
-// categories can be open at once; clicking an expense row opens edit/delete.
 export function SummaryBars({
   rows,
   total,
   expensesByCategory,
-  categories,
   displayCurrency,
+  onSelect,
 }: {
   rows: SummaryRow[];
   total: number;
   expensesByCategory: Record<string, ExpenseWithConversion[]>;
-  categories: Category[];
-  displayCurrency: CurrencyCode;
-}) {
-  const { openEditor, editor } = useExpenseEditor(categories);
-
-  return (
-    <>
-      <ul className="flex flex-col gap-1">
-        {rows.map((row) => (
-          <SummaryBarRow
-            key={row.categoryId}
-            row={row}
-            total={total}
-            details={expensesByCategory[row.categoryId] ?? []}
-            displayCurrency={displayCurrency}
-            onSelect={openEditor}
-          />
-        ))}
-      </ul>
-      {editor}
-    </>
-  );
-}
-
-// Each category owns its open/closed state, so toggling one doesn't re-render
-// the siblings — the rows are independent (no accordion / mutual exclusion).
-function SummaryBarRow({
-  row,
-  total,
-  details,
-  displayCurrency,
-  onSelect,
-}: {
-  row: SummaryRow;
-  total: number;
-  details: ExpenseWithConversion[];
   displayCurrency: CurrencyCode;
   onSelect: (expense: ExpenseWithConversion) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const pct = total > 0 ? Math.round((row.totalMinor / total) * 100) : 0;
+  const [openId, setOpenId] = useState<string | null>(null);
+  const max = Math.max(0, ...rows.map((r) => r.totalMinor));
 
   return (
-    <li>
-      {/* Category header — no zebra: rows are told apart by the colour dot. */}
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-        className="flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-md px-1 py-1.5 text-left transition-colors hover:bg-border/60"
-      >
-        <CategoryDot color={row.color} />
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center justify-between gap-2">
-            <span className="truncate text-sm text-text">{row.name}</span>
-            <span className="text-sm text-text">
-              <TotalMoney
-                minor={row.totalMinor}
-                currency={displayCurrency}
-                unconverted={row.unconverted}
-              />
-            </span>
-          </span>
-          <span className="mt-1.5 block h-1.5 w-full overflow-hidden rounded-pill bg-border">
-            <span
-              className="block h-full rounded-pill"
-              style={{ width: `${pct}%`, backgroundColor: row.color }}
-            />
-          </span>
-        </span>
-        <ChevronDown
-          aria-hidden="true"
-          className={cn(
-            "size-4 shrink-0 text-text-muted transition-transform",
-            open && "rotate-180",
-          )}
-        />
-      </button>
-
-      {/* Expense rows — zebra-striped; click opens edit/delete (like the day tab). */}
-      {open ? (
-        <ul className="mt-1 mb-2 flex flex-col gap-1 pl-6 pr-1">
-          {details.length === 0 ? (
-            <li className="px-2 py-1.5 text-sm text-text-muted">Нет трат</li>
-          ) : (
-            details.map((e, i) => (
-              <li key={e.id}>
-                <button
-                  type="button"
-                  onClick={() => onSelect(e)}
+    <ul className="mx-4 mt-3 overflow-hidden rounded-card bg-card">
+      {rows.map((row, i) => {
+        const open = row.categoryId === openId;
+        const details = expensesByCategory[row.categoryId] ?? [];
+        const width =
+          max > 0 ? Math.max(3, Math.round((row.totalMinor / max) * 100)) : 3;
+        const pct = total > 0 ? Math.round((row.totalMinor / total) * 100) : 0;
+        return (
+          <li
+            key={row.categoryId}
+            className={cn(i > 0 && "border-t border-row-line")}
+          >
+            <button
+              type="button"
+              aria-expanded={open}
+              onClick={() => setOpenId(open ? null : row.categoryId)}
+              className="flex w-full cursor-pointer flex-col gap-2.5 px-4 py-3.5 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+            >
+              <span className="flex w-full items-center gap-2">
+                <span
+                  aria-hidden
+                  className="size-2.5 flex-none rounded-chip"
+                  style={{ backgroundColor: row.color }}
+                />
+                <span className="min-w-0 truncate text-[15px] font-semibold">
+                  {row.name}
+                </span>
+                <span className="shrink-0 text-[13px] text-ink-2">
+                  {formatCount(details.length, EXPENSE_FORMS)}
+                </span>
+                <TotalMoney
+                  minor={row.totalMinor}
+                  currency={displayCurrency}
+                  unconverted={row.unconverted}
+                  className="ml-auto shrink-0 text-[15px] font-medium whitespace-nowrap"
+                />
+                <ChevronDown
+                  aria-hidden
                   className={cn(
-                    "flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-border/60",
-                    i % 2 === 1 && "bg-surface-sunken",
+                    "size-[18px] shrink-0 text-ink-3 transition-transform",
+                    open && "rotate-180",
                   )}
-                >
-                  <ExpenseRowContent
-                    title={e.note}
-                    subtitle={formatRelativeDay(e.spentAt)}
-                    amountMinor={e.amountMinor}
-                    currency={e.currency}
-                    convertedMinor={e.convertedMinor}
-                    displayCurrency={e.displayCurrency}
+                  strokeWidth={1.75}
+                />
+              </span>
+              <span className="flex w-full items-center gap-2.5">
+                <span className="h-1.5 flex-1 overflow-hidden rounded-chip bg-page">
+                  <span
+                    className="block h-full rounded-chip"
+                    style={{ width: `${width}%`, backgroundColor: row.color }}
                   />
-                </button>
-              </li>
-            ))
-          )}
-        </ul>
-      ) : null}
-    </li>
+                </span>
+                <span className="w-9 text-right text-xs text-ink-2 tabular-nums">
+                  {pct}%
+                </span>
+              </span>
+            </button>
+
+            {open ? (
+              <ul className="mx-3 mb-3 overflow-hidden rounded-field bg-page">
+                {details.map((e, j) => (
+                  <li key={e.id} className={cn(j > 0 && "border-t border-line")}>
+                    <button
+                      type="button"
+                      onClick={() => onSelect(e)}
+                      className="flex min-h-14 w-full cursor-pointer items-center gap-3 px-3.5 py-[9px] text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+                    >
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="truncate text-[15px]/[18px] font-medium">
+                          {e.note}
+                        </span>
+                        <span className="text-[13px]/[16px] text-ink-2">
+                          {formatChipDate(e.spentAt)}
+                        </span>
+                      </span>
+                      <ExpenseAmount
+                        expense={e}
+                        className="shrink-0 text-sm font-medium whitespace-nowrap"
+                      />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

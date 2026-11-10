@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
-import { GoogleButton } from "@/components/ui/google-button";
+import { GoogleContinueButton } from "@/components/kit/google-continue-button";
 
 export function GoogleSignIn({
   hasGoogle,
@@ -36,14 +36,18 @@ export function GoogleSignIn({
 
   return (
     <>
-      <div className="my-5 flex items-center gap-3 text-xs text-text-muted">
-        <span className="h-px flex-1 bg-border" />
-        или
-        <span className="h-px flex-1 bg-border" />
-      </div>
-      <GoogleButton onClick={onGoogle} loading={loading} disabled={disabled}>
+      <GoogleContinueButton
+        onClick={onGoogle}
+        loading={loading}
+        disabled={disabled}
+      >
         {label}
-      </GoogleButton>
+      </GoogleContinueButton>
+      <div aria-hidden className="flex items-center gap-3 text-[13px] text-ink-3">
+        <span className="h-px flex-1 bg-line" />
+        или
+        <span className="h-px flex-1 bg-line" />
+      </div>
     </>
   );
 }

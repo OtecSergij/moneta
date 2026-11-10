@@ -8,6 +8,7 @@ type SegmentProps<T extends string> = {
   value: T;
   onChange: (value: T) => void;
   ariaLabel: string;
+  tone?: "text" | "symbol";
   className?: string;
 };
 
@@ -16,6 +17,7 @@ export function Segment<T extends string>({
   value,
   onChange,
   ariaLabel,
+  tone = "text",
   className,
 }: SegmentProps<T>) {
   return (
@@ -36,7 +38,10 @@ export function Segment<T extends string>({
             aria-pressed={selected}
             onClick={() => onChange(option.value)}
             className={cn(
-              "h-10 cursor-pointer rounded-[10px] text-sm font-semibold tabular-nums transition-colors",
+              "h-10 cursor-pointer rounded-[10px] tabular-nums transition-colors",
+              tone === "symbol"
+                ? "text-[15px] font-medium"
+                : "text-sm font-semibold",
               "focus-visible:outline-2 focus-visible:outline-primary",
               selected ? "bg-card text-ink shadow-raised" : "text-ink-2",
             )}

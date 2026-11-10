@@ -12,9 +12,8 @@ import {
 import { authClient } from "@/lib/auth-client";
 import { AuthCard } from "@/components/ui/auth-card";
 import { StatusCard } from "@/components/ui/status-card";
-import { Field } from "@/components/ui/field";
-import { TextInput } from "@/components/ui/text-input";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/kit/button";
+import { TextField } from "@/components/kit/text-field";
 
 export function ForgotPasswordForm() {
   const [sent, setSent] = useState(false);
@@ -37,13 +36,12 @@ export function ForgotPasswordForm() {
 
   if (sent) {
     return (
-      <StatusCard icon={MailCheck} title="Проверьте почту">
+      <StatusCard
+        icon={MailCheck}
+        title="Проверьте почту"
+        action={{ href: "/login", label: "Вернуться ко входу" }}
+      >
         Мы отправили ссылку для сброса пароля.
-        <p className="mt-6">
-          <Link href="/login" className="text-accent hover:text-accent-hover">
-            Вернуться ко входу
-          </Link>
-        </p>
       </StatusCard>
     );
   }
@@ -52,28 +50,30 @@ export function ForgotPasswordForm() {
     <AuthCard title="Восстановление пароля" subtitle="Введите email.">
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="mt-6 flex flex-col gap-4"
+        className="flex flex-col gap-3.5"
         noValidate
       >
-        <Field label="Email" htmlFor="email" error={errors.email?.message}>
-          <TextInput
-            id="email"
-            type="email"
-            inputMode="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            aria-invalid={!!errors.email}
-            {...register("email")}
-          />
-        </Field>
+        <TextField
+          label="Email"
+          id="email"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          placeholder="you@example.com"
+          error={errors.email?.message}
+          {...register("email")}
+        />
 
-        <Button type="submit" loading={isSubmitting} className="w-full">
+        <Button type="submit" loading={isSubmitting} className="mt-1.5">
           Отправить ссылку
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-text-muted">
-        <Link href="/login" className="text-accent hover:text-accent-hover">
+      <p className="text-center text-[15px]">
+        <Link
+          href="/login"
+          className="font-medium text-primary-ink hover:text-primary"
+        >
           Вернуться ко входу
         </Link>
       </p>

@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
-import { todayISO } from "@/lib/dates";
 import { type ExpenseFormValues } from "@/lib/expense-form";
 import { EXPENSE_NOTE_MAX } from "@/lib/expense-constants";
 import type {
@@ -12,9 +11,10 @@ import type {
 import { type CurrencyCode } from "@/lib/currency";
 import { formatMoney, parseMoney } from "@/lib/money";
 import { quoteConversionAction } from "@/lib/actions/fx";
-import { Field } from "@/components/ui/field";
-import { TextInput } from "@/components/ui/text-input";
-import { CurrencySegment } from "@/components/ui/currency-segment";
+import { TextField } from "@/components/kit/text-field";
+import { CurrencySegment } from "@/components/currency/currency-segment";
+import { AmountField } from "@/components/expenses/amount-field";
+import { DateChips } from "@/components/expenses/date-chips";
 import { CategoryChips } from "@/components/categories/category-chips";
 import { NewCategoryPanel } from "@/components/categories/new-category-panel";
 import { CategoryEditSheet } from "@/components/categories/category-edit-sheet";
@@ -29,9 +29,9 @@ type VisiblePreview = { status: "pending" } | ConversionQuote;
 
 function previewLabel(preview: VisiblePreview): string {
   if (preview.status === "value") {
-    return formatMoney(preview.convertedMinor, preview.displayCurrency);
+    return `≈ ${formatMoney(preview.convertedMinor, preview.displayCurrency)}`;
   }
-  return preview.status === "unavailable" ? "курс недоступен" : "…";
+  return preview.status === "unavailable" ? "Курс недоступен" : "≈ …";
 }
 
 type CategoryProps =
@@ -48,8 +48,9 @@ function sortByName<T extends Category>(list: T[]): T[] {
 
 export function ExpenseFormFields({
   displayCurrency,
+  size,
   ...categoryProps
-}: { displayCurrency: CurrencyCode } & CategoryProps) {
+}: { displayCurrency: CurrencyCode; size: "main" | "sheet" } & CategoryProps) {
   const {
     register,
     control,
@@ -62,20 +63,9 @@ export function ExpenseFormFields({
   const amount = useWatch({ control, name: "amount" });
   const currency = useWatch({ control, name: "currency" });
 
-  // Controlled date field (value + setValue), NOT register(): an uncontrolled
-  // register'd date input desync'd from the form after reset() — adding a second
-  // expense in a row left spentAt empty/"invalid" though the picker showed a
-  // date. The plain ref sets `max` post-render (hydration-safe, no setState),
-  // and again whenever the date changes, so the quick-add reset() after
-  // midnight lifts the cap to the new today.
   function selectCategory(id: string) {
     setValue("categoryId", id, { shouldValidate: true });
   }
-
-  const spentAtRef = useRef<HTMLInputElement | null>(null);
-  useEffect(() => {
-    if (spentAtRef.current) spentAtRef.current.max = todayISO();
-  }, [spentAt]);
 
   // With matching currencies convert.ts's identity rule returns exactly the
   // entered amount, so there is nothing to show and no quote to request.
@@ -143,79 +133,55 @@ export function ExpenseFormFields({
 
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-3">
-          <Field label="Сумма" htmlFor="amount" error={errors.amount?.message}>
-            <TextInput
-              id="amount"
-              inputMode="decimal"
-              autoComplete="off"
-              placeholder="0"
-              className="tabular-nums"
-              aria-invalid={!!errors.amount}
-              {...register("amount")}
-            />
-          </Field>
+      <AmountField
+        id={size === "main" ? "amount" : "e-amount"}
+        size={size}
+        currency={currency}
+        preview={preview ? previewLabel(preview) : null}
+        error={errors.amount?.message}
+        {...register("amount")}
+      />
 
-          <CurrencySegment
-            value={currency}
-            onChange={(c) =>
-              setValue("currency", c, { shouldValidate: true })
-            }
-            label="Валюта траты"
-          />
+      <CurrencySegment
+        value={currency}
+        onChange={(c) => setValue("currency", c, { shouldValidate: true })}
+        label="Валюта"
+      />
 
-          {preview ? (
-            <p className="inline-flex min-h-11 w-fit items-center self-start px-1 text-sm text-text-muted">
-              {previewLabel(preview)}
-            </p>
-          ) : null}
-        </div>
-
-        <div>
-          {categoryProps.categoriesEditable ? (
-            <EditableCategories
-              categories={categoryProps.categories}
-              onCategoriesChange={categoryProps.onCategoriesChange}
-              value={categoryId}
-              onChange={selectCategory}
-              error={errors.categoryId?.message}
-              onRemoved={(id) => {
-                if (id === categoryId) setValue("categoryId", "");
-              }}
-            />
-          ) : (
-            <CategoryChips
-              categories={categoryProps.categories}
-              value={categoryId}
-              onChange={selectCategory}
-              error={errors.categoryId?.message}
-            />
-          )}
-        </div>
-      </div>
-
-      <Field label="Описание" htmlFor="note" error={errors.note?.message}>
-        <TextInput
-          id="note"
-          maxLength={EXPENSE_NOTE_MAX}
-          aria-invalid={!!errors.note}
-          {...register("note")}
+      {categoryProps.categoriesEditable ? (
+        <EditableCategories
+          categories={categoryProps.categories}
+          onCategoriesChange={categoryProps.onCategoriesChange}
+          value={categoryId}
+          onChange={selectCategory}
+          error={errors.categoryId?.message}
+          onRemoved={(id) => {
+            if (id === categoryId) setValue("categoryId", "");
+          }}
         />
-      </Field>
-
-      <Field label="Дата" htmlFor="spentAt" error={errors.spentAt?.message}>
-        <TextInput
-          id="spentAt"
-          type="date"
-          ref={spentAtRef}
-          value={spentAt ?? ""}
-          onChange={(e) =>
-            setValue("spentAt", e.target.value, { shouldValidate: true })
-          }
-          aria-invalid={!!errors.spentAt}
+      ) : (
+        <CategoryChips
+          categories={categoryProps.categories}
+          value={categoryId}
+          onChange={selectCategory}
+          error={errors.categoryId?.message}
         />
-      </Field>
+      )}
+
+      <TextField
+        id={size === "main" ? "note" : "e-note"}
+        label="Описание"
+        placeholder="Например, кофе с собой"
+        maxLength={EXPENSE_NOTE_MAX}
+        error={errors.note?.message}
+        {...register("note")}
+      />
+
+      <DateChips
+        value={spentAt ?? ""}
+        onChange={(iso) => setValue("spentAt", iso, { shouldValidate: true })}
+        error={errors.spentAt?.message}
+      />
     </>
   );
 }

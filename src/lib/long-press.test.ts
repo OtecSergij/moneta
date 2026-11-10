@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createLongPress } from "./long-press";
+import { CLICK_SWALLOW_WINDOW_MS, createLongPress } from "./long-press";
 
 describe("createLongPress", () => {
   beforeEach(() => vi.useFakeTimers());
@@ -65,12 +65,48 @@ describe("createLongPress", () => {
     expect(lp.consumeClick()).toBe(false);
   });
 
+  it("swallows a programmatic click right after the gesture", () => {
+    const { lp } = setup();
+    lp.pointerDown(0, 0);
+    vi.advanceTimersByTime(600);
+    lp.pointerUp();
+    expect(lp.consumeClick()).toBe(true);
+  });
+
+  it("keeps the flag while the finger is still down", () => {
+    const { lp } = setup();
+    lp.pointerDown(0, 0);
+    vi.advanceTimersByTime(500 + CLICK_SWALLOW_WINDOW_MS * 3);
+    lp.pointerUp();
+    expect(lp.consumeClick()).toBe(true);
+  });
+
+  it("disarms shortly after a gesture whose click was lost", () => {
+    const { lp } = setup();
+    lp.pointerDown(0, 0);
+    vi.advanceTimersByTime(500);
+    lp.pointerUp();
+    vi.advanceTimersByTime(CLICK_SWALLOW_WINDOW_MS);
+    expect(lp.consumeClick()).toBe(false);
+  });
+
   it("does not swallow a keyboard click after a gesture whose click was lost", () => {
     const { lp } = setup();
     lp.pointerDown(0, 0);
     vi.advanceTimersByTime(500);
     lp.pointerUp();
-    expect(lp.consumeClick(false)).toBe(false);
+    lp.keyDown();
+    expect(lp.consumeClick()).toBe(false);
+  });
+
+  it("does not swallow the click of the next tap", () => {
+    const { lp } = setup();
+    lp.pointerDown(0, 0);
+    vi.advanceTimersByTime(500);
+    lp.pointerLeave();
+    lp.pointerDown(0, 0);
+    vi.advanceTimersByTime(100);
+    lp.pointerUp();
     expect(lp.consumeClick()).toBe(false);
   });
 

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
+import { PAGE_BG } from "@/lib/brand";
 import "./globals.css";
 
 const inter = Inter({
@@ -31,7 +32,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   colorScheme: "light",
-  themeColor: "#ffffff",
+  themeColor: PAGE_BG,
 };
 
 export default function RootLayout({

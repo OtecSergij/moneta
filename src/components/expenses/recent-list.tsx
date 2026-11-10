@@ -7,9 +7,6 @@ import { formatRelativeDay } from "@/lib/dates";
 import { ExpenseListRow } from "@/components/expenses/expense-list-row";
 import { useExpenseEditor } from "@/components/expenses/use-expense-editor";
 
-// Home "Последние" list — same edit/delete dialog as History, so a just-logged
-// expense can be fixed without leaving the home screen. Flat (not day-grouped):
-// each row carries its own date in the subtitle.
 export function RecentList({
   expenses,
   categories,
@@ -24,25 +21,33 @@ export function RecentList({
   );
 
   return (
-    <>
-      <ul className="flex flex-col gap-1">
-        {expenses.map((e, i) => {
-          const category = categoryById.get(e.categoryId);
-          if (!category) return null;
-          return (
+    <section aria-labelledby="recent-title" className="mx-4 mt-7">
+      <h2
+        id="recent-title"
+        className="px-1 pb-2.5 text-[17px] font-semibold"
+      >
+        Последние
+      </h2>
+      <ul className="overflow-hidden rounded-card bg-card">
+        {expenses
+          .flatMap((e) => {
+            const category = categoryById.get(e.categoryId);
+            return category ? [{ e, category }] : [];
+          })
+          .map(({ e, category }, i) => (
             <ExpenseListRow
               key={e.id}
               expense={e}
               color={category.color}
               title={e.note}
-              subtitle={`${formatRelativeDay(e.spentAt)} · ${category.name}`}
+              when={formatRelativeDay(e.spentAt)}
+              subtitle={category.name}
               index={i}
               onClick={openEditor}
             />
-          );
-        })}
+          ))}
       </ul>
       {editor}
-    </>
+    </section>
   );
 }

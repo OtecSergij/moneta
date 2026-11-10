@@ -1,24 +1,23 @@
+import type { ReactNode } from "react";
 import type { ExpenseWithConversion } from "@/repositories/expenses";
 import { ExpenseRowContent } from "@/components/expenses/expense-row-content";
 import { cn } from "@/lib/utils";
 
-// One clickable, zebra-striped expense row — shared by the home "Последние" list
-// and the History day list. `index` drives the zebra tint (even rows tinted).
-// Both lead with the description (business-spec §5.2): the subtitle is
-// "дата · категория" on home (flat list) and just the category under a day
-// heading in History. Clicking calls `onClick(expense)` (→ edit/delete dialog).
+// Rows sit in a white rounded card; `index` > 0 draws the divider above.
 export function ExpenseListRow({
   expense,
   color,
   title,
+  when,
   subtitle,
   index,
   onClick,
 }: {
   expense: ExpenseWithConversion;
-  color: string;
+  color?: string;
   title: string;
-  subtitle?: string | null;
+  when?: string;
+  subtitle?: ReactNode;
   index: number;
   onClick: (expense: ExpenseWithConversion) => void;
 }) {
@@ -28,18 +27,16 @@ export function ExpenseListRow({
         type="button"
         onClick={() => onClick(expense)}
         className={cn(
-          "flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-border/60",
-          index % 2 === 1 && "bg-surface-sunken",
+          "flex min-h-16 w-full cursor-pointer items-center gap-3 border-t px-4 py-[11px] text-left text-ink transition-colors hover:bg-page focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary",
+          index === 0 ? "border-transparent" : "border-row-line",
         )}
       >
         <ExpenseRowContent
+          expense={expense}
           color={color}
           title={title}
+          when={when}
           subtitle={subtitle}
-          amountMinor={expense.amountMinor}
-          currency={expense.currency}
-          convertedMinor={expense.convertedMinor}
-          displayCurrency={expense.displayCurrency}
         />
       </button>
     </li>

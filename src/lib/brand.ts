@@ -1,10 +1,11 @@
 // Single source of truth for the brand mark used by code-generated icons
-// (manifest colours + the apple-touch-icon). ACCENT mirrors `--accent` (light)
-// in globals.css — CSS variables can't be read at build time, so the value is
-// repeated here on purpose. The static SVGs in /public inline the same M_PATH;
+// (manifest colours + the apple-touch-icon). ACCENT and PAGE_BG mirror
+// `--color-primary` and `--color-page` in globals.css — CSS variables can't be
+// read at build time, so the values are repeated here on purpose. The static SVGs in /public inline the same M_PATH;
 // they can't import TS, so keep them in sync by hand if the mark changes.
 export const ACCENT = "#2563eb";
 export const ON_ACCENT = "#ffffff";
+export const PAGE_BG = "#F4F4F5";
 
 // Lowercase "m" as a vector outline on a 512×512 canvas — no <text>, so it
 // rasterises identically on every platform (incl. maskable tooling).

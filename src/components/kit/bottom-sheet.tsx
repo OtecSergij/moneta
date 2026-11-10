@@ -15,6 +15,7 @@ type BottomSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tone?: "white" | "gray";
+  compact?: boolean;
   className?: string;
   onOpenAutoFocus?: (event: Event) => void;
   children: ReactNode;
@@ -59,6 +60,7 @@ export function BottomSheet({
   open,
   onOpenChange,
   tone = "white",
+  compact = false,
   title,
   ariaLabel,
   className,
@@ -137,8 +139,12 @@ export function BottomSheet({
           </div>
           <div
             className={cn(
-              "flex min-h-0 flex-col overflow-y-auto overscroll-contain pb-[calc(32px+env(safe-area-inset-bottom))]",
-              tone === "white" ? "gap-5 px-5 pt-2" : "gap-3 px-4",
+              "flex min-h-0 flex-col overflow-y-auto overscroll-contain",
+              compact
+                ? "gap-4 px-5 pt-[5px] pb-[calc(28px+env(safe-area-inset-bottom))]"
+                : tone === "white"
+                  ? "gap-5 px-5 pt-[9px] pb-[calc(32px+env(safe-area-inset-bottom))]"
+                  : "gap-3 px-4 pt-px pb-[calc(32px+env(safe-area-inset-bottom))]",
               className,
             )}
           >

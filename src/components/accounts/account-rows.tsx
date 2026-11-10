@@ -8,6 +8,8 @@ import { AccountSheet } from "@/components/accounts/account-sheet";
 import { accountToneClass } from "@/components/accounts/tones";
 import { cn } from "@/lib/utils";
 
+const NO_RATE_NOTE = "Не пересчитано: нет курса на сегодня";
+
 export function AccountRows({
   rows,
   displayCurrency,
@@ -40,7 +42,10 @@ export function AccountRows({
                   <span className="min-w-0 truncate">{row.name}</span>
                 </span>
                 {row.currency === displayCurrency ? null : row.convertedMinor === null ? (
-                  <span className="pl-[18px] text-[13px] text-ink-3">Нет курса</span>
+                  <span className="pl-[18px] text-[13px] text-ink-2" title={NO_RATE_NOTE}>
+                    <span aria-hidden="true">≈</span>
+                    <span className="sr-only">{NO_RATE_NOTE}</span>
+                  </span>
                 ) : (
                   <span className="pl-[18px] text-[13px] text-ink-2 tabular-nums">
                     ≈ {formatMoney(row.convertedMinor, displayCurrency)}

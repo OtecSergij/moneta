@@ -14,6 +14,7 @@ import {
   subDays,
 } from "date-fns";
 import { ru } from "date-fns/locale";
+import { z } from "zod";
 
 export interface DateRange {
   from: string; // inclusive "YYYY-MM-DD"
@@ -104,6 +105,22 @@ export const RANGE_PRESETS = [
   { key: "7d", label: "7 дней", range: (now?: Date) => lastNDays(7, now) },
 ] as const;
 
+const isoDate = z.iso.date();
+
+/** History range from the URL; missing, invalid or reversed params fall back to the last 7 days. */
+export function resolveHistoryRange(
+  from?: string,
+  to?: string,
+  now: Date = new Date(),
+): DateRange {
+  const f = isoDate.safeParse(from);
+  const t = isoDate.safeParse(to);
+  if (f.success && t.success && f.data <= t.data) {
+    return { from: f.data, to: t.data };
+  }
+  return lastNDays(7, now);
+}
+
 export type RangePresetKey = (typeof RANGE_PRESETS)[number]["key"];
 
 /** True if `iso` is strictly after today (used to reject future expense dates). */
@@ -121,13 +138,15 @@ export function formatDayHeading(iso: string, now: Date = new Date()): string {
 }
 
 /**
- * Relative day label, shared everywhere a single expense date is shown (history
- * tabs + home list): "Сегодня" for today, the weekday name ("Вторник") for the
- * previous 6 days, otherwise the day heading ("1 июня" / "1 июня 2025").
+ * Relative day label for the home list: "Сегодня", "Вчера", the weekday name
+ * ("Вторник") for earlier days of the current Monday-based week, otherwise the
+ * day heading ("1 июня" / "1 июня 2025").
  */
 export function formatRelativeDay(iso: string, now: Date = new Date()): string {
   const diff = differenceInCalendarDays(now, parseISODate(iso));
   if (diff === 0) return "Сегодня";
-  if (diff >= 1 && diff <= 6) return weekday(iso, "EEEE");
+  if (diff === 1) return "Вчера";
+  const monday = toISODate(startOfWeek(now, { weekStartsOn: 1 }));
+  if (diff > 1 && iso >= monday) return weekday(iso, "EEEE");
   return formatDayHeading(iso, now);
 }

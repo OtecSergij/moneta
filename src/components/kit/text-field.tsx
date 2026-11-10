@@ -6,6 +6,7 @@ type TextFieldProps = Omit<ComponentProps<"input">, "size"> & {
   labelHidden?: boolean;
   variant?: "default" | "title";
   size?: "md" | "lg";
+  labelGap?: 6 | 8;
   error?: string;
 };
 
@@ -14,6 +15,7 @@ export function TextField({
   labelHidden = false,
   variant = "default",
   size = "md",
+  labelGap = 6,
   error,
   id,
   className,
@@ -25,7 +27,7 @@ export function TextField({
   const errorId = `${inputId}-error`;
 
   return (
-    <div className={cn("flex flex-col gap-1.5", className)}>
+    <div className={cn("flex flex-col", labelGap === 8 ? "gap-2" : "gap-1.5", className)}>
       <label
         htmlFor={inputId}
         className={cn(

@@ -5,7 +5,6 @@ import { listCategories } from "@/repositories/categories";
 import {
   lastUsedAccountId,
   lastUsedCategoryId,
-  lastUsedCurrency,
   listExpenses,
 } from "@/repositories/expenses";
 import { listAccounts } from "@/repositories/accounts";
@@ -51,7 +50,6 @@ export default async function HomePage() {
     weekRows,
     recent,
     lastCategoryId,
-    lastCurrency,
     lastAccountId,
   ] = await Promise.all([
     listCategories(spaceId),
@@ -61,15 +59,9 @@ export default async function HomePage() {
     listExpenses(spaceId, displayCurrency, elapsed, rateIndex),
     listExpenses(spaceId, displayCurrency, { limit: 10 }, rateIndex),
     lastUsedCategoryId(spaceId, user.id),
-    lastUsedCurrency(spaceId, user.id),
     lastUsedAccountId(spaceId, user.id),
   ]);
-  const selection = defaultAccountSelection({
-    accounts,
-    lastAccountId,
-    lastCurrency,
-    displayCurrency,
-  });
+  const selection = defaultAccountSelection(accounts, lastAccountId);
 
   const weekTotal = sumConverted(weekRows, displayCurrency, rateIndex);
   const byDay = new Map(
@@ -107,8 +99,7 @@ export default async function HomePage() {
       <QuickAddForm
         initialCategories={categories}
         initialCategoryId={lastCategoryId ?? ""}
-        initialCurrency={selection.currency}
-        initialAccountId={selection.accountId}
+        initialSelection={selection}
         accounts={accounts}
         displayCurrency={displayCurrency}
       />

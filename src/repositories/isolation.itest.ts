@@ -15,7 +15,7 @@ import {
   summary,
   updateExpense,
 } from "@/repositories/expenses";
-import { mkExpense, mkMember, mkMigratedOwner, mkSpaceUser } from "@/test/factories";
+import { mkAccount, mkExpense, mkMember, mkMigratedOwner, mkSpaceUser } from "@/test/factories";
 
 async function setup() {
   const m = await mkMigratedOwner();
@@ -70,6 +70,7 @@ describe("space isolation", () => {
     });
     expect(
       await createExpense(f.spaceId, f.user.id, {
+        accountId: (await mkAccount(f.spaceId, f.user.id)).id,
         categoryId: category.id,
         amountMinor: 100,
         currency: "RUB",

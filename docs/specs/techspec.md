@@ -20,7 +20,7 @@ categories(+space_id → spaces CASCADE, +created_by → user RESTRICT, −user_
     UNIQUE(space_id,name) · UNIQUE(id,space_id)
 expenses(+space_id → spaces CASCADE, +created_by → user RESTRICT, −user_id,
     FK(category_id,space_id) → categories(id,space_id) RESTRICT   [вместо одиночного FK на category_id],
-    +account_id → accounts SET NULL [ф.4])
+    +account_id NOT NULL → accounts CASCADE [ф.4])
     INDEX(space_id, spent_at DESC) · INDEX(space_id, created_by, created_at DESC)
     · INDEX(account_id, created_at) [ф.4]
 lists(id, space_id → spaces CASCADE, created_by → user RESTRICT, name,
@@ -136,7 +136,7 @@ export const requireSpace = cache(async (): Promise<SpaceContext> => {
 | `--shadow-sheet` / `--shadow-raised` | 0 -12px 32px rgba(0,0,0,.14) / 0 1px 2px rgba(0,0,0,.08) | окно / выбранный сегмент |
 | `--radius-chip` / `-field` / `-card` / `-sheet` | 999px / 14px / 20px / 24px | чип / поле / карточка / окно |
 
-- Скругления вне системных (12, 10, 16, 7, 9 px) — произвольными значениями (`rounded-[12px]`), как на доске. Одиночные цвета (#8E8E96, #7A7A80, #F8FAFF) снапаются к ближайшему токену.
+- Скругления вне системных (12, 10, 16, 7, 9 px) — произвольными значениями (`rounded-[12px]`), как на доске. #8E8E96 и #F8FAFF — токены `--color-check-line` (рамка пустого чекбокса, 2 px) и `--color-edit-row` (строка в правке); #7A7A80 снапается к ближайшему токену.
 - Аватар: тон по порядку участников (владелец первый, затем по `joined_at`), пары по кругу: #E8EFFD/#1D4ED8 (владелец), #FCE7F3/#9D174D, #DCFCE7/#166534, #FEF3C7/#92400E. На приглашении у владельца всегда синий. `src/lib/avatar.ts`: `avatarInitial(name)`, `avatarTone(index)`.
 - Синие тона счетов по рангу: #1D4ED8, #60A5FA, #BFDBFE, дальше повторяется последний.
 - Шрифт Inter; везде `tabular-nums`, символ валюты справа, иконки lucide со `strokeWidth={1.75}`.
@@ -315,7 +315,7 @@ npx drizzle-kit generate   # должно ответить «No schema changes»
 
    // src/repositories/categories.ts
    type CategoryWithUsage = Category & { hasExpenses: boolean };   // hasExpenses по всему пространству
-   listCategories(spaceId: SpaceId): Promise<CategoryWithUsage[]>
+   listCategories(spaceId: SpaceId): Promise<CategoryWithUsage[]>   // порядок создания (created_at, id); новая — в конец
    getCategory(spaceId, id)
    createCategory(spaceId, userId, input)
    updateCategory(spaceId, id, patch)
@@ -329,7 +329,6 @@ npx drizzle-kit generate   # должно ответить «No schema changes»
    updateExpense(spaceId, id, patch) // категория только своего пространства; 23503 → null
    deleteExpense(spaceId, id)
    lastUsedCategoryId(spaceId, userId)
-   lastUsedCurrency(spaceId, userId)
 
    // src/repositories/fx-rates.ts
    backfillRates(spaceId, deps?)
@@ -348,10 +347,10 @@ npx drizzle-kit generate   # должно ответить «No schema changes»
    - `src/app/invite/[token]/invite-form.tsx` (client): `AvatarInitial` (тон 0) и «<имя владельца> приглашает вас вести траты вместе»; `GoogleContinueButton` и «или» только при `hasGoogle`; `TextField` «Email» и «Пароль», `Button` «Зарегистрироваться»; поля имени нет. Состояние «Проверьте почту» — текст из `sign-up-form.tsx` в стиле доски `Invite`. Тост на `error`.
    - `src/app/invite/[token]/invite-invalid.tsx`: иконка lucide в круге `warn-soft`/`warn-ink`, «Ссылка больше не работает», текст как на холсте, ссылка «Войти в moneta» → `/login`.
 10. **Настройки** — доски `Settings` (`share`: pair, solo), `SettingsInvite`:
-    - `src/app/settings/page.tsx`: по холсту, но без панели вкладок; «Назад» (lucide `ChevronLeft`): `router.back()` при `history.length > 1`, иначе `/`; блоки «Совместный доступ» и «Аккаунт» (подпись «Email», адрес, «Выйти»). `getActiveInviteForOwner` вызывается только при `role === "owner"`; участнику токен не загружается.
+    - `src/app/settings/page.tsx`: по холсту, но без панели вкладок; «Назад» (lucide `ChevronLeft`): `router.back()`, только если предыдущая запись истории внутри приложения (`navigation.canGoBack`), иначе ссылка на `/` — из приложения не уводит; блоки «Совместный доступ» и «Аккаунт» (подпись «Email», адрес, «Выйти»). `getActiveInviteForOwner` вызывается только при `role === "owner"`; участнику токен не загружается.
     - `src/components/settings/sharing-section.tsx`: строки участников — аватар (тон по индексу), имя с суффиксом «· вы, владелец» / «· вы» / «· владелец», email; блок ссылки только у владельца.
     - `src/components/settings/invite-link.tsx` (client): нет действующей ссылки (нет вовсе, использована, отозвана, истекла) → «Создать ссылку-приглашение». Есть → подпись «Ссылка-приглашение», URL без протокола с многоточием, «Копировать» (`select`) копирует полный URL и на 2 с становится «Скопировано» на `bg-ok`; ниже «Создать новую ссылку».
-    - `src/components/logout-button.tsx`: `Button secondary` «Выйти».
+    - `src/components/logout-button.tsx`: строка «Выйти» во всю ширину (lucide `LogOut` 20 px, `text-danger-ink`, 16/500, 56 px, линия сверху), ошибка → тост.
 11. **Правка категорий** — доски `Main`, `MainStates`, `CategoryEdit`, `CategoryEditEmpty`:
     - `src/components/categories/category-chips.tsx`: на `Chip`; с `editable` долгое нажатие или правый клик → `onEdit` и чип «Новая»; без `editable` — только выбор.
     - `src/components/categories/new-category-panel.tsx`: `TextField` «Название категории», 15 цветов, «Отмена» и «Добавить»; новая категория становится выбранной; если категорий нет, панель открыта сразу.
@@ -465,7 +464,7 @@ Google-путь проверяется локально только при те
    - `src/components/currency/display-currency-chip.tsx` и `currency-sheet.tsx` (доска `CurrencySheet`): серый `BottomSheet` «Валюта отображения» — символ в чипе, название, `Check` у выбранной; обновление оптимистичное. `src/components/currency/currency-segment.tsx` — на `kit/segment`. Удалить `src/components/settings/display-currency-switcher.tsx`.
    - `src/components/ui/{money,total-money,category-dot}.tsx` — без старых токенов; у `TotalMoney` новый проп `size="hero"` (итог недели, см. типографику).
 5. **«Траты» и карточка траты** — доски `Main`, `MainEmpty`, `MainStates`, `ExpenseSheet`:
-   - `src/app/page.tsx` сверху вниз: шапка «Траты» с чипом валюты и шестерёнкой; `WeekCard`; форма «Новая трата» (`AmountField`, сегмент валют, чипы категорий с «Новая», «Описание» с placeholder «Например, кофе с собой», `DateChips`, `Button primary` «Добавить трату»); «Последние» — до 10 строк «название · когда · ● категория · сумма в валюте отображения», пусто → блока нет; `TabBar active="main"`.
+   - `src/app/page.tsx` сверху вниз: шапка «Траты» с чипом валюты и шестерёнкой; `WeekCard`; форма «Новая трата» (`AmountField`, сегмент валют, чипы категорий с «Новая», «Описание» с placeholder «Например, кофе с собой», `DateChips`, `Button primary` «Добавить трату»); «Последние» — до 10 строк «название · когда · ● категория · сумма в валюте отображения», «когда» — `formatRelativeDay` («Сегодня», «Вчера», день недели в пределах недели с понедельника, иначе дата; до гидрации — дата), пусто → блока нет; `TabBar active="main"`.
    - `src/components/expenses/week-card.tsx`: «На этой неделе · 9–15 ноября» (`weekRangeLabel`); итог `TotalMoney size="hero"`; 7 столбиков Пн–Вс: максимум 56 px, минимум 6 px, день без трат или в будущем — 4 px `bg-line`, прошедшие `bg-bar-past`, сегодня `bg-primary` с жирной подписью. Карточка не ссылка.
    - `src/components/expenses/amount-field.tsx`: 36 px (главная) или 30 px (окно), символ справа, «≈ X», когда валюта отличается от валюты отображения.
    - `src/components/expenses/date-chips.tsx`: «Сегодня», «Вчера», «Другая» с lucide `Calendar`; выбранная дата становится третьим чипом («Вт, 10 ноября», с годом вне текущего года); нативный `<input type="date">` и `showPicker()`, `max = todayISO()`.
@@ -474,7 +473,7 @@ Google-путь проверяется локально только при те
    - `src/lib/dates.ts`: `weekRange`, `weekRangeLabel` (внутри месяца «9–15 ноября», через месяц «27 октября – 2 ноября», через год — с годами), `formatChipDate`.
 6. **«История»** — доски `History`, `HistoryDays`, `HistoryEmpty`; `src/app/history/page.tsx`, `src/components/history/{history-filter,period-tabs,summary-bars,history-list}.tsx`:
    - шапка как на «Тратах»; `TabBar active="history"`;
-   - карточка периода: «От»/«До» с датой и `ChevronDown`, нативный пикер; при «от» позже «до» ставится до = от; чипы «Сегодня» и «7 дней», по умолчанию «Сегодня»;
+   - карточка периода: «От»/«До» с датой и lucide `Calendar`, нативный пикер; при «от» позже «до» ставится до = от; чипы «Сегодня» и «7 дней», по умолчанию «7 дней»;
    - «Итого»: сумма и «N трат», видно и при пустом периоде;
    - сегмент «По категориям/По дням» на `kit/segment`, скрыт при пустом периоде;
    - «По категориям»: точка, имя, «N трат», сумма, `ChevronDown`, полоса и %; категория раскрывается в траты;
@@ -485,7 +484,7 @@ Google-путь проверяется локально только при те
    - `src/app/(auth)/**`, `src/components/ui/{auth-card,status-card}.tsx`, `src/components/google-sign-in.tsx`: на `kit/*` и новых токенах по образцу доски `Invite`; досок у этих экранов нет, тексты прежние. `google-sign-in.tsx` использует `GoogleContinueButton`; затем удалить `src/components/ui/google-button.tsx`.
 8. **Списки:**
    - `src/app/lists/page.tsx` — доски `Lists`, `ListsEmpty`; `src/app/lists/[id]/page.tsx`: `id` через `z.uuid()`, иначе `notFound()`; невидимый список → `notFound()`. На обоих `TabBar active="lists"`.
-   - `src/components/lists/list-rows.tsx`: название, бейдж «Только мне» (lucide `Lock` 12 px, `bg-page text-ink-badge`), «N из M», прогресс: `bg-ok` при N=M>0, иначе `bg-primary`; 0/0 — пустая дорожка.
+   - `src/components/lists/list-rows.tsx`: название, бейдж «Только мне» (lucide `Lock` 12 px, `bg-page text-ink-badge`), «N из M», прогресс: `bg-ok` при N=M>0, иначе `bg-primary`; 0/0 — пустая дорожка. На экране самого списка прогресс всегда `bg-primary`.
    - `src/components/lists/list-new-sheet.tsx` (доска `ListNew`): белое окно «Новый список» — «Название», «Виден только мне» со `Switch`, по умолчанию включён; «Создать список».
    - `src/components/lists/list-screen.tsx` (client; доски `List`, `ListEmpty`, `ListRename`): шапка — «Списки» с `ChevronLeft` и кнопка меню `MoreHorizontal`; заголовок с инлайн-переименованием (Enter или `Check` сохраняет, Escape отменяет, пустое не сохраняется); прогресс; поле «Добавить пункт» — Enter добавляет в конец неотмеченных; тап по пункту отмечает оптимистично с откатом при ошибке; `not_found` → `router.replace("/lists")` и тост.
    - `src/components/lists/list-item-row.tsx` (доска `ListItemEdit`): долгое нажатие или правый клик → инлайн-правка (поле, корзина `Trash2`, `Check`); Enter или `Check` сохраняет, корзина удаляет, Escape отменяет; blur отменяет, только если `relatedTarget` вне строки (иначе тап по корзине или `Check` не дойдёт); пустое не сохраняется.
@@ -594,39 +593,41 @@ Google-путь проверяется локально только при те
 
 ## Фаза 4 — связь трат и счетов
 
+> **Решение после приёмки:** трат без счёта нет. `expenses.account_id` NOT NULL, FK `(account_id, space_id) → accounts(id, space_id)` ON DELETE CASCADE (миграция `0008_expense_account_required` заводит старым тратам счёт «Основной» на каждую валюту, остаток 0). Валюта траты — валюта её счёта; «Без счёта» и сегмента валют в форме нет. По умолчанию — последний счёт автора, иначе первый (`created_at`). Счетов нет → поля суммы и описания и кнопка «Добавить трату» неактивны, вместо чипов ссылка «Создайте первый счёт» на `/accounts`. Удаление счёта удаляет его траты, подтверждение называет их число.
+
 ### Что сделать
 
 1. **Схема** `src/db/schema/expenses.ts` (импорт `accounts` относительный), `npx drizzle-kit generate --name=expense_account` → `0007_expense_account.sql`:
    ```ts
-   accountId: uuid("account_id").references(() => accounts.id, { onDelete: "set null" })
+   accountId: uuid("account_id").notNull()
+   foreignKey({ name: "expenses_account_same_space_fk", columns: [accountId, spaceId], foreignColumns: [accounts.id, accounts.spaceId] }).onDelete("cascade")  // + unique("accounts_id_space_uniq") на accounts
    index("expenses_account_created_idx").on(accountId, createdAt)
    ```
 2. **Репозитории:**
    ```ts
    // src/repositories/expenses.ts
-   ExpenseInput += accountId: z.uuid().nullable().optional()
+   ExpenseInput += accountId: z.uuid()
    createExpense / updateExpense       // проверка счёта
    lastUsedAccountId(spaceId, userId): Promise<string | null>
    // src/repositories/accounts.ts
    listAccounts(spaceId)               // остаток по формуле
    ```
-   - `createExpense` и `updateExpense` проверяют итоговую строку (текущая плюс патч): при `accountId` не null счёт должен быть в том же пространстве и `currency === account.currency`, иначе `null` и лог `expense.account_rejected`. Патч с одним `accountId` проверяется против текущей валюты, патч с одной валютой — против текущего счёта.
-   - `lastUsedAccountId` — счёт последней траты `created_by = я` в пространстве; нет счёта или счёт удалён → `null`.
+   - `createExpense` и `updateExpense` проверяют итоговую строку (текущая плюс патч): счёт должен быть в том же пространстве и `currency === account.currency`, иначе `null` и лог `expense.account_rejected`. Патч с одним `accountId` проверяется против текущей валюты, патч с одной валютой — против текущего счёта.
+   - `lastUsedAccountId` — счёт последней траты `created_by = я` в пространстве; трат нет → `null`.
    - `listAccounts`: формула остатка из «Деньги и остатки счетов» через LEFT JOIN с агрегатом; `sum(...)::bigint` приходит строкой → `Number()` с проверкой `Number.isSafeInteger`; порядок `created_at`.
    - `updateAccount`: правило переякорения прежнее; `loadedBalanceMinor` — вычисленный остаток, который показало окно.
 3. **Отрицательные суммы:** правки `divRoundHalfEven` и `minorToInput` из «Деньги и остатки счетов».
 4. **Логика формы:**
    ```ts
    // src/lib/expense-account.ts (чистая)
-   pickAccountCurrency(accounts, accountId, fallback): CurrencyCode
-   defaultAccountSelection({ accounts, lastAccountId, lastCurrency, displayCurrency }): { accountId: string | null; currency: CurrencyCode }
+   defaultAccountSelection(accounts, lastAccountId): { accountId: string; currency: CurrencyCode } | null
    ```
-   `src/lib/expense-form.ts`: `accountId: z.uuid().nullable()`, `toExpenseInput` передаёт его.
+   `src/lib/expense-form.ts`: `accountId: z.uuid()`, `toExpenseInput` передаёт его.
 5. **Форма** — доски `Main`, `MainStates`, `ExpenseSheet`:
-   - `src/components/expenses/account-chips.tsx`: `Chip` на каждый счёт (`created_at` по возрастанию), последний чип — «Без счёта».
-   - Выбор счёта: `currency = pickAccountCurrency(...)`, введённое число остаётся; если оно не парсится в новой валюте, срабатывает обычная валидация.
-   - «Без счёта» показывает сегмент валют с валютой предыдущего счёта. Счетов в пространстве нет → блока «Счёт» нет, только сегмент.
-   - По умолчанию (`defaultAccountSelection`): последний счёт автора, если он существует, и его валюта; иначе «Без счёта» и `lastUsedCurrency ?? displayCurrency`. После сохранения траты выбранный счёт остаётся.
+   - `src/components/expenses/account-chips.tsx`: `Chip` на каждый счёт (`created_at` по возрастанию).
+   - Выбор счёта: `currency` = валюта счёта, введённое число остаётся; если оно не парсится в новой валюте, срабатывает обычная валидация.
+   - Счетов в пространстве нет → вместо чипов ссылка «Создайте первый счёт» на `/accounts`, поля суммы и описания и кнопка «Добавить трату» неактивны.
+   - По умолчанию (`defaultAccountSelection`): последний счёт автора, если он существует, иначе первый счёт. После сохранения траты выбранный счёт остаётся.
    - `ExpenseSheet` показывает чипы счетов с выбранным счётом траты; открывается с главной и из «Истории»: `src/app/history/page.tsx` загружает `listAccounts`, `src/components/history/**` пробрасывает счета.
    - Файлы: `src/components/expenses/{account-chips,expense-form-fields,quick-add-form,expense-sheet,use-expense-editor}.tsx`, `src/app/page.tsx`.
 6. **Окно счёта:** `src/components/accounts/account-sheet.tsx` показывает отрицательный остаток с минусом; переименование такого счёта работает (остаток не отправляется, если поле не меняли).
@@ -641,7 +642,7 @@ Google-путь проверяется локально только при те
 3. Перенос на счёт B: A восстанавливается; B уменьшается, если трата создана после якоря B, и не меняется, если до.
 4. Удаление траты восстанавливает остаток.
 5. Трата до якоря не влияет, как и её правка или удаление.
-6. Удаление счёта: `account_id = null`, траты на месте.
+6. Удаление счёта удаляет его траты, траты других счетов на месте.
 7. Отказы: валюта ≠ валюте счёта; счёт другого пространства; патч только `accountId` при несовпадении валют; патч только `currency` при привязанном счёте.
 8. `loaded = 585` при вычисленных 575 и правке только имени → якорь не двигается; правка значения → двигается.
 9. Отрицательный остаток считается верно.
@@ -652,10 +653,10 @@ Google-путь проверяется локально только при те
 | `src/lib/half-even.test.ts` | Отрицательные, ничьи half-even для отрицательных; существующие случаи без изменений. |
 | `src/lib/money.test.ts` | `minorToInput` для отрицательных в RUB, RSD и BTC сохраняет «-»; для положительных поведение прежнее. |
 | `src/lib/fx/convert.test.ts` | `convertRow(−X) === −convertRow(X)`; `sumConverted` со смешанными знаками. |
-| `src/lib/expense-account.test.ts` | Выбор счёта → его валюта; «Без счёта» → прежняя валюта; удалённый последний счёт → «Без счёта»; нет счетов. |
+| `src/lib/expense-account.test.ts` | Последний счёт → он и его валюта; удалённый последний счёт или трат нет → первый счёт; нет счетов → `null`. |
 | `src/lib/accounts-total.test.ts` | Отрицательный счёт входит в итог, но не в доли. |
 
-Сверка с холстом: `Main` (выбран счёт, сегмента нет); `MainStates` («Без счёта» и сегмент); `ExpenseSheet`, открытая с главной и из «Истории» (выбран счёт траты); `Accounts` (остатки по формуле); `AccountSheet` (правка остатка ставит якорь; счёт с отрицательным остатком переименовывается).
+Сверка с холстом: `Main` (выбран счёт, сегмента нет); `ExpenseSheet`, открытая с главной и из «Истории» (выбран счёт траты); `Accounts` (остатки по формуле); `AccountSheet` (правка остатка ставит якорь; счёт с отрицательным остатком переименовывается).
 
 Сценарий в браузере:
 1. Трата со счёта → остаток уменьшился.
@@ -663,13 +664,13 @@ Google-путь проверяется локально только при те
 3. Перенос траты на другой счёт → оба остатка верны.
 4. Удаление траты → остаток восстановлен.
 5. Уточнить остаток, затем удалить более раннюю трату → остаток не изменился.
-6. Удалить счёт → траты остались, в их карточке «Без счёта».
+6. Удалить счёт → подтверждение называет число трат, траты удалены.
 
 ### Готово, когда
 
 - Общие команды и поиски зелёные.
-- `account_id` у траты, обнуляется при удалении счёта — схема, `account-balance.itest.ts` сценарий 6.
-- Выбор счёта вместо сегмента, «Без счёта», по умолчанию последний счёт автора — сверка `Main`/`MainStates`/`ExpenseSheet`; `expense-account.test.ts`; `account-balance.itest.ts` сценарии 7 и 10.
+- `account_id` у траты обязателен, траты удаляются вместе со счётом — схема, `migrations.itest.ts`, `account-balance.itest.ts` сценарий 6.
+- Выбор счёта вместо сегмента, по умолчанию последний счёт автора — сверка `Main`/`MainStates`/`ExpenseSheet`; `expense-account.test.ts`; `account-balance.itest.ts` сценарии 7 и 10.
 - Остаток = якорь минус траты, созданные после якоря; «уточнить остаток» ставит новый якорь — `account-balance.itest.ts` сценарии 1–5, 8, 9.
 - Тесты создания, правки суммы, переноса, удаления и трат до якоря — `account-balance.itest.ts`.
 - Экран счетов показывает остатки по формуле — сверка `Accounts`, сценарий в браузере.

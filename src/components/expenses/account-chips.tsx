@@ -9,10 +9,12 @@ export function AccountChips({
   accounts,
   value,
   onChange,
+  error,
 }: {
   accounts: ExpenseAccount[];
-  value: string | null;
-  onChange: (id: string | null) => void;
+  value: string;
+  onChange: (id: string) => void;
+  error?: string;
 }) {
   return (
     <fieldset className="m-0 min-w-0 border-0 p-0">
@@ -23,10 +25,12 @@ export function AccountChips({
             {a.name}
           </Chip>
         ))}
-        <Chip pressed={value === null} onClick={() => onChange(null)}>
-          Без счёта
-        </Chip>
       </div>
+      {error ? (
+        <p className="mt-1.5 text-[13px] text-error" role="alert">
+          {error}
+        </p>
+      ) : null}
     </fieldset>
   );
 }

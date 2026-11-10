@@ -5,13 +5,18 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 
+function previousEntryInApp() {
+  const { navigation } = window as Window & { navigation?: { canGoBack: boolean } };
+  return navigation?.canGoBack === true;
+}
+
 export function BackButton() {
   const router = useRouter();
 
   function onClick(event: MouseEvent<HTMLAnchorElement>) {
     const modified =
       event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
-    if (!modified && event.button === 0 && window.history.length > 1) {
+    if (!modified && event.button === 0 && previousEntryInApp()) {
       event.preventDefault();
       router.back();
     }

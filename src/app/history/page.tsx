@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { requireSpace } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
 import { listAccounts } from "@/repositories/accounts";
@@ -11,25 +10,12 @@ import { getUserSettings } from "@/repositories/user-settings";
 import { loadRateIndex } from "@/repositories/fx-rates";
 import { CURRENCY_CODES } from "@/lib/currency";
 import { sumConvertedByDay } from "@/lib/fx/convert";
-import { formatDayTitle, todayRange } from "@/lib/dates";
+import { formatDayTitle, resolveHistoryRange } from "@/lib/dates";
 import { AppScreen } from "@/components/layout/app-screen";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import { HistoryFilter } from "@/components/history/history-filter";
 import { PeriodTabs } from "@/components/history/period-tabs";
 import type { DayGroup } from "@/components/history/history-list";
-
-const isoDate = z.iso.date();
-
-// Resolve the URL range, defaulting to today (business-spec §5.2) when
-// params are missing/invalid or reversed.
-function resolveRange(from?: string, to?: string) {
-  const f = isoDate.safeParse(from);
-  const t = isoDate.safeParse(to);
-  if (f.success && t.success && f.data <= t.data) {
-    return { from: f.data, to: t.data };
-  }
-  return todayRange();
-}
 
 export default async function HistoryPage({
   searchParams,
@@ -38,7 +24,7 @@ export default async function HistoryPage({
 }) {
   const { user, spaceId } = await requireSpace();
   const { from, to } = await searchParams;
-  const range = resolveRange(from, to);
+  const range = resolveHistoryRange(from, to);
 
   // The rate history is the heaviest read in this render, so it is loaded
   // once and threaded into every consumer below — summary, the row list and

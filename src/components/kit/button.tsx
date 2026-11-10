@@ -19,7 +19,7 @@ const VARIANT_CLASS: Record<ButtonVariant, string> = {
   primary:
     "h-13 rounded-field bg-primary text-base font-semibold text-white hover:bg-primary-ink",
   secondary:
-    "h-12 rounded-field bg-card text-[15px] font-medium text-ink shadow-[inset_0_0_0_1px_var(--color-control-line)] hover:bg-page",
+    "h-12 rounded-field bg-page text-[15px] font-medium text-ink hover:bg-line",
   danger:
     "h-13 rounded-field bg-danger-soft text-base font-semibold text-danger-ink",
   "danger-text":

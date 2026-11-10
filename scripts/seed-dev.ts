@@ -102,8 +102,9 @@ const ACCOUNTS: Array<{
   anchorDaysAgo: number;
 }> = [
   { name: "Карта USD", currency: "USD", balanceMinor: 124050, anchorDaysAgo: 1 },
-  { name: "Наличные RSD", currency: "RSD", balanceMinor: 4830000, anchorDaysAgo: 20 },
   { name: "Наличные EUR", currency: "EUR", balanceMinor: 62000, anchorDaysAgo: 10 },
+  { name: "Наличные RSD", currency: "RSD", balanceMinor: 4830000, anchorDaysAgo: 20 },
+  { name: "Карта RUB", currency: "RUB", balanceMinor: 8642000, anchorDaysAgo: 5 },
 ];
 
 const LISTS: Array<{ name: string; done: string[]; todo: string[]; isPrivate?: true; by: Author }> = [
@@ -227,7 +228,7 @@ async function main() {
 
   const charged = new Map<string, Array<{ amountMinor: number; createdAt: Date }>>();
   for (const [i, e] of planned.entries()) {
-    const accountId = accountIds.get(e.currency) ?? null;
+    const accountId = accountIds.get(e.currency)!;
     const row = await createExpense(spaceId, authorId[e.by], {
       categoryId: categoryIds.get(e.category)!,
       amountMinor: e.amountMinor,
@@ -241,9 +242,7 @@ async function main() {
     const onDay = addMinutes(setHours(startOfDay(e.day), 9), i);
     const createdAt = onDay < now ? onDay : subSeconds(now, planned.length - i);
     await db.update(expenses).set({ createdAt }).where(eq(expenses.id, row.id));
-    if (accountId) {
-      charged.set(accountId, [...(charged.get(accountId) ?? []), { amountMinor: e.amountMinor, createdAt }]);
-    }
+    charged.set(accountId, [...(charged.get(accountId) ?? []), { amountMinor: e.amountMinor, createdAt }]);
   }
 
   for (const a of ACCOUNTS) {

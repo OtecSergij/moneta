@@ -11,7 +11,7 @@ function acc(
   currency: CurrencyCode,
   balanceMinor: number,
 ): AccountBalance {
-  return { id: name, name, currency, balanceMinor };
+  return { id: name, name, currency, balanceMinor, expenseCount: 0 };
 }
 
 const SEED = [

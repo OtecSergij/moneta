@@ -1,11 +1,11 @@
-import { and, asc, eq, getTableColumns, gt, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, sql, type SQL } from "drizzle-orm";
 import { db, type DbExecutor } from "@/db";
 import { accounts, expenses } from "@/db/schema";
 import type { AccountInput, AccountPatch } from "@/lib/accounts";
 import type { SpaceId } from "@/lib/space-id";
 
 export type Account = typeof accounts.$inferSelect;
-export type AccountWithBalance = Account & { balanceMinor: number };
+export type AccountWithBalance = Account & { balanceMinor: number; expenseCount: number };
 
 function toSafeInteger(value: string): number {
   const n = Number(value);
@@ -20,16 +20,13 @@ async function selectWithBalance(
   const rows = await executor
     .select({
       ...getTableColumns(accounts),
-      spentMinor: sql<string>`coalesce(sum(${expenses.amountMinor}), 0)::bigint`,
+      spentMinor: sql<string>`coalesce(sum(${expenses.amountMinor}) filter (where ${expenses.createdAt} > ${accounts.anchorAt}), 0)::bigint`,
+      expenseCount: sql<number>`count(${expenses.id})::int`,
     })
     .from(accounts)
     .leftJoin(
       expenses,
-      and(
-        eq(expenses.accountId, accounts.id),
-        eq(expenses.spaceId, accounts.spaceId),
-        gt(expenses.createdAt, accounts.anchorAt),
-      ),
+      and(eq(expenses.accountId, accounts.id), eq(expenses.spaceId, accounts.spaceId)),
     )
     .where(where)
     .groupBy(accounts.id)
@@ -70,7 +67,7 @@ export async function createAccount(
       anchorAmountMinor: input.balanceMinor,
     })
     .returning();
-  return { ...row, balanceMinor: row.anchorAmountMinor };
+  return { ...row, balanceMinor: row.anchorAmountMinor, expenseCount: 0 };
 }
 
 export async function updateAccount(

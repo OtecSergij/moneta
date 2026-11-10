@@ -27,7 +27,7 @@ export const expenseFormSchema = z
     spentAt: z.iso
       .date("Укажите дату")
       .refine((d) => !isFutureISO(d), "Дата не может быть в будущем"),
-    accountId: z.uuid().nullable(),
+    accountId: z.uuid("Выберите счёт"),
   })
   .superRefine((values, ctx) => {
     const minor = parseMoney(values.amount, values.currency);

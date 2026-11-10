@@ -7,10 +7,12 @@ export function ListProgress({
   done,
   total,
   trackClassName,
+  okWhenComplete = true,
 }: {
   done: number;
   total: number;
   trackClassName: string;
+  okWhenComplete?: boolean;
 }) {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   return (
@@ -21,7 +23,7 @@ export function ListProgress({
       <span
         className={cn(
           "block h-full rounded-chip",
-          total > 0 && done === total ? "bg-ok" : "bg-primary",
+          okWhenComplete && total > 0 && done === total ? "bg-ok" : "bg-primary",
         )}
         style={{ width: `${pct}%` }}
       />

@@ -320,10 +320,123 @@ describe("phase-1 data migration", () => {
                 values (${twinA.id}, ${twinA.id}, 'Дом', '#F59E0B')`,
           ).rejects.toMatchObject({ code: "23505" });
 
+          const [twinAccount] = await sql<{ id: string }[]>`
+            select id from accounts where space_id = ${twinA.id}
+          `;
           await expect(
-            sql`insert into expenses (space_id, created_by, category_id, amount_minor, note, spent_at)
-                values (${twinA.id}, ${twinA.id}, ${catOf(twinB.id)}, 100, 'x', '2026-01-05')`,
+            sql`insert into expenses (space_id, created_by, category_id, amount_minor, note, spent_at, account_id)
+                values (${twinA.id}, ${twinA.id}, ${catOf(twinB.id)}, 100, 'x', '2026-01-05', ${twinAccount.id})`,
           ).rejects.toMatchObject({ code: "23503" });
+        } finally {
+          await sql.end();
+        }
+      });
+    } finally {
+      rmSync(oldFolder, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("expense account backfill migration", () => {
+  it("gives every expense without an account a zero-balance account of its currency", async () => {
+    const oldFolder = migrationsUpTo(7);
+    try {
+      await withScratchDatabase(async (url) => {
+        const sql = postgres(url, { max: 1, onnotice: () => {} });
+        try {
+          await migrate(drizzle(sql), { migrationsFolder: oldFolder });
+
+          const [u] = await sql<{ id: string }[]>`
+            insert into "user" (name, email, email_verified)
+            values ('u', ${`${randomUUID()}@t.local`}, true) returning id
+          `;
+          const [single, multi, linkedOnly] = await sql<{ id: string }[]>`
+            insert into spaces (created_at) values (now()), (now()), (now()) returning id
+          `;
+          const cats = await sql<{ id: string; space_id: string }[]>`
+            insert into categories (space_id, created_by, name, color) values
+              (${single.id}, ${u.id}, 'Еда', '#10B981'),
+              (${multi.id}, ${u.id}, 'Еда', '#10B981'),
+              (${linkedOnly.id}, ${u.id}, 'Еда', '#10B981')
+            returning id, space_id
+          `;
+          const catOf = (spaceId: string) => cats.find((c) => c.space_id === spaceId)!.id;
+          const [taken, card] = await sql<{ id: string }[]>`
+            insert into accounts (space_id, created_by, name, currency, anchor_amount_minor) values
+              (${single.id}, ${u.id}, 'Основной', 'RUB', 500),
+              (${linkedOnly.id}, ${u.id}, 'Карта', 'RUB', 500)
+            returning id
+          `;
+          await sql`
+            insert into expenses (space_id, created_by, category_id, amount_minor, currency, note, spent_at, account_id) values
+              (${single.id}, ${u.id}, ${catOf(single.id)}, 100, 'RUB', 'a', '2026-01-01', null),
+              (${single.id}, ${u.id}, ${catOf(single.id)}, 200, 'RUB', 'b', '2026-01-02', null),
+              (${single.id}, ${u.id}, ${catOf(single.id)}, 300, 'RUB', 'c', '2026-01-03', ${taken.id}),
+              (${multi.id}, ${u.id}, ${catOf(multi.id)}, 400, 'RUB', 'd', '2026-01-04', null),
+              (${multi.id}, ${u.id}, ${catOf(multi.id)}, 500, 'USD', 'e', '2026-01-05', null),
+              (${multi.id}, ${u.id}, ${catOf(multi.id)}, 600, 'RSD', 'f', '2026-01-06', null),
+              (${linkedOnly.id}, ${u.id}, ${catOf(linkedOnly.id)}, 700, 'RUB', 'g', '2026-01-07', ${card.id}),
+              (${multi.id}, ${u.id}, ${catOf(multi.id)}, 800, 'RUB', 'h', '2026-01-08', ${card.id})
+          `;
+
+          await migrate(drizzle(sql), { migrationsFolder: "./src/db/migrations" });
+
+          const accountRows = await sql<
+            { id: string; space_id: string; name: string; currency: string; anchor_amount_minor: string }[]
+          >`select id, space_id, name, currency, anchor_amount_minor from accounts order by name`;
+          const created = accountRows.filter((a) => a.id !== taken.id && a.id !== card.id);
+          expect(
+            created.map(({ space_id, name, currency, anchor_amount_minor }) => ({
+              space_id,
+              name,
+              currency,
+              anchor: Number(anchor_amount_minor),
+            })),
+          ).toEqual(
+            expect.arrayContaining([
+              { space_id: single.id, name: "Основной 2", currency: "RUB", anchor: 0 },
+              { space_id: multi.id, name: "Основной ₽", currency: "RUB", anchor: 0 },
+              { space_id: multi.id, name: "Основной $", currency: "USD", anchor: 0 },
+              { space_id: multi.id, name: "Основной RSD", currency: "RSD", anchor: 0 },
+            ]),
+          );
+          expect(created).toHaveLength(4);
+
+          const expenseRows = await sql<
+            { note: string; account_id: string; currency: string }[]
+          >`select note, account_id, currency from expenses order by note`;
+          const accountOf = (id: string) => accountRows.find((a) => a.id === id)!;
+          for (const e of expenseRows) {
+            expect(accountOf(e.account_id).currency).toBe(e.currency);
+          }
+          expect(accountOf(expenseRows[0].account_id).name).toBe("Основной 2");
+          expect(expenseRows[0].account_id).toBe(expenseRows[1].account_id);
+          expect(expenseRows[2].account_id).toBe(taken.id);
+          expect(expenseRows[6].account_id).toBe(card.id);
+          expect(expenseRows[7].account_id).toBe(expenseRows[3].account_id);
+
+          const balances = await sql<{ name: string; spent: string }[]>`
+            select a.name, coalesce(sum(e.amount_minor) filter (where e.created_at > a.anchor_at), 0) as spent
+            from accounts a left join expenses e on e.account_id = a.id
+            where a.anchor_amount_minor = 0
+            group by a.id
+          `;
+          expect(balances.map((b) => Number(b.spent))).toEqual([0, 0, 0, 0]);
+
+          const [column] = await sql<{ is_nullable: string }[]>`
+            select is_nullable from information_schema.columns
+            where table_name = 'expenses' and column_name = 'account_id'
+          `;
+          expect(column.is_nullable).toBe("NO");
+
+          await expect(
+            sql`insert into expenses (space_id, created_by, category_id, amount_minor, note, spent_at, account_id)
+                values (${multi.id}, ${u.id}, ${catOf(multi.id)}, 100, 'x', '2026-01-09', ${card.id})`,
+          ).rejects.toMatchObject({ code: "23503" });
+
+          await sql`delete from accounts where id = ${card.id}`;
+          const remaining = await sql`select 1 from expenses where space_id = ${linkedOnly.id}`;
+          expect(remaining).toHaveLength(0);
         } finally {
           await sql.end();
         }

@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown } from "lucide-react";
+import { Calendar } from "lucide-react";
 import { RANGE_PRESETS, formatDayHeading, type DateRange } from "@/lib/dates";
 import { Chip } from "@/components/kit/chip";
 
@@ -88,7 +88,7 @@ function DateField({
           {formatDayHeading(value)}
         </span>
       </span>
-      <ChevronDown
+      <Calendar
         aria-hidden
         className="size-[18px] shrink-0 text-ink-2"
         strokeWidth={1.75}

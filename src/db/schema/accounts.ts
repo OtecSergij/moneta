@@ -6,6 +6,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -38,6 +39,7 @@ export const accounts = pgTable(
   },
   (t) => [
     uniqueIndex("accounts_space_name_uniq").on(t.spaceId, t.name),
+    unique("accounts_id_space_uniq").on(t.id, t.spaceId),
     index("accounts_space_idx").on(t.spaceId),
     check(
       "accounts_name_len",

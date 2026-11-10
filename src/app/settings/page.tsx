@@ -51,9 +51,7 @@ export default async function SettingsPage() {
               {user.email}
             </span>
           </div>
-          <div className="flex flex-col border-t border-row-line p-4">
-            <LogoutButton />
-          </div>
+          <LogoutButton />
         </div>
       </section>
     </AppScreen>

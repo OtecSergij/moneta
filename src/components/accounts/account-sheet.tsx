@@ -5,6 +5,7 @@ import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 import { minorToInput, parseMoney } from "@/lib/money";
+import { EXPENSE_FORMS, formatCount, plural, type PluralForms } from "@/lib/plural";
 import { ACCOUNT_NAME_MAX, type AccountPatch } from "@/lib/accounts";
 import type { AccountSummaryRow } from "@/lib/accounts-total";
 import {
@@ -15,6 +16,8 @@ import { BottomSheet } from "@/components/kit/bottom-sheet";
 import { Button } from "@/components/kit/button";
 import { TextField } from "@/components/kit/text-field";
 import { BalanceField } from "@/components/accounts/balance-field";
+
+const DELETE_VERB_FORMS: PluralForms = ["удалится", "удалятся", "удалятся"];
 
 const CONFIRM_BUTTON =
   "h-12 cursor-pointer rounded-control text-[15px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60";
@@ -133,7 +136,12 @@ export function AccountSheet({
               <span className="text-base font-semibold">
                 Удалить «{account.name}»?
               </span>
-              <span className="text-sm/5">Отменить это нельзя.</span>
+              <span className="text-sm/5">
+                {account.expenseCount > 0
+                  ? `Вместе со счётом ${plural(account.expenseCount, DELETE_VERB_FORMS)} ${formatCount(account.expenseCount, EXPENSE_FORMS)}. `
+                  : null}
+                Отменить это нельзя.
+              </span>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <button

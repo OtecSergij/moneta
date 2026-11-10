@@ -70,9 +70,7 @@ export const expenses = pgTable(
     // the timezone calculation lives in the app. Always set on insert.
     // Future-date validation is in the repository (zod).
     spentAt: date("spent_at", { mode: "string" }).notNull(),
-    accountId: uuid("account_id").references(() => accounts.id, {
-      onDelete: "set null",
-    }),
+    accountId: uuid("account_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -92,6 +90,11 @@ export const expenses = pgTable(
       columns: [t.categoryId, t.spaceId],
       foreignColumns: [categories.id, categories.spaceId],
     }).onDelete("restrict"),
+    foreignKey({
+      name: "expenses_account_same_space_fk",
+      columns: [t.accountId, t.spaceId],
+      foreignColumns: [accounts.id, accounts.spaceId],
+    }).onDelete("cascade"),
     check("expenses_amount_positive", sql`${t.amountMinor} > 0`),
     check(
       "expenses_note_len",

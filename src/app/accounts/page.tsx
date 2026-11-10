@@ -26,11 +26,12 @@ export default async function AccountsPage() {
   const displayCurrency = settings.displayCurrency;
   const today = todayISO();
   const summary = summarizeAccounts(
-    accounts.map(({ id, name, currency, balanceMinor }) => ({
+    accounts.map(({ id, name, currency, balanceMinor, expenseCount }) => ({
       id,
       name,
       currency,
       balanceMinor,
+      expenseCount,
     })),
     displayCurrency,
     rateIndex,

@@ -215,6 +215,7 @@ export function ListScreen({ list: serverList }: { list: ListWithItems }) {
             done={checked.length}
             total={list.items.length}
             trackClassName="bg-line"
+            okWhenComplete={false}
           />
         ) : null}
       </div>

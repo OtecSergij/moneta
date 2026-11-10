@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   accounts,
@@ -93,7 +94,9 @@ export async function mkInvite(
   return row;
 }
 
-// Auto-creates a throwaway category when `overrides.categoryId` is omitted.
+// Auto-creates a throwaway category when `overrides.categoryId` is omitted, and
+// reuses (or creates) an account of the expense's currency when
+// `overrides.accountId` is.
 // Throws instead of returning null: a seeding test has no use for the null
 // createExpense reserves for a rejected categoryId.
 export async function mkExpense(
@@ -111,13 +114,27 @@ export async function mkExpense(
       })
     ).id;
 
+  const currency = overrides.currency ?? "RUB";
+  const accountId =
+    overrides.accountId ??
+    (
+      await db
+        .select({ id: accounts.id })
+        .from(accounts)
+        .where(and(eq(accounts.spaceId, spaceId), eq(accounts.currency, currency)))
+        .orderBy(asc(accounts.createdAt))
+        .limit(1)
+    )[0]?.id ??
+    (await mkAccount(spaceId, userId, { currency })).id;
+
   const row = await createExpense(spaceId, userId, {
     amountMinor: 1000,
-    currency: "RUB",
     note: "тест",
     spentAt: todayISO(),
     ...overrides,
+    currency,
     categoryId,
+    accountId,
   });
   if (!row) {
     throw new Error("mkExpense: createExpense returned null");

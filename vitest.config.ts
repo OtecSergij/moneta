@@ -18,7 +18,7 @@ export default defineConfig({
           name: "unit",
           environment: "node",
           include: ["**/*.test.ts"],
-          exclude: ["**/*.itest.ts", "node_modules", ".next", "dist"],
+          exclude: ["**/*.itest.ts", "**/node_modules/**", ".next", "dist", ".claude/**"],
           env: { NODE_ENV: "test" },
         },
       },
@@ -28,7 +28,7 @@ export default defineConfig({
           name: "integration",
           environment: "node",
           include: ["**/*.itest.ts"],
-          exclude: ["node_modules", ".next", "dist"],
+          exclude: ["**/node_modules/**", ".next", "dist", ".claude/**"],
           globalSetup: ["./src/test/global-setup.ts"],
           // One container shared across all integration files; run sequentially
           // so they don't race on the same database.

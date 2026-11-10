@@ -33,7 +33,7 @@ function ItemEditor({
   return (
     <div
       ref={rowRef}
-      className="flex min-h-[60px] items-center gap-1.5 bg-card py-2 pr-2 pl-3"
+      className="flex min-h-[60px] items-center gap-1.5 bg-edit-row py-2 pr-2 pl-3"
     >
       <label htmlFor={`item-edit-${item.id}`} className="sr-only">
         Название пункта
@@ -134,7 +134,7 @@ export function ListItemRow({
           <Check aria-hidden className="size-3.5" strokeWidth={1.75} />
         </span>
       ) : (
-        <span className="size-[22px] flex-none rounded-[7px] border-2 border-bar-past bg-card" />
+        <span className="size-[22px] flex-none rounded-[7px] border-2 border-check-line bg-card" />
       )}
       <span className="min-w-0 flex-1 break-words">{item.text}</span>
     </button>

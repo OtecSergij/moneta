@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useFormContext, useWatch } from "react-hook-form";
 import { type ExpenseFormValues } from "@/lib/expense-form";
 import { EXPENSE_NOTE_MAX } from "@/lib/expense-constants";
@@ -11,9 +12,7 @@ import type {
 import { type CurrencyCode } from "@/lib/currency";
 import { formatMoney, parseMoney } from "@/lib/money";
 import { quoteConversionAction } from "@/lib/actions/fx";
-import { pickAccountCurrency } from "@/lib/expense-account";
 import { TextField } from "@/components/kit/text-field";
-import { CurrencySegment } from "@/components/currency/currency-segment";
 import { AmountField } from "@/components/expenses/amount-field";
 import {
   AccountChips,
@@ -47,10 +46,6 @@ type CategoryProps =
     }
   | { categoriesEditable?: false; categories: Category[] };
 
-function sortByName<T extends Category>(list: T[]): T[] {
-  return [...list].sort((a, b) => a.name.localeCompare(b.name, "ru"));
-}
-
 export function ExpenseFormFields({
   displayCurrency,
   size,
@@ -79,12 +74,15 @@ export function ExpenseFormFields({
     setValue("categoryId", id, { shouldValidate: true });
   }
 
-  function selectAccount(id: string | null) {
-    setValue("accountId", id);
-    if (id === null) return;
-    setValue("currency", pickAccountCurrency(accounts, id, currency));
+  function selectAccount(id: string) {
+    const account = accounts.find((a) => a.id === id);
+    if (!account) return;
+    setValue("accountId", id, { shouldValidate: true });
+    setValue("currency", account.currency);
     if (amount !== "") void trigger("amount");
   }
+
+  const noAccounts = accounts.length === 0;
 
   // With matching currencies convert.ts's identity rule returns exactly the
   // entered amount, so there is nothing to show and no quote to request.
@@ -159,23 +157,24 @@ export function ExpenseFormFields({
         preview={preview ? previewLabel(preview) : null}
         error={errors.amount?.message}
         {...register("amount")}
+        disabled={noAccounts}
       />
 
-      {accounts.length > 0 ? (
+      {!noAccounts ? (
         <AccountChips
           accounts={accounts}
           value={accountId}
           onChange={selectAccount}
+          error={errors.accountId?.message}
         />
-      ) : null}
-
-      {accounts.length === 0 || accountId === null ? (
-        <CurrencySegment
-          value={currency}
-          onChange={(c) => setValue("currency", c, { shouldValidate: true })}
-          label="Валюта"
-        />
-      ) : null}
+      ) : (
+        <Link
+          href="/accounts"
+          className="self-start text-sm text-ink-2 underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        >
+          Создайте первый счёт
+        </Link>
+      )}
 
       {categoryProps.categoriesEditable ? (
         <EditableCategories
@@ -200,10 +199,12 @@ export function ExpenseFormFields({
       <TextField
         id={size === "main" ? "note" : "e-note"}
         label="Описание"
+        labelGap={size === "main" ? 8 : 6}
         placeholder="Например, кофе с собой"
         maxLength={EXPENSE_NOTE_MAX}
         error={errors.note?.message}
         {...register("note")}
+        disabled={noAccounts}
       />
 
       <DateChips
@@ -252,9 +253,7 @@ function EditableCategories({
             categories={categories}
             onCancel={empty ? undefined : () => setNewOpen(false)}
             onCreated={(c) => {
-              onCategoriesChange(
-                sortByName([...categories, { ...c, hasExpenses: false }]),
-              );
+              onCategoriesChange([...categories, { ...c, hasExpenses: false }]);
               onChange(c.id);
               setNewOpen(false);
             }}
@@ -266,10 +265,8 @@ function EditableCategories({
         onClose={() => setEditingId(null)}
         onSaved={(c) => {
           onCategoriesChange(
-            sortByName(
-              categories.map((prev) =>
-                prev.id === c.id ? { ...c, hasExpenses: prev.hasExpenses } : prev,
-              ),
+            categories.map((prev) =>
+              prev.id === c.id ? { ...c, hasExpenses: prev.hasExpenses } : prev,
             ),
           );
           setEditingId(null);

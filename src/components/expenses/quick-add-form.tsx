@@ -13,7 +13,7 @@ import {
   type ExpenseFormValues,
 } from "@/lib/expense-form";
 import { createExpenseAction } from "@/lib/actions/expenses";
-import { knownAccountId } from "@/lib/expense-account";
+import { defaultAccountSelection } from "@/lib/expense-account";
 import type { CategoryWithUsage } from "@/repositories/categories";
 import { Button } from "@/components/kit/button";
 import { ExpenseFormFields } from "@/components/expenses/expense-form-fields";
@@ -24,15 +24,13 @@ import type { ExpenseAccount } from "@/components/expenses/account-chips";
 export function QuickAddForm({
   initialCategories,
   initialCategoryId,
-  initialCurrency,
-  initialAccountId,
+  initialSelection,
   accounts,
   displayCurrency,
 }: {
   initialCategories: CategoryWithUsage[];
   initialCategoryId: string;
-  initialCurrency: CurrencyCode;
-  initialAccountId: string | null;
+  initialSelection: { accountId: string; currency: CurrencyCode } | null;
   accounts: ExpenseAccount[];
   displayCurrency: CurrencyCode;
 }) {
@@ -47,8 +45,8 @@ export function QuickAddForm({
     resolver: zodResolver(expenseFormSchema),
     defaultValues: {
       amount: "",
-      currency: initialCurrency,
-      accountId: initialAccountId,
+      currency: initialSelection?.currency ?? displayCurrency,
+      accountId: initialSelection?.accountId ?? "",
       categoryId: initialCategoryId,
       note: "",
       spentAt: todayISO(),
@@ -68,9 +66,11 @@ export function QuickAddForm({
 
   useEffect(() => {
     const selected = methods.getValues("accountId");
-    if (knownAccountId(accounts, selected) !== selected) {
-      methods.setValue("accountId", null);
-    }
+    if (accounts.some((a) => a.id === selected)) return;
+    const next = defaultAccountSelection(accounts, null);
+    methods.setValue("accountId", next?.accountId ?? "");
+    if (next) methods.setValue("currency", next.currency);
+    if (methods.getValues("amount") !== "") void methods.trigger("amount");
   }, [accounts, methods]);
 
   async function onSubmit(values: ExpenseFormValues) {
@@ -128,6 +128,7 @@ export function QuickAddForm({
         <Button
           type="submit"
           loading={methods.formState.isSubmitting}
+          disabled={accounts.length === 0}
           className="w-full"
         >
           Добавить трату

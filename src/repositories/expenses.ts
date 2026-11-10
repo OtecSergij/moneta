@@ -32,7 +32,7 @@ export const ExpenseInput = z.object({
   // and the form's "Добавьте описание" rule (business-spec §4.2).
   note: z.string().trim().min(1).max(EXPENSE_NOTE_MAX),
   spentAt: z.iso.date(),
-  accountId: z.uuid().nullable().optional(),
+  accountId: z.uuid(),
 });
 export type ExpenseInput = z.infer<typeof ExpenseInput>;
 
@@ -119,25 +119,8 @@ export async function lastUsedCategoryId(
   return rows[0]?.categoryId ?? null;
 }
 
-// Currency of the user's most recently created expense — same rationale as
-// lastUsedCategoryId above. Null when there are no expenses; the caller
-// falls back to the display currency (AC-4).
-export async function lastUsedCurrency(
-  spaceId: SpaceId,
-  userId: string,
-): Promise<CurrencyCode | null> {
-  const rows = await db
-    .select({ currency: expenses.currency })
-    .from(expenses)
-    .where(and(eq(expenses.spaceId, spaceId), eq(expenses.createdBy, userId)))
-    .orderBy(desc(expenses.createdAt))
-    .limit(1);
-  return rows[0]?.currency ?? null;
-}
-
 // Account of the user's most recently created expense in the space. Null when
-// that expense has no account — including one whose account was deleted
-// (account_id is SET NULL).
+// there are none.
 export async function lastUsedAccountId(
   spaceId: SpaceId,
   userId: string,
@@ -210,7 +193,7 @@ export async function createExpense(
 ): Promise<Expense | null> {
   if (!(await categoryInSpace(spaceId, input.categoryId))) return null;
   if (!spentAtIsValid(input.spentAt)) return null;
-  if (input.accountId && !(await accountAccepts(spaceId, input.accountId, input.currency))) {
+  if (!(await accountAccepts(spaceId, input.accountId, input.currency))) {
     return null;
   }
 
@@ -225,7 +208,7 @@ export async function createExpense(
         currency: input.currency,
         note: input.note,
         spentAt: input.spentAt,
-        accountId: input.accountId ?? null,
+        accountId: input.accountId,
       })
       .returning();
     return row;
@@ -259,9 +242,9 @@ export async function updateExpense(
       if (patch.accountId !== undefined || patch.currency !== undefined) {
         const [current] = await tx.select().from(expenses).where(where).for("update");
         if (!current) return null;
-        const accountId = patch.accountId === undefined ? current.accountId : patch.accountId;
+        const accountId = patch.accountId ?? current.accountId;
         const currency = patch.currency ?? current.currency;
-        if (accountId && !(await accountAccepts(spaceId, accountId, currency, tx))) {
+        if (!(await accountAccepts(spaceId, accountId, currency, tx))) {
           return null;
         }
       }

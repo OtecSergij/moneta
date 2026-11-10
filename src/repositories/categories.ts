@@ -35,7 +35,7 @@ export async function listCategories(
     })
     .from(categories)
     .where(eq(categories.spaceId, spaceId))
-    .orderBy(asc(categories.name));
+    .orderBy(asc(categories.createdAt), asc(categories.id));
 }
 
 export async function getCategory(

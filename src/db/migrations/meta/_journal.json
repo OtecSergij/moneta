@@ -57,6 +57,13 @@
       "when": 1794324093400,
       "tag": "0007_expense_account",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794339167627,
+      "tag": "0008_expense_account_required",
+      "breakpoints": true
     }
   ]
 }

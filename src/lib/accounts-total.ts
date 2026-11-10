@@ -6,6 +6,7 @@ export type AccountBalance = {
   name: string;
   currency: CurrencyCode;
   balanceMinor: number;
+  expenseCount: number;
 };
 
 export type AccountSummaryRow = AccountBalance & {

@@ -11,7 +11,21 @@ import {
   listCategories,
   updateCategory,
 } from "@/repositories/categories";
-import { mkExpense, mkMember, mkSpaceUser } from "@/test/factories";
+import { mkAccount, mkExpense, mkMember, mkSpaceUser } from "@/test/factories";
+
+describe("categories repository — order", () => {
+  it("listCategories returns categories in creation order", async () => {
+    const a = await mkSpaceUser();
+    for (const name of ["Такси", "Аптека", "Кафе"]) {
+      await createCategory(a.spaceId, a.user.id, { name });
+    }
+    expect((await listCategories(a.spaceId)).map((c) => c.name)).toEqual([
+      "Такси",
+      "Аптека",
+      "Кафе",
+    ]);
+  });
+});
 
 describe("categories repository — isolation", () => {
   it("listCategories returns only the space's rows", async () => {
@@ -154,6 +168,7 @@ describe("categories repository — shared space", () => {
     const cat = await createCategory(owner.spaceId, owner.user.id, {
       name: "Race",
     });
+    const account = await mkAccount(owner.spaceId, owner.user.id);
 
     const realDelete = db.delete.bind(db);
     const spy = vi.spyOn(db, "delete").mockImplementationOnce(((
@@ -169,6 +184,7 @@ describe("categories repository — shared space", () => {
               spaceId: owner.spaceId,
               createdBy: member.user.id,
               categoryId: cat.id,
+              accountId: account.id,
               amountMinor: 100,
               currency: "RUB",
               note: "гонка",

@@ -7,6 +7,7 @@ import {
   isFutureISO,
   lastNDays,
   parseISODate,
+  resolveHistoryRange,
   toISODate,
   todayRange,
   weekRange,
@@ -40,6 +41,22 @@ describe("range helpers", () => {
   });
 });
 
+describe("resolveHistoryRange", () => {
+  it("keeps a valid range from the URL", () => {
+    expect(resolveHistoryRange("2026-05-01", "2026-05-10", NOW)).toEqual({
+      from: "2026-05-01",
+      to: "2026-05-10",
+    });
+  });
+
+  it("defaults to the last 7 days for missing, invalid or reversed params", () => {
+    const week = { from: "2026-05-11", to: "2026-05-17" };
+    expect(resolveHistoryRange(undefined, undefined, NOW)).toEqual(week);
+    expect(resolveHistoryRange("2026-02-30", "2026-05-10", NOW)).toEqual(week);
+    expect(resolveHistoryRange("2026-05-10", "2026-05-01", NOW)).toEqual(week);
+  });
+});
+
 describe("isFutureISO", () => {
   it("flags tomorrow but not today or yesterday", () => {
     expect(isFutureISO("2026-05-18", NOW)).toBe(true);
@@ -53,13 +70,20 @@ describe("formatRelativeDay", () => {
     expect(formatRelativeDay("2026-05-17", NOW)).toBe("Сегодня");
   });
 
-  it("returns the weekday name within the previous 6 days", () => {
-    expect(formatRelativeDay("2026-05-16", NOW)).toBe("Суббота"); // diff 1
-    expect(formatRelativeDay("2026-05-11", NOW)).toBe("Понедельник"); // diff 6
+  it("returns 'Вчера' for yesterday, even across the week boundary", () => {
+    expect(formatRelativeDay("2026-05-16", NOW)).toBe("Вчера");
+    expect(formatRelativeDay("2026-05-10", new Date(2026, 4, 11))).toBe("Вчера");
   });
 
-  it("falls back to the date from 7 days back and older", () => {
-    expect(formatRelativeDay("2026-05-10", NOW)).toBe("10 мая"); // diff 7
+  it("returns the weekday name for earlier days of the current week", () => {
+    expect(formatRelativeDay("2026-05-15", NOW)).toBe("Пятница");
+    expect(formatRelativeDay("2026-05-11", NOW)).toBe("Понедельник");
+  });
+
+  it("falls back to the date before this week's Monday", () => {
+    const thursday = new Date(2026, 4, 14);
+    expect(formatRelativeDay("2026-05-10", thursday)).toBe("10 мая");
+    expect(formatRelativeDay("2026-05-10", NOW)).toBe("10 мая");
     expect(formatRelativeDay("2025-05-10", NOW)).toBe("10 мая 2025");
   });
 });

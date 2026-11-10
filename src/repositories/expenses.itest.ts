@@ -13,13 +13,14 @@ import {
   deleteExpense,
   getExpense,
   lastUsedCategoryId,
-  lastUsedCurrency,
   listExpenses,
   summary,
   updateExpense,
 } from "@/repositories/expenses";
 import {
+  type SpaceUser,
   clearRates,
+  mkAccount,
   mkExpense,
   mkMember,
   mkRate,
@@ -27,6 +28,10 @@ import {
 } from "@/test/factories";
 
 const today = new Date().toISOString().slice(0, 10);
+
+async function rubAccount(owner: SpaceUser): Promise<string> {
+  return (await mkAccount(owner.spaceId, owner.user.id)).id;
+}
 
 beforeEach(clearRates);
 
@@ -44,6 +49,7 @@ describe("expenses repository — isolation", () => {
     });
 
     await createExpense(a.spaceId, a.user.id, {
+      accountId: await rubAccount(a),
       categoryId: catA.id,
       amountMinor: 10000,
       currency: "RUB",
@@ -51,6 +57,7 @@ describe("expenses repository — isolation", () => {
       spentAt: today,
     });
     await createExpense(b.spaceId, b.user.id, {
+      accountId: await rubAccount(b),
       categoryId: catB.id,
       amountMinor: 20000,
       currency: "RUB",
@@ -72,6 +79,7 @@ describe("expenses repository — isolation", () => {
       color: CATEGORY_COLORS[0],
     });
     const exp = await createExpense(a.spaceId, a.user.id, {
+      accountId: await rubAccount(a),
       categoryId: catA.id,
       amountMinor: 5000,
       currency: "RUB",
@@ -95,6 +103,7 @@ describe("expenses repository — isolation", () => {
       color: CATEGORY_COLORS[0],
     });
     const exp = await createExpense(a.spaceId, a.user.id, {
+      accountId: await rubAccount(a),
       categoryId: catA.id,
       amountMinor: 7000,
       currency: "RUB",
@@ -116,6 +125,7 @@ describe("expenses repository — isolation", () => {
 
     // B tries to attach an expense to A's category — must be rejected.
     const result = await createExpense(b.spaceId, b.user.id, {
+      accountId: await rubAccount(b),
       categoryId: catA.id,
       amountMinor: 100,
       currency: "RUB",
@@ -140,6 +150,7 @@ describe("expenses repository — isolation", () => {
     });
 
     await createExpense(a.spaceId, a.user.id, {
+      accountId: await rubAccount(a),
       categoryId: catA.id,
       amountMinor: 30000,
       currency: "RUB",
@@ -147,6 +158,7 @@ describe("expenses repository — isolation", () => {
       spentAt: today,
     });
     await createExpense(a.spaceId, a.user.id, {
+      accountId: await rubAccount(a),
       categoryId: catA.id,
       amountMinor: 12000,
       currency: "RUB",
@@ -154,6 +166,7 @@ describe("expenses repository — isolation", () => {
       spentAt: today,
     });
     await createExpense(b.spaceId, b.user.id, {
+      accountId: await rubAccount(b),
       categoryId: catB.id,
       amountMinor: 99999,
       currency: "RUB",
@@ -183,6 +196,7 @@ describe("expenses repository — isolation", () => {
       color: CATEGORY_COLORS[0],
     });
     const exp = await createExpense(u.spaceId, u.user.id, {
+      accountId: await rubAccount(u),
       categoryId: cat.id,
       amountMinor: 100,
       currency: "RUB",
@@ -219,6 +233,7 @@ describe("lastUsedCategoryId", () => {
     });
 
     await createExpense(u.spaceId, u.user.id, {
+      accountId: await rubAccount(u),
       categoryId: food.id,
       amountMinor: 100,
       currency: "RUB",
@@ -227,6 +242,7 @@ describe("lastUsedCategoryId", () => {
     });
     // Created later but spent earlier — "last used" follows creation order.
     await createExpense(u.spaceId, u.user.id, {
+      accountId: await rubAccount(u),
       categoryId: taxi.id,
       amountMinor: 200,
       currency: "RUB",
@@ -235,6 +251,7 @@ describe("lastUsedCategoryId", () => {
     });
     // Another user's later expense must not leak into u's result.
     await createExpense(other.spaceId, other.user.id, {
+      accountId: await rubAccount(other),
       categoryId: otherCat.id,
       amountMinor: 300,
       currency: "RUB",
@@ -250,6 +267,7 @@ describe("ExpenseInput.note", () => {
   it("requires a non-empty description and trims it", () => {
     const base = {
       categoryId: crypto.randomUUID(),
+      accountId: crypto.randomUUID(),
       amountMinor: 100,
       currency: "RUB",
       spentAt: today,
@@ -444,6 +462,7 @@ describe("createExpense — entry date bound", () => {
     const base = {
       categoryId: cat.id,
       currency: "BTC" as const,
+      accountId: (await mkAccount(u.spaceId, u.user.id, { currency: "BTC" })).id,
       amountMinor: 10000,
       note: "из будущего",
     };
@@ -542,7 +561,7 @@ describe("expenses repository — shared space", () => {
     expect(result.totalMinor).toBe(3500);
   });
 
-  it("form hints are personal: each member gets their own last category and currency", async () => {
+  it("form hints are personal: each member gets their own last category", async () => {
     const owner = await mkSpaceUser();
     const member = await mkMember(owner.spaceId);
     const food = await createCategory(owner.spaceId, owner.user.id, {
@@ -564,12 +583,9 @@ describe("expenses repository — shared space", () => {
     });
 
     expect(await lastUsedCategoryId(owner.spaceId, owner.user.id)).toBe(food.id);
-    expect(await lastUsedCurrency(owner.spaceId, owner.user.id)).toBe("EUR");
     expect(await lastUsedCategoryId(owner.spaceId, member.user.id)).toBe(taxi.id);
-    expect(await lastUsedCurrency(owner.spaceId, member.user.id)).toBe("USD");
 
     const newcomer = await mkMember(owner.spaceId);
     expect(await lastUsedCategoryId(newcomer.spaceId, newcomer.user.id)).toBeNull();
-    expect(await lastUsedCurrency(newcomer.spaceId, newcomer.user.id)).toBeNull();
   });
 });

@@ -6,6 +6,8 @@ import { accounts, expenses } from "@/db/schema";
 import type { SpaceId } from "@/lib/space-id";
 import { deleteAccount, getAccount, listAccounts, updateAccount } from "@/repositories/accounts";
 import {
+  ExpenseInput,
+  ExpensePatch,
   createExpense,
   deleteExpense,
   getExpense,
@@ -58,22 +60,25 @@ describe("account balance", () => {
 
     expect(await balance(a.spaceId, account.id)).toBe(7500);
     const [listed] = await listAccounts(a.spaceId);
-    expect(listed.balanceMinor).toBe(7500);
+    expect(listed).toMatchObject({ balanceMinor: 7500, expenseCount: 1 });
 
     await expenseAt(a.spaceId, a.user.id, account.id, 1000, AFTER_ANCHOR);
     await expenseAt(a.spaceId, a.user.id, account.id, 4000, BEFORE_ANCHOR);
     expect(await balance(a.spaceId, account.id)).toBe(6500);
+    expect((await getAccount(a.spaceId, account.id))?.expenseCount).toBe(3);
   });
 
-  it("1a. an expense of another space linked to the account is not counted", async () => {
+  it("1a. the database refuses to link an expense to another space's account", async () => {
     const a = await mkSpaceUser();
     const b = await mkSpaceUser();
     const account = await anchoredAccount(a.spaceId, a.user.id, 10000);
     const stray = await mkExpense(b.spaceId, b.user.id, { amountMinor: 2500 });
-    await db
-      .update(expenses)
-      .set({ accountId: account.id, createdAt: AFTER_ANCHOR })
-      .where(eq(expenses.id, stray.id));
+    await expect(
+      db
+        .update(expenses)
+        .set({ accountId: account.id, createdAt: AFTER_ANCHOR })
+        .where(eq(expenses.id, stray.id)),
+    ).rejects.toMatchObject({ cause: { code: "23503" } });
 
     expect(await balance(a.spaceId, account.id)).toBe(10000);
   });
@@ -103,8 +108,9 @@ describe("account balance", () => {
     expect(await balance(a.spaceId, laterAnchored.id)).toBe(5000);
     expect(await balance(a.spaceId, earlierAnchored.id)).toBe(2500);
 
-    await updateExpense(a.spaceId, expense.id, { accountId: null });
+    await updateExpense(a.spaceId, expense.id, { accountId: from.id });
     expect(await balance(a.spaceId, earlierAnchored.id)).toBe(5000);
+    expect(await balance(a.spaceId, from.id)).toBe(7500);
   });
 
   it("4. deleting an expense restores the balance", async () => {
@@ -129,15 +135,16 @@ describe("account balance", () => {
     expect(await balance(a.spaceId, account.id)).toBe(10000);
   });
 
-  it("6. deleting an account unlinks its expenses and keeps them", async () => {
+  it("6. deleting an account deletes its expenses and nothing else", async () => {
     const a = await mkSpaceUser();
     const account = await anchoredAccount(a.spaceId, a.user.id, 10000);
+    const other = await anchoredAccount(a.spaceId, a.user.id, 10000);
     const expense = await expenseAt(a.spaceId, a.user.id, account.id, 2500, AFTER_ANCHOR);
+    const kept = await expenseAt(a.spaceId, a.user.id, other.id, 2500, AFTER_ANCHOR);
 
     expect(await deleteAccount(a.spaceId, account.id)).toEqual({ ok: true });
-    const kept = await getExpense(a.spaceId, expense.id);
-    expect(kept).not.toBeNull();
-    expect(kept?.accountId).toBeNull();
+    expect(await getExpense(a.spaceId, expense.id)).toBeNull();
+    expect((await getExpense(a.spaceId, kept.id))?.accountId).toBe(other.id);
   });
 
   it("7. rejects a mismatched currency, a foreign account and patches that break the pair", async () => {
@@ -176,13 +183,21 @@ describe("account balance", () => {
     const linked = await mkExpense(a.spaceId, a.user.id, { accountId: rub.id });
     expect(await updateExpense(a.spaceId, linked.id, { currency: "USD" })).toBeNull();
     expect((await getExpense(a.spaceId, linked.id))?.currency).toBe("RUB");
-    expect((await getExpense(a.spaceId, base.id))?.accountId).toBeNull();
+    expect((await getExpense(a.spaceId, base.id))?.accountId).toBe(rub.id);
 
     const moved = await updateExpense(a.spaceId, linked.id, { currency: "USD", accountId: usd.id });
     expect(moved?.accountId).toBe(usd.id);
 
-    const unlinked = await updateExpense(a.spaceId, linked.id, { accountId: null, currency: "EUR" });
-    expect(unlinked).toMatchObject({ accountId: null, currency: "EUR" });
+    expect(
+      ExpenseInput.safeParse({
+        categoryId: base.categoryId,
+        amountMinor: 1000,
+        currency: "RUB",
+        note: "тест",
+        spentAt: base.spentAt,
+      }).success,
+    ).toBe(false);
+    expect(ExpensePatch.safeParse({ accountId: null }).success).toBe(false);
 
     const rejections = log.mock.calls.filter(([event]) => event === "expense.account_rejected");
     expect(rejections).toHaveLength(5);
@@ -192,14 +207,17 @@ describe("account balance", () => {
     vi.spyOn(console, "info").mockImplementation(() => {});
     const a = await mkSpaceUser();
     const rub = await anchoredAccount(a.spaceId, a.user.id, 10000);
+    const usd = await anchoredAccount(a.spaceId, a.user.id, 10000, { currency: "USD" });
     for (let i = 0; i < 10; i++) {
-      const expense = await mkExpense(a.spaceId, a.user.id);
+      const expense = await mkExpense(a.spaceId, a.user.id, { accountId: rub.id });
       await Promise.all([
         updateExpense(a.spaceId, expense.id, { currency: "USD" }),
-        updateExpense(a.spaceId, expense.id, { accountId: rub.id }),
+        updateExpense(a.spaceId, expense.id, { accountId: usd.id }),
+        updateExpense(a.spaceId, expense.id, { accountId: usd.id, currency: "USD" }),
+        updateExpense(a.spaceId, expense.id, { accountId: rub.id, currency: "RUB" }),
       ]);
       const row = await getExpense(a.spaceId, expense.id);
-      if (row?.accountId) expect(row.currency).toBe(rub.currency);
+      expect(row?.currency).toBe(row?.accountId === usd.id ? "USD" : "RUB");
     }
   });
 

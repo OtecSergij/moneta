@@ -4,7 +4,6 @@ import { db } from "@/db";
 import { fxRates } from "@/db/schema";
 import { isCurrentDate, maxEntryDate } from "@/lib/fx/provider";
 import { CATEGORY_COLORS, createCategory } from "@/repositories/categories";
-import { createExpense } from "@/repositories/expenses";
 import {
   backfillRates,
   ensureRates,
@@ -182,10 +181,9 @@ describe("backfillRates", () => {
     const dates = ["2024-11-01", "2024-11-02", "2024-11-03"]; // Fri, Sat, Sun
     const authors = [owner, member, member];
     for (const [i, spentAt] of dates.entries()) {
-      await createExpense(owner.spaceId, authors[i].user.id, {
+      await mkExpense(owner.spaceId, authors[i].user.id, {
         categoryId: cat.id,
         amountMinor: 1000,
-        currency: "RUB",
         note: "трата",
         spentAt,
       });

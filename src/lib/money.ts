@@ -87,9 +87,9 @@ export function parseMoney(input: string, currency: CurrencyCode): number | null
 }
 
 /**
- * Convert minor units back to a plain editable string (dot decimal, no
+ * Convert minor units back to a plain editable string (comma decimal, no
  * grouping) for prefilling an edit form: `minorToInput(1248050, "RUB")` ->
- * "12480.50". Uses `exponent`, not `displayDigits` — editing an RSD expense
+ * "12480,50". Uses `exponent`, not `displayDigits` — editing an RSD expense
  * must round-trip its para, even though they're never shown when formatted.
  */
 export function minorToInput(amountMinor: number, currency: CurrencyCode): string {
@@ -103,5 +103,5 @@ export function minorToInput(amountMinor: number, currency: CurrencyCode): strin
 
   return fracValue === 0
     ? `${sign}${major}`
-    : `${sign}${major}.${String(fracValue).padStart(meta.exponent, "0")}`;
+    : `${sign}${major},${String(fracValue).padStart(meta.exponent, "0")}`;
 }

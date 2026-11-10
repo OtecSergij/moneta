@@ -27,7 +27,13 @@ export function TextField({
   const errorId = `${inputId}-error`;
 
   return (
-    <div className={cn("flex flex-col", labelGap === 8 ? "gap-2" : "gap-1.5", className)}>
+    <div
+      className={cn(
+        "flex flex-col has-disabled:opacity-60 has-disabled:[&_*]:cursor-not-allowed",
+        labelGap === 8 ? "gap-2" : "gap-1.5",
+        className,
+      )}
+    >
       <label
         htmlFor={inputId}
         className={cn(

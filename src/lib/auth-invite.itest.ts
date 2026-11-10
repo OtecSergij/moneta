@@ -203,3 +203,16 @@ describe("OAuth path (hooks with OAuth state)", () => {
     ).toBe(false);
   });
 });
+
+describe("display name length", () => {
+  it("rejects a sign-up name over 60 characters and accepts exactly 60", async () => {
+    const tooLong = newEmail();
+    const res = await signUpWith(tooLong, { name: "я".repeat(61) });
+    expect(res.status).toBe(400);
+    expect(await userByEmail(tooLong)).toBeUndefined();
+
+    const fits = newEmail();
+    expect((await signUpWith(fits, { name: "я".repeat(60) })).status).toBe(200);
+    expect((await userByEmail(fits))?.name).toBe("я".repeat(60));
+  });
+});

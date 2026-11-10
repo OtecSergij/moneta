@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { db, type DbExecutor } from "@/db";
 import {
   pendingSpaceJoins,
@@ -108,18 +108,4 @@ export async function listMembers(spaceId: SpaceId): Promise<SpaceMember[]> {
       desc(sql`${spaceMembers.role} = 'owner'`),
       asc(spaceMembers.joinedAt),
     );
-}
-
-export async function getSpaceOwner(
-  spaceId: SpaceId,
-): Promise<{ userId: string; name: string } | null> {
-  const [row] = await db
-    .select({ userId: spaceMembers.userId, name: user.name })
-    .from(spaceMembers)
-    .innerJoin(user, eq(user.id, spaceMembers.userId))
-    .where(
-      and(eq(spaceMembers.spaceId, spaceId), eq(spaceMembers.role, "owner")),
-    )
-    .limit(1);
-  return row ?? null;
 }

@@ -96,7 +96,7 @@ export function ExpenseSheet({
   return (
     <BottomSheet
       open
-      compact
+      variant="compact"
       onOpenChange={(open) => {
         if (!open) onClose();
       }}

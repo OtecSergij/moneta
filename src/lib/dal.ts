@@ -1,8 +1,9 @@
 import "server-only";
 import { cache } from "react";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth, type Session } from "@/lib/auth";
+import { TIME_ZONE_COOKIE, zonedNow } from "@/lib/dates";
 import type { SpaceId } from "@/lib/space-id";
 import { resolveSpace, type SpaceRole } from "@/repositories/spaces";
 
@@ -35,3 +36,9 @@ export const requireSpace = cache(async (): Promise<SpaceContext> => {
   const { spaceId, role } = await resolveSpace(s.user.id);
   return { user: s.user, spaceId, role };
 });
+
+// The user's wall clock, from the zone the client stores in a cookie
+// (TimeZoneCookie). Without it the server's own zone (UTC on the VPS) is used.
+export async function userNow(): Promise<Date> {
+  return zonedNow((await cookies()).get(TIME_ZONE_COOKIE)?.value);
+}

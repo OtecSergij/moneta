@@ -568,7 +568,7 @@ Google-путь проверяется локально только при те
    - `src/components/accounts/account-new-sheet.tsx` (доска `AccountNew`): белое окно «Новый счёт» — `TextField` «Название», сегмент из 5 валют (по умолчанию валюта отображения), `TextField` «Остаток» с `suffix` (пусто = 0), «Добавить счёт».
    - `src/components/accounts/account-sheet.tsx` (доски `AccountSheet`, `AccountDelete`): белое окно — `TextField variant="title"` с названием, «Остаток» с `suffix`, начальное значение `minorToInput(balanceMinor)`; «Сохранить»; `Button danger` «Удалить счёт» → инлайн-подтверждение «Удалить «X»?» / «Отменить это нельзя.» с «Отмена» и «Удалить». Остаток уходит на сервер только при изменении поля.
 4. **Навигация и ревалидация:** `src/components/nav/tab-bar.tsx` — 4 вкладки, `active` += `"accounts"`; `src/proxy.ts`: `PROTECTED` += `"/accounts"`; `displayCurrency` ревалидирует `/accounts`.
-5. **Фабрики и сид:** `mkAccount`; счета в порядке чипов холста (`created_at` по возрастанию): «Карта USD» 1 240,50 $, «Наличные RSD» 48 300 RSD, «Наличные EUR» 620 €. Экран показывает их по сумме: USD, EUR, RSD, как на доске `Accounts`.
+5. **Фабрики и сид:** `mkAccount`; 4 счёта в порядке `created_at`: «Карта USD» 1 240,50 $, «Наличные EUR» 620 €, «Наличные RSD» 48 300 RSD, «Карта RUB» 86 420 ₽ (без рублёвого счёта трата в ₽ невозможна, а счёт обязателен). Экран показывает их по сумме в валюте отображения: RUB, USD, EUR, RSD.
 
 ### Как проверить
 

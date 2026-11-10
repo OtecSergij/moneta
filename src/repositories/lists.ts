@@ -217,10 +217,11 @@ export async function addItem(
 async function writeItem(
   spaceId: SpaceId,
   userId: string,
+  listId: string,
   itemId: string,
   write: (visible: SQL) => SQL,
 ): Promise<ListOpResult> {
-  const visible = visibleList(spaceId, userId);
+  const visible = and(visibleList(spaceId, userId), eq(lists.id, listId))!;
   return await db.transaction(async (tx) => {
     if (!(await touchList(tx, visible, listOfItem(itemId)))) return NOT_FOUND;
     const rows = await tx.execute(write(visible));
@@ -231,10 +232,11 @@ async function writeItem(
 export async function setItemText(
   spaceId: SpaceId,
   userId: string,
+  listId: string,
   itemId: string,
   text: string,
 ): Promise<ListOpResult> {
-  return await writeItem(spaceId, userId, itemId, (visible) => sql`
+  return await writeItem(spaceId, userId, listId, itemId, (visible) => sql`
     update "list_items" set "text" = ${text}, "updated_at" = now()
     from "lists"
     where "list_items"."id" = ${itemId} and "list_items"."list_id" = "lists"."id"
@@ -245,10 +247,11 @@ export async function setItemText(
 export async function setItemChecked(
   spaceId: SpaceId,
   userId: string,
+  listId: string,
   itemId: string,
   checked: boolean,
 ): Promise<ListOpResult> {
-  return await writeItem(spaceId, userId, itemId, (visible) => sql`
+  return await writeItem(spaceId, userId, listId, itemId, (visible) => sql`
     update "list_items" set "checked" = ${checked}, "updated_at" = now()
     from "lists"
     where "list_items"."id" = ${itemId} and "list_items"."list_id" = "lists"."id"
@@ -259,9 +262,10 @@ export async function setItemChecked(
 export async function deleteItem(
   spaceId: SpaceId,
   userId: string,
+  listId: string,
   itemId: string,
 ): Promise<ListOpResult> {
-  return await writeItem(spaceId, userId, itemId, (visible) => sql`
+  return await writeItem(spaceId, userId, listId, itemId, (visible) => sql`
     delete from "list_items" using "lists"
     where "list_items"."id" = ${itemId} and "list_items"."list_id" = "lists"."id"
       and ${visible}

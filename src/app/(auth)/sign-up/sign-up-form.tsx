@@ -7,7 +7,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { MailCheck } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
-import { signUpSchema, type SignUpValues } from "@/lib/auth-schemas";
+import {
+  USER_NAME_MAX,
+  signUpSchema,
+  type SignUpValues,
+} from "@/lib/auth-schemas";
 import { AuthCard } from "@/components/ui/auth-card";
 import { StatusCard } from "@/components/ui/status-card";
 import { Button } from "@/components/kit/button";
@@ -24,7 +28,8 @@ export function SignUpForm({ hasGoogle }: { hasGoogle: boolean }) {
   } = useForm<SignUpValues>({ resolver: zodResolver(signUpSchema) });
 
   async function onSubmit(values: SignUpValues) {
-    const name = values.name || values.email.split("@")[0];
+    const name =
+      values.name || values.email.split("@")[0].slice(0, USER_NAME_MAX);
     const { error } = await authClient.signUp.email({
       email: values.email,
       password: values.password,

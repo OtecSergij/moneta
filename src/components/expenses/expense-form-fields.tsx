@@ -251,6 +251,7 @@ function EditableCategories({
         {newOpen || empty ? (
           <NewCategoryPanel
             categories={categories}
+            autoFocus={newOpen}
             onCancel={empty ? undefined : () => setNewOpen(false)}
             onCreated={(c) => {
               onCategoriesChange([...categories, { ...c, hasExpenses: false }]);

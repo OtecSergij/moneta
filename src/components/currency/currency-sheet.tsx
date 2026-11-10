@@ -26,7 +26,7 @@ export function CurrencySheet({
     <BottomSheet
       open={open}
       onOpenChange={onOpenChange}
-      tone="gray"
+      variant="gray"
       title={TITLE}
     >
       <div

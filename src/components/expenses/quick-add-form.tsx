@@ -13,7 +13,7 @@ import {
   type ExpenseFormValues,
 } from "@/lib/expense-form";
 import { createExpenseAction } from "@/lib/actions/expenses";
-import { defaultAccountSelection } from "@/lib/expense-account";
+import { accountFallback } from "@/lib/expense-account";
 import type { CategoryWithUsage } from "@/repositories/categories";
 import { Button } from "@/components/kit/button";
 import { ExpenseFormFields } from "@/components/expenses/expense-form-fields";
@@ -65,11 +65,10 @@ export function QuickAddForm({
   }, [categories, methods]);
 
   useEffect(() => {
-    const selected = methods.getValues("accountId");
-    if (accounts.some((a) => a.id === selected)) return;
-    const next = defaultAccountSelection(accounts, null);
-    methods.setValue("accountId", next?.accountId ?? "");
-    if (next) methods.setValue("currency", next.currency);
+    const next = accountFallback(accounts, methods.getValues("accountId"));
+    if (!next) return;
+    methods.setValue("accountId", next.accountId);
+    if (next.currency) methods.setValue("currency", next.currency);
     if (methods.getValues("amount") !== "") void methods.trigger("amount");
   }, [accounts, methods]);
 

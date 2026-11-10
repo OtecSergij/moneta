@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
@@ -10,6 +10,7 @@ import {
   beforeUserCreate,
   inviteGuard,
 } from "@/lib/auth-invite-hook";
+import { USER_NAME_MAX } from "@/lib/auth-schemas";
 import { sendEmail } from "@/lib/email";
 
 // Full spec: docs/auth-decisions.md. Key invariants encoded here:
@@ -65,12 +66,33 @@ export const auth = betterAuth({
   },
 
   hooks: {
-    before: createAuthMiddleware(inviteGuard),
+    before: createAuthMiddleware(async (ctx) => {
+      await inviteGuard(ctx);
+      const name = (ctx.body as { name?: unknown } | undefined)?.name;
+      if (
+        (ctx.path === "/sign-up/email" || ctx.path === "/update-user") &&
+        typeof name === "string" &&
+        name.length > USER_NAME_MAX
+      ) {
+        throw new APIError("BAD_REQUEST", { message: "Name too long" });
+      }
+    }),
   },
 
   databaseHooks: {
     user: {
-      create: { before: beforeUserCreate, after: afterUserCreate },
+      create: {
+        // OAuth profiles bypass the hook above; trim them to fit the DB check.
+        before: async (user, ctx) => {
+          if ((await beforeUserCreate(user, ctx)) === false) return false;
+          if (user.name.length > USER_NAME_MAX) {
+            return {
+              data: { ...user, name: user.name.slice(0, USER_NAME_MAX) },
+            };
+          }
+        },
+        after: afterUserCreate,
+      },
     },
   },
 
@@ -110,6 +132,9 @@ export const auth = betterAuth({
       sameSite: "lax",
       httpOnly: true,
     },
+    // Traefik (Coolify) overwrites X-Real-Ip with the client address; the
+    // first X-Forwarded-For entry is client-controlled.
+    ipAddress: { ipAddressHeaders: ["x-real-ip"] },
   },
 
   rateLimit: {

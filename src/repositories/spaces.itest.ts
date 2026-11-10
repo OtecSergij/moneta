@@ -4,7 +4,6 @@ import { db } from "@/db";
 import { pendingSpaceJoins, spaceMembers, spaces } from "@/db/schema";
 import {
   getMembership,
-  getSpaceOwner,
   listMembers,
   resolveSpace,
 } from "@/repositories/spaces";
@@ -151,7 +150,7 @@ describe("resolveSpace", () => {
   });
 });
 
-describe("listMembers / getSpaceOwner", () => {
+describe("listMembers", () => {
   it("lists the owner first, then members by joined_at, with name, email, role and joinedAt", async () => {
     const owner = await mkSpaceUser({ name: "Owner" });
     const late = await mkMember(owner.spaceId, { name: "Late" });
@@ -203,15 +202,5 @@ describe("listMembers / getSpaceOwner", () => {
 
     expect(members.map((m) => m.userId)).toEqual([a.user.id]);
     expect(members.map((m) => m.userId)).not.toContain(b.user.id);
-  });
-
-  it("getSpaceOwner returns the owner's id and name", async () => {
-    const owner = await mkSpaceUser({ name: "Хозяин" });
-    await mkMember(owner.spaceId);
-
-    expect(await getSpaceOwner(owner.spaceId)).toEqual({
-      userId: owner.user.id,
-      name: "Хозяин",
-    });
   });
 });

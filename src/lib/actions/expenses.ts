@@ -29,6 +29,9 @@ export async function createExpenseAction(
   // without claiming a cause that may be wrong.
   const expense = await createExpense(spaceId, user.id, parsed.data);
   if (!expense) {
+    // The account or category may have just been deleted by another member:
+    // re-render so the form drops the stale selection.
+    revalidateFor("expense");
     return { ok: false, error: "Не удалось сохранить трату. Проверьте категорию, дату и счёт" };
   }
   revalidateFor("expense");
@@ -56,7 +59,10 @@ export async function updateExpenseAction(
   if (!parsed.success) return INVALID;
 
   const expense = await updateExpense(spaceId, id, parsed.data);
-  if (!expense) return { ok: false, error: "Не удалось обновить трату" };
+  if (!expense) {
+    revalidateFor("expense");
+    return { ok: false, error: "Не удалось обновить трату" };
+  }
   revalidateFor("expense");
   // The patch may not touch spentAt at all — skip the top-up rather than
   // guessing which date to fill.

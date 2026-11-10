@@ -25,12 +25,18 @@ export const loginSchema = z.object({
 });
 export type LoginValues = z.infer<typeof loginSchema>;
 
+export const USER_NAME_MAX = 60;
+
 export const signUpSchema = z.object({
   email: emailField,
   password: newPasswordField,
   // Optional in the form. Better Auth requires a non-empty `name` on the API,
   // so when this is blank the form derives one from the email local-part.
-  name: z.string().trim().max(80, "Слишком длинное имя").optional(),
+  name: z
+    .string()
+    .trim()
+    .max(USER_NAME_MAX, "Слишком длинное имя")
+    .optional(),
 });
 export type SignUpValues = z.infer<typeof signUpSchema>;
 

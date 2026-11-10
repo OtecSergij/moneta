@@ -85,7 +85,7 @@ describe("parseMoney", () => {
 
 describe("minorToInput", () => {
   it("uses `exponent`, not `displayDigits` — RSD keeps its para", () => {
-    expect(minorToInput(202794, "RSD")).toBe("2027.94");
+    expect(minorToInput(202794, "RSD")).toBe("2027,94");
   });
 
   it("round-trips through parseMoney for all five currencies", () => {
@@ -103,15 +103,15 @@ describe("minorToInput", () => {
   });
   it("keeps the leading minus for negative amounts", () => {
     expect(minorToInput(-5000, "RUB")).toBe("-50");
-    expect(minorToInput(-1248050, "RUB")).toBe("-12480.50");
-    expect(minorToInput(-202794, "RSD")).toBe("-2027.94");
+    expect(minorToInput(-1248050, "RUB")).toBe("-12480,50");
+    expect(minorToInput(-202794, "RSD")).toBe("-2027,94");
     expect(minorToInput(-300000, "RSD")).toBe("-3000");
-    expect(minorToInput(-45000, "BTC")).toBe("-0.00045000");
-    expect(minorToInput(-5, "RUB")).toBe("-0.05");
+    expect(minorToInput(-45000, "BTC")).toBe("-0,00045000");
+    expect(minorToInput(-5, "RUB")).toBe("-0,05");
   });
 
   it("leaves positive amounts unchanged", () => {
     expect(minorToInput(5000, "RUB")).toBe("50");
-    expect(minorToInput(45000, "BTC")).toBe("0.00045000");
+    expect(minorToInput(45000, "BTC")).toBe("0,00045000");
   });
 });

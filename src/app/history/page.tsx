@@ -1,4 +1,5 @@
-import { requireSpace } from "@/lib/dal";
+import type { Metadata } from "next";
+import { requireSpace, userNow } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
 import { listAccounts } from "@/repositories/accounts";
 import {
@@ -17,6 +18,8 @@ import { HistoryFilter } from "@/components/history/history-filter";
 import { PeriodTabs } from "@/components/history/period-tabs";
 import type { DayGroup } from "@/components/history/history-list";
 
+export const metadata: Metadata = { title: "История — moneta" };
+
 export default async function HistoryPage({
   searchParams,
 }: {
@@ -24,7 +27,8 @@ export default async function HistoryPage({
 }) {
   const { user, spaceId } = await requireSpace();
   const { from, to } = await searchParams;
-  const range = resolveHistoryRange(from, to);
+  const now = await userNow();
+  const range = resolveHistoryRange(from, to, now);
 
   // The rate history is the heaviest read in this render, so it is loaded
   // once and threaded into every consumer below — summary, the row list and
@@ -66,7 +70,7 @@ export default async function HistoryPage({
     rateIndex,
   ).map((bucket) => ({
     day: bucket.day,
-    heading: formatDayTitle(bucket.day),
+    heading: formatDayTitle(bucket.day, now),
     totalMinor: bucket.totalMinor,
     unconverted: bucket.unconverted,
     items: bucket.items,

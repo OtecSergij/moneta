@@ -12,6 +12,7 @@ import {
   todayRange,
   weekRange,
   weekRangeLabel,
+  zonedNow,
 } from "@/lib/dates";
 
 // Fixed reference: Sunday, 17 May 2026 (local).
@@ -167,5 +168,20 @@ describe("formatDayTitle", () => {
 
   it("adds the year outside the current year", () => {
     expect(formatDayTitle("2025-11-10", TUESDAY)).toBe("Понедельник, 10 ноября 2025");
+  });
+});
+
+describe("zonedNow", () => {
+  const instant = new Date(Date.UTC(2026, 10, 9, 23, 30));
+
+  it("returns the wall clock of the given zone", () => {
+    expect(toISODate(zonedNow("Europe/Belgrade", instant))).toBe("2026-11-10");
+    expect(toISODate(zonedNow("America/New_York", instant))).toBe("2026-11-09");
+    expect(zonedNow("Europe/Belgrade", instant).getHours()).toBe(0);
+  });
+
+  it("leaves the instant as is for a missing or unknown zone", () => {
+    expect(zonedNow(undefined, instant)).toBe(instant);
+    expect(zonedNow("Not/AZone", instant)).toBe(instant);
   });
 });

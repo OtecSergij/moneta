@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { MailCheck } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
-import { signUpSchema } from "@/lib/auth-schemas";
+import { USER_NAME_MAX, signUpSchema } from "@/lib/auth-schemas";
 import { AvatarInitial } from "@/components/kit/avatar-initial";
 import { Button } from "@/components/kit/button";
 import { GoogleContinueButton } from "@/components/kit/google-continue-button";
@@ -59,7 +59,7 @@ export function InviteForm({
     const payload = {
       email: values.email,
       password: values.password,
-      name: values.email.split("@")[0],
+      name: values.email.split("@")[0].slice(0, USER_NAME_MAX),
       inviteToken: token,
       callbackURL: "/",
     };

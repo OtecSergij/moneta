@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { TabBar, type TabKey } from "@/components/nav/tab-bar";
+import { TimeZoneCookie } from "@/components/layout/time-zone-cookie";
 
 export function AppScreen({
   tab,
@@ -14,6 +15,7 @@ export function AppScreen({
         {children}
       </main>
       <TabBar active={tab} />
+      <TimeZoneCookie />
     </div>
   );
 }

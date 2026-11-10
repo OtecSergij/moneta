@@ -32,6 +32,45 @@ export function parseISODate(iso: string): Date {
   return new Date(y, m - 1, d);
 }
 
+export const TIME_ZONE_COOKIE = "tz";
+
+/**
+ * The wall-clock time in `timeZone` as a Date whose local fields carry it, so
+ * the helpers below compute the user's calendar day on a server in another
+ * zone. An unknown or missing zone leaves `now` as is.
+ */
+export function zonedNow(
+  timeZone: string | undefined,
+  now: Date = new Date(),
+): Date {
+  if (!timeZone) return now;
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+    }).formatToParts(now);
+  } catch {
+    return now;
+  }
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((p) => p.type === type)?.value);
+  return new Date(
+    get("year"),
+    get("month") - 1,
+    get("day"),
+    get("hour"),
+    get("minute"),
+    get("second"),
+  );
+}
+
 /** Today as "YYYY-MM-DD" in local time — default for new expenses, max for the picker. */
 export function todayISO(now: Date = new Date()): string {
   return toISODate(now);

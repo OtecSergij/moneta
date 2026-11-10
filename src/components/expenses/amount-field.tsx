@@ -27,7 +27,12 @@ export function AmountField({
       .join(" ") || undefined;
 
   return (
-    <div className={cn("flex flex-col", size === "main" ? "gap-2" : "gap-1.5")}>
+    <div
+      className={cn(
+        "flex flex-col has-disabled:opacity-60 has-disabled:[&_*]:cursor-not-allowed",
+        size === "main" ? "gap-2" : "gap-1.5",
+      )}
+    >
       <label
         className={cn(
           "flex cursor-text items-center gap-2.5 rounded-field bg-page",

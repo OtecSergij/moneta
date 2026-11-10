@@ -1,6 +1,6 @@
 import { after } from "next/server";
 import { addDays } from "date-fns";
-import { requireSpace } from "@/lib/dal";
+import { requireSpace, userNow } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
 import {
   lastUsedAccountId,
@@ -32,8 +32,9 @@ import { RecentList } from "@/components/expenses/recent-list";
 
 export default async function HomePage() {
   const { user, spaceId } = await requireSpace();
-  const week = weekRange();
-  const elapsed = currentWeekFromMonday();
+  const now = await userNow();
+  const week = weekRange(now);
+  const elapsed = currentWeekFromMonday(now);
 
   // One load for every consumer below. Bounded by maxEntryDate() rather than
   // the week: the recent list has no date filter of its own and its rows can

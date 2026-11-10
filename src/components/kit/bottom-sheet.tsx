@@ -14,8 +14,7 @@ import { cn } from "@/lib/utils";
 type BottomSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  tone?: "white" | "gray";
-  compact?: boolean;
+  variant?: "white" | "gray" | "compact";
   className?: string;
   onOpenAutoFocus?: (event: Event) => void;
   children: ReactNode;
@@ -25,6 +24,12 @@ type BottomSheetProps = {
 );
 
 const TOP_GAP_PX = 24;
+
+const BODY_CLASS = {
+  white: "gap-5 px-5 pt-[9px] pb-[calc(32px+env(safe-area-inset-bottom))]",
+  gray: "gap-3 px-4 pt-px pb-[calc(32px+env(safe-area-inset-bottom))]",
+  compact: "gap-4 px-5 pt-[5px] pb-[calc(28px+env(safe-area-inset-bottom))]",
+} as const;
 
 function subscribeViewport(onChange: () => void) {
   const vv = window.visualViewport;
@@ -59,8 +64,7 @@ type Drag = { startY: number; lastY: number; lastT: number; vy: number };
 export function BottomSheet({
   open,
   onOpenChange,
-  tone = "white",
-  compact = false,
+  variant = "white",
   title,
   ariaLabel,
   className,
@@ -116,7 +120,7 @@ export function BottomSheet({
           className={cn(
             "fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[calc(100dvh-24px)] w-full max-w-[480px] flex-col rounded-t-sheet text-ink shadow-sheet outline-none",
             dragY === 0 && "transition-transform duration-200",
-            tone === "white" ? "bg-card" : "bg-page",
+            variant === "gray" ? "bg-page" : "bg-card",
           )}
           style={{
             bottom: viewport.bottom,
@@ -140,11 +144,7 @@ export function BottomSheet({
           <div
             className={cn(
               "flex min-h-0 flex-col overflow-y-auto overscroll-contain",
-              compact
-                ? "gap-4 px-5 pt-[5px] pb-[calc(28px+env(safe-area-inset-bottom))]"
-                : tone === "white"
-                  ? "gap-5 px-5 pt-[9px] pb-[calc(32px+env(safe-area-inset-bottom))]"
-                  : "gap-3 px-4 pt-px pb-[calc(32px+env(safe-area-inset-bottom))]",
+              BODY_CLASS[variant],
               className,
             )}
           >
@@ -152,7 +152,7 @@ export function BottomSheet({
               <Dialog.Title
                 className={cn(
                   "text-xl/7 font-semibold",
-                  tone === "gray" && "px-1",
+                  variant === "gray" && "px-1",
                 )}
               >
                 {title}

@@ -131,7 +131,7 @@ export async function setItemTextAction(
   if (!isUuid(itemId)) return ITEM_NOT_FOUND;
   const parsed = ItemText.safeParse(text);
   if (!parsed.success) return INVALID;
-  const result = await setItemText(spaceId, user.id, itemId, parsed.data);
+  const result = await setItemText(spaceId, user.id, listId, itemId, parsed.data);
   return await itemDone(result, spaceId, user.id, listId);
 }
 
@@ -145,7 +145,7 @@ export async function setItemCheckedAction(
   if (!isUuid(itemId)) return ITEM_NOT_FOUND;
   const parsed = z.boolean().safeParse(checked);
   if (!parsed.success) return INVALID;
-  const result = await setItemChecked(spaceId, user.id, itemId, parsed.data);
+  const result = await setItemChecked(spaceId, user.id, listId, itemId, parsed.data);
   return await itemDone(result, spaceId, user.id, listId);
 }
 
@@ -156,6 +156,6 @@ export async function deleteItemAction(
   const { user, spaceId } = await requireSpace();
   if (!isUuid(listId)) return LIST_NOT_FOUND;
   if (!isUuid(itemId)) return ITEM_NOT_FOUND;
-  const result = await deleteItem(spaceId, user.id, itemId);
+  const result = await deleteItem(spaceId, user.id, listId, itemId);
   return await itemDone(result, spaceId, user.id, listId);
 }

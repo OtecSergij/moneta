@@ -64,6 +64,13 @@
       "when": 1794339167627,
       "tag": "0008_expense_account_required",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794346978230,
+      "tag": "0009_user_name_length",
+      "breakpoints": true
     }
   ]
 }

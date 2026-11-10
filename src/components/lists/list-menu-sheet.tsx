@@ -67,7 +67,7 @@ export function ListMenuSheet({
   onDelete: () => void;
 }) {
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange} tone="gray" title={name}>
+    <BottomSheet open={open} onOpenChange={onOpenChange} variant="gray" title={name}>
       <div className="overflow-hidden rounded-group bg-card">
         <MenuButton onClick={onReset} className="min-h-[60px] text-ink">
           <Tile Icon={RotateCcw} className="bg-primary-soft text-primary-ink" />

@@ -9,10 +9,12 @@ import { useCategoryForm } from "@/components/categories/use-category-form";
 
 export function NewCategoryPanel({
   categories,
+  autoFocus,
   onCreated,
   onCancel,
 }: {
   categories: Category[];
+  autoFocus: boolean;
   onCreated: (category: Category) => void;
   onCancel?: () => void;
 }) {
@@ -37,7 +39,7 @@ export function NewCategoryPanel({
         }}
         maxLength={CATEGORY_NAME_MAX}
         error={nameError}
-        autoFocus
+        autoFocus={autoFocus}
         className="[&>div]:h-11 [&>div]:rounded-control [&>div]:bg-card [&>div]:px-3.5"
       />
       <ColorSwatches value={color} onChange={setColor} size="panel" />

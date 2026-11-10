@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultAccountSelection } from "@/lib/expense-account";
+import { accountFallback, defaultAccountSelection } from "@/lib/expense-account";
 
 const ACCOUNTS = [
   { id: "usd", currency: "USD" as const },
@@ -30,5 +30,25 @@ describe("defaultAccountSelection", () => {
 
   it("returns null when the space has no accounts", () => {
     expect(defaultAccountSelection([], "usd")).toBeNull();
+  });
+});
+
+describe("accountFallback", () => {
+  it("keeps the selection while the account still exists", () => {
+    expect(accountFallback(ACCOUNTS, "rsd")).toBeNull();
+  });
+
+  it("switches to the first account when the selected one disappears", () => {
+    expect(accountFallback(ACCOUNTS, "gone")).toEqual({
+      accountId: "usd",
+      currency: "USD",
+    });
+  });
+
+  it("clears the selection when no accounts are left", () => {
+    expect(accountFallback([], "usd")).toEqual({
+      accountId: "",
+      currency: null,
+    });
   });
 });

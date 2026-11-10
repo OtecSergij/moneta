@@ -71,6 +71,13 @@ API-based отправка через HTTPS, не нужен открытый SM
 - Регистрационный DoS (бот забивает БД + email-квоту Resend)
 - Email-bombing через verification resend
 
+IP клиента берётся из `X-Real-Ip` (`advanced.ipAddress.ipAddressHeaders`): Traefik в
+Coolify перезаписывает этот заголовок адресом клиента, а первое значение
+`X-Forwarded-For` клиент может подделать. Если заголовка нет, Better Auth не знает IP
+и пропускает лимиты. После деплоя проверить логи на «Rate limiting skipped» — строк
+быть не должно — и убедиться curl'ом, что поддельный `X-Forwarded-For` не сбрасывает
+счётчик.
+
 ## Схема БД
 
 ```sql

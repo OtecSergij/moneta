@@ -50,9 +50,9 @@ describe("lists repository — visibility", () => {
     expect(await setListVisibility(s, u, list.id, "shared")).toEqual(nf);
     expect(await resetList(s, u, list.id)).toEqual(nf);
     expect(await addItem(s, u, list.id, "Чужой")).toEqual(nf);
-    expect(await setItemText(s, u, item.id, "Чужой")).toEqual(nf);
-    expect(await setItemChecked(s, u, item.id, true)).toEqual(nf);
-    expect(await deleteItem(s, u, item.id)).toEqual(nf);
+    expect(await setItemText(s, u, list.id, item.id, "Чужой")).toEqual(nf);
+    expect(await setItemChecked(s, u, list.id, item.id, true)).toEqual(nf);
+    expect(await deleteItem(s, u, list.id, item.id)).toEqual(nf);
     expect(await deleteList(s, u, list.id)).toEqual(nf);
 
     expect(await snapshot(list.id)).toEqual(before);
@@ -69,7 +69,7 @@ describe("lists repository — visibility", () => {
     const added = await addItem(b.spaceId, b.user.id, id, "Молоко");
     expect(added.ok).toBe(true);
     if (!added.ok) return;
-    expect(await setItemChecked(a.spaceId, a.user.id, added.item.id, true)).toEqual({ ok: true });
+    expect(await setItemChecked(a.spaceId, a.user.id, id, added.item.id, true)).toEqual({ ok: true });
     expect(await renameList(b.spaceId, b.user.id, id, "Продукты на неделю")).toEqual({ ok: true });
 
     for (const who of [a, b]) {
@@ -93,7 +93,7 @@ describe("lists repository — visibility", () => {
 
     expect(await listLists(other.spaceId, other.user.id)).toEqual([]);
     expect(await getList(other.spaceId, other.user.id, list.id)).toBeNull();
-    expect(await setItemChecked(other.spaceId, other.user.id, item.id, true)).toEqual({
+    expect(await setItemChecked(other.spaceId, other.user.id, list.id, item.id, true)).toEqual({
       ok: false,
       reason: "not_found",
     });
@@ -102,6 +102,23 @@ describe("lists repository — visibility", () => {
       reason: "not_found",
     });
     expect(await snapshot(list.id)).toEqual(before);
+  });
+
+  it("an item write through a list that does not own the item is not_found", async () => {
+    const a = await mkSpaceUser();
+    const list = await mkList(a.spaceId, a.user.id);
+    const item = await mkItem(list, a.user.id);
+    const other = await mkList(a.spaceId, a.user.id);
+    const before = await snapshot(list.id);
+    const otherBefore = await snapshot(other.id);
+
+    const nf = { ok: false, reason: "not_found" };
+    expect(await setItemText(a.spaceId, a.user.id, other.id, item.id, "Чужой")).toEqual(nf);
+    expect(await setItemChecked(a.spaceId, a.user.id, other.id, item.id, true)).toEqual(nf);
+    expect(await deleteItem(a.spaceId, a.user.id, other.id, item.id)).toEqual(nf);
+
+    expect(await snapshot(list.id)).toEqual(before);
+    expect(await snapshot(other.id)).toEqual(otherBefore);
   });
 
   it("setListVisibility by a non-author is forbidden; the author may change it", async () => {
@@ -122,11 +139,11 @@ describe("lists repository — visibility", () => {
     const { a, b } = await pair();
     const list = await mkList(a.spaceId, a.user.id);
     const item = await mkItem(list, a.user.id);
-    expect(await setItemChecked(b.spaceId, b.user.id, item.id, true)).toEqual({ ok: true });
+    expect(await setItemChecked(b.spaceId, b.user.id, list.id, item.id, true)).toEqual({ ok: true });
 
     await setListVisibility(a.spaceId, a.user.id, list.id, "private");
 
-    expect(await setItemChecked(b.spaceId, b.user.id, item.id, false)).toEqual({
+    expect(await setItemChecked(b.spaceId, b.user.id, list.id, item.id, false)).toEqual({
       ok: false,
       reason: "not_found",
     });
@@ -137,9 +154,9 @@ describe("lists repository — visibility", () => {
 describe("lists repository — ordering and updates", () => {
   const ops: Array<[string, (s: Awaited<ReturnType<typeof setup>>) => Promise<unknown>]> = [
     ["addItem", ({ a, target }) => addItem(a.spaceId, a.user.id, target.id, "Новый")],
-    ["setItemText", ({ a, item }) => setItemText(a.spaceId, a.user.id, item.id, "Другой")],
-    ["setItemChecked", ({ a, item }) => setItemChecked(a.spaceId, a.user.id, item.id, true)],
-    ["deleteItem", ({ a, item }) => deleteItem(a.spaceId, a.user.id, item.id)],
+    ["setItemText", ({ a, target, item }) => setItemText(a.spaceId, a.user.id, target.id, item.id, "Другой")],
+    ["setItemChecked", ({ a, target, item }) => setItemChecked(a.spaceId, a.user.id, target.id, item.id, true)],
+    ["deleteItem", ({ a, target, item }) => deleteItem(a.spaceId, a.user.id, target.id, item.id)],
     ["resetList", ({ a, target }) => resetList(a.spaceId, a.user.id, target.id)],
     ["renameList", ({ a, target }) => renameList(a.spaceId, a.user.id, target.id, "Наверх")],
     [
@@ -178,7 +195,7 @@ describe("lists repository — ordering and updates", () => {
     const second = await mkItem(list, a.user.id, { text: "Второй" });
     const third = await mkItem(list, a.user.id, { text: "Третий" });
 
-    await setItemChecked(a.spaceId, a.user.id, first.id, true);
+    await setItemChecked(a.spaceId, a.user.id, list.id, first.id, true);
     await addItem(a.spaceId, a.user.id, list.id, "Четвёртый");
 
     const got = await getList(a.spaceId, a.user.id, list.id);

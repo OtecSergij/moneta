@@ -9,13 +9,20 @@ import {
   deleteList,
   getList,
   listLists,
+  moveList,
   renameList,
   resetList,
   setItemChecked,
   setItemText,
   setListVisibility,
 } from "@/repositories/lists";
-import { mkItem, mkList, mkMember, mkSpaceUser } from "@/test/factories";
+import {
+  mkItem,
+  mkList,
+  mkMember,
+  mkSpaceUser,
+  type SpaceUser,
+} from "@/test/factories";
 
 async function pair() {
   const a = await mkSpaceUser();
@@ -53,6 +60,7 @@ describe("lists repository — visibility", () => {
     expect(await setItemText(s, u, list.id, item.id, "Чужой")).toEqual(nf);
     expect(await setItemChecked(s, u, list.id, item.id, true)).toEqual(nf);
     expect(await deleteItem(s, u, list.id, item.id)).toEqual(nf);
+    expect(await moveList(s, u, list.id, null)).toEqual(nf);
     expect(await deleteList(s, u, list.id)).toEqual(nf);
 
     expect(await snapshot(list.id)).toEqual(before);
@@ -98,6 +106,10 @@ describe("lists repository — visibility", () => {
       reason: "not_found",
     });
     expect(await deleteList(other.spaceId, other.user.id, list.id)).toEqual({
+      ok: false,
+      reason: "not_found",
+    });
+    expect(await moveList(other.spaceId, other.user.id, list.id, null)).toEqual({
       ok: false,
       reason: "not_found",
     });
@@ -167,13 +179,13 @@ describe("lists repository — ordering and updates", () => {
 
   async function setup() {
     const a = await mkSpaceUser();
-    const target = await mkList(a.spaceId, a.user.id, { name: "Цель" });
+    const target = await mkList(a.spaceId, a.user.id, { name: "Цель", position: 1 });
     const item = await mkItem(target, a.user.id);
-    const newer = await mkList(a.spaceId, a.user.id, { name: "Новее" });
+    const newer = await mkList(a.spaceId, a.user.id, { name: "Новее", position: 0 });
     return { a, target, item, newer };
   }
 
-  it.each(ops)("%s lifts the list to the top of listLists", async (_, op) => {
+  it.each(ops)("%s leaves the list in its place", async (_, op) => {
     const s = await setup();
     expect((await listLists(s.a.spaceId, s.a.user.id)).map((l) => l.id)).toEqual([
       s.newer.id,
@@ -183,8 +195,8 @@ describe("lists repository — ordering and updates", () => {
     await op(s);
 
     expect((await listLists(s.a.spaceId, s.a.user.id)).map((l) => l.id)).toEqual([
-      s.target.id,
       s.newer.id,
+      s.target.id,
     ]);
   });
 
@@ -242,5 +254,163 @@ describe("lists repository — ordering and updates", () => {
       (e: unknown) => e,
     );
     expect(err).toMatchObject({ cause: { code: "23503" } });
+  });
+});
+
+describe("lists repository — manual order", () => {
+  async function create(
+    who: SpaceUser,
+    name: string,
+    visibility: "shared" | "private" = "shared",
+  ) {
+    const { id } = await createList(who.spaceId, who.user.id, { name, visibility });
+    return id;
+  }
+
+  const order = async (who: SpaceUser) =>
+    (await listLists(who.spaceId, who.user.id)).map((l) => l.name);
+
+  it("createList puts a new list on top", async () => {
+    const a = await mkSpaceUser();
+    await create(a, "Первый");
+    await create(a, "Второй");
+    await create(a, "Третий");
+
+    expect(await order(a)).toEqual(["Третий", "Второй", "Первый"]);
+  });
+
+  it("moveList puts a list after another, first, or last, for every member", async () => {
+    const { a, b } = await pair();
+    const first = await create(a, "A");
+    const second = await create(a, "B");
+    await create(a, "C");
+    const fourth = await create(a, "D");
+    expect(await order(a)).toEqual(["D", "C", "B", "A"]);
+
+    expect(await moveList(a.spaceId, a.user.id, first, fourth)).toEqual({ ok: true });
+    expect(await order(a)).toEqual(["D", "A", "C", "B"]);
+
+    expect(await moveList(b.spaceId, b.user.id, second, null)).toEqual({ ok: true });
+    expect(await order(b)).toEqual(["B", "D", "A", "C"]);
+    expect(await order(a)).toEqual(["B", "D", "A", "C"]);
+
+    expect(await moveList(a.spaceId, a.user.id, second, first)).toEqual({ ok: true });
+    expect(await order(a)).toEqual(["D", "A", "B", "C"]);
+
+    const third = (await listLists(a.spaceId, a.user.id))[3].id;
+    expect(await moveList(a.spaceId, a.user.id, fourth, third)).toEqual({ ok: true });
+    expect(await order(a)).toEqual(["A", "B", "C", "D"]);
+
+    expect(await moveList(a.spaceId, a.user.id, first, first)).toEqual({ ok: true });
+    expect(await order(a)).toEqual(["A", "B", "C", "D"]);
+  });
+
+  it("lists that share a position move in the order listLists shows", async () => {
+    const a = await mkSpaceUser();
+    for (const name of ["P", "Q", "R"]) await mkList(a.spaceId, a.user.id, { name });
+    const shown = await listLists(a.spaceId, a.user.id);
+
+    await moveList(a.spaceId, a.user.id, shown[2].id, shown[0].id);
+
+    expect(await order(a)).toEqual([shown[0].name, shown[2].name, shown[1].name]);
+  });
+
+  it("a new list after a move still lands on top", async () => {
+    const a = await mkSpaceUser();
+    const first = await create(a, "A");
+    const second = await create(a, "B");
+    await moveList(a.spaceId, a.user.id, second, first);
+    await create(a, "C");
+
+    expect(await order(a)).toEqual(["C", "A", "B"]);
+  });
+
+  it("another member's private list keeps its place among the rest", async () => {
+    const { a, b } = await pair();
+    await create(a, "Y");
+    await create(a, "Тайный", "private");
+    const x = await create(a, "X");
+    const z = await create(b, "Z");
+    expect(await order(a)).toEqual(["Z", "X", "Тайный", "Y"]);
+    expect(await order(b)).toEqual(["Z", "X", "Y"]);
+
+    expect(await moveList(b.spaceId, b.user.id, z, x)).toEqual({ ok: true });
+
+    expect(await order(b)).toEqual(["X", "Z", "Y"]);
+    expect(await order(a)).toEqual(["X", "Z", "Тайный", "Y"]);
+  });
+
+  it("a hidden list at either end stays there when others move around it", async () => {
+    const { a, b } = await pair();
+    await create(a, "Тайный внизу", "private");
+    const x = await create(a, "X");
+    const y = await create(a, "Y");
+    await create(a, "Тайный вверху", "private");
+    expect(await order(a)).toEqual(["Тайный вверху", "Y", "X", "Тайный внизу"]);
+
+    await moveList(b.spaceId, b.user.id, x, null);
+    expect(await order(a)).toEqual(["X", "Тайный вверху", "Y", "Тайный внизу"]);
+
+    await moveList(b.spaceId, b.user.id, x, y);
+    expect(await order(a)).toEqual(["Тайный вверху", "Y", "X", "Тайный внизу"]);
+    expect(await order(b)).toEqual(["Y", "X"]);
+  });
+
+  it("moving or anchoring on a list the user cannot see is not_found and changes nothing", async () => {
+    const { a, b } = await pair();
+    const shared = await create(a, "Общий");
+    const secret = await create(a, "Тайный", "private");
+    const other = await mkSpaceUser();
+    const foreign = await create(other, "Чужой");
+    const before = await order(a);
+    const nf = { ok: false, reason: "not_found" };
+
+    expect(await moveList(b.spaceId, b.user.id, secret, null)).toEqual(nf);
+    expect(await moveList(b.spaceId, b.user.id, shared, secret)).toEqual(nf);
+    expect(await moveList(a.spaceId, a.user.id, shared, foreign)).toEqual(nf);
+    expect(await moveList(a.spaceId, a.user.id, foreign, null)).toEqual(nf);
+
+    expect(await order(a)).toEqual(before);
+    expect(await order(other)).toEqual(["Чужой"]);
+  });
+
+  it("concurrent moves leave every list once, with distinct positions", async () => {
+    const { a, b } = await pair();
+    const ids: string[] = [];
+    for (const name of ["A", "B", "C", "D", "E"]) ids.push(await create(a, name));
+
+    const results = await Promise.all([
+      moveList(a.spaceId, a.user.id, ids[0], null),
+      moveList(b.spaceId, b.user.id, ids[4], ids[0]),
+      moveList(a.spaceId, a.user.id, ids[2], ids[3]),
+      moveList(b.spaceId, b.user.id, ids[1], null),
+    ]);
+
+    expect(results).toEqual(Array(4).fill({ ok: true }));
+    expect([...(await order(a))].sort()).toEqual(["A", "B", "C", "D", "E"]);
+    const positions = await db
+      .select({ position: lists.position })
+      .from(lists)
+      .where(eq(lists.spaceId, a.spaceId));
+    expect(new Set(positions.map((p) => p.position)).size).toBe(5);
+  });
+
+  it("a list created during a move gets a position of its own", async () => {
+    const a = await mkSpaceUser();
+    const ids: string[] = [];
+    for (const name of ["A", "B", "C"]) ids.push(await create(a, name));
+
+    await Promise.all([
+      moveList(a.spaceId, a.user.id, ids[0], null),
+      create(a, "D"),
+      moveList(a.spaceId, a.user.id, ids[2], ids[1]),
+    ]);
+
+    expect([...(await order(a))].sort()).toEqual(["A", "B", "C", "D"]);
+    const positions = await db
+      .select({ position: lists.position })
+      .from(lists)
+      .where(eq(lists.spaceId, a.spaceId));
+    expect(new Set(positions.map((p) => p.position)).size).toBe(4);
   });
 });

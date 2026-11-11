@@ -4,6 +4,7 @@ import {
   check,
   foreignKey,
   index,
+  integer,
   pgEnum,
   pgTable,
   text,
@@ -29,6 +30,7 @@ export const lists = pgTable(
       .references(() => user.id, { onDelete: "restrict" }),
     name: text("name").notNull(),
     visibility: listVisibilityEnum("visibility").notNull().default("shared"),
+    position: integer("position").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -38,7 +40,7 @@ export const lists = pgTable(
   },
   (t) => [
     unique("lists_id_space_uniq").on(t.id, t.spaceId),
-    index("lists_space_updated_idx").on(t.spaceId, t.updatedAt.desc()),
+    index("lists_space_position_idx").on(t.spaceId, t.position),
     check("lists_name_len", sql`char_length(trim(${t.name})) between 1 and 60`),
   ],
 );

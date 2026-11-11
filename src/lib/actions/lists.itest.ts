@@ -42,6 +42,7 @@ import {
   createListAction,
   deleteItemAction,
   deleteListAction,
+  moveListAction,
   renameListAction,
   resetListAction,
   setItemCheckedAction,
@@ -84,6 +85,7 @@ describe("lists actions", () => {
       setItemTextAction(bad, bad, "Пункт"),
       setItemCheckedAction(bad, bad, true),
       deleteItemAction(bad, bad),
+      moveListAction(bad, null),
     ]);
     for (const r of results) expect(r.ok).toBe(false);
   });
@@ -126,6 +128,7 @@ describe("lists actions", () => {
       setItemTextAction(list.id, item.id, "Чужое"),
       setItemCheckedAction(list.id, item.id, true),
       deleteItemAction(list.id, item.id),
+      moveListAction(list.id, null),
     ]);
     for (const r of results) {
       expect(r).toMatchObject({ ok: false, notFound: true });
@@ -153,6 +156,24 @@ describe("lists actions", () => {
       expect(r).toEqual({ ok: false, error: "Пункт не найден" });
     }
     expect(revalidatePath).toHaveBeenCalledWith("/lists");
+  });
+
+  it("moves a list and revalidates; a bad or self anchor is invalid", async () => {
+    const first = await mkList(me.spaceId, me.user.id, { name: "A", position: 0 });
+    const second = await mkList(me.spaceId, me.user.id, { name: "B", position: 1 });
+
+    expect(await moveListAction(first.id, "not-a-uuid")).toMatchObject({ ok: false });
+    expect(await moveListAction(first.id, first.id)).toMatchObject({ ok: false });
+    expect(revalidatePath).not.toHaveBeenCalled();
+
+    expect(await moveListAction(first.id, second.id)).toEqual({ ok: true, data: null });
+    expect(revalidatePath).toHaveBeenCalledWith("/lists");
+    const rows = await db
+      .select({ name: lists.name })
+      .from(lists)
+      .where(eq(lists.spaceId, me.spaceId))
+      .orderBy(lists.position);
+    expect(rows.map((r) => r.name)).toEqual(["B", "A"]);
   });
 
   it("lets only the author change visibility", async () => {

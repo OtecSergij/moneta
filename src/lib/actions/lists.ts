@@ -11,6 +11,7 @@ import {
   deleteItem,
   deleteList,
   isListVisible,
+  moveList,
   renameList,
   resetList,
   setItemChecked,
@@ -85,6 +86,18 @@ export async function setListVisibilityAction(
   }
   revalidateFor("list");
   return { ok: true, data: null };
+}
+
+export async function moveListAction(
+  listId: string,
+  afterId: string | null,
+): Promise<ListActionResult<null>> {
+  const { user, spaceId } = await requireSpace();
+  if (!isUuid(listId)) return LIST_NOT_FOUND;
+  if (afterId !== null && (!isUuid(afterId) || afterId === listId)) {
+    return INVALID;
+  }
+  return done(await moveList(spaceId, user.id, listId, afterId));
 }
 
 export async function resetListAction(

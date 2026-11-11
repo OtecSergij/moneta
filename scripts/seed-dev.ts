@@ -263,8 +263,7 @@ async function main() {
     }
   }
 
-  // Inserted oldest first so the list order on screen follows LISTS.
-  for (const l of [...LISTS].reverse()) {
+  for (const [position, l] of LISTS.entries()) {
     const [list] = await db
       .insert(lists)
       .values({
@@ -272,6 +271,7 @@ async function main() {
         createdBy: authorId[l.by],
         name: l.name,
         visibility: l.isPrivate ? "private" : "shared",
+        position,
       })
       .returning();
     const items = [

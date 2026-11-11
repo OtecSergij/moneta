@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, or, sql, type SQL } from "drizzle-orm";
 import { db, type Tx } from "@/db";
 import { listItems, lists } from "@/db/schema";
 import type { ListInput, ListVisibility } from "@/lib/lists";
@@ -61,7 +61,7 @@ export async function listLists(
   userId: string,
 ): Promise<ListSummary[]> {
   return await summaryQuery(spaceId, userId).orderBy(
-    desc(lists.updatedAt),
+    asc(lists.position),
     asc(lists.id),
   );
 }
@@ -106,9 +106,62 @@ export async function createList(
       createdBy: userId,
       name: input.name,
       visibility: input.visibility,
+      position: sql`(select least(coalesce(min(${lists.position}), 0), 0) - 1 from ${lists} where ${lists.spaceId} = ${spaceId})`,
     })
     .returning({ id: lists.id });
   return row;
+}
+
+// Puts a list right after `afterId` (null: first) in the space-wide order and
+// renumbers the space to 0..n-1; createList stays below 0, so a new list never
+// ties with a renumbered one. Other members' private lists keep their places.
+export async function moveList(
+  spaceId: SpaceId,
+  userId: string,
+  listId: string,
+  afterId: string | null,
+): Promise<ListOpResult> {
+  return await db.transaction(async (tx) => {
+    // Lock in id order, which never changes, so concurrent moves can't
+    // deadlock; read the order in a later statement, because ORDER BY with a
+    // lock can return rows sorted by positions from before another move.
+    await tx
+      .select({ id: lists.id })
+      .from(lists)
+      .where(eq(lists.spaceId, spaceId))
+      .orderBy(asc(lists.id))
+      .for("no key update");
+    const rows = await tx
+      .select({
+        id: lists.id,
+        position: lists.position,
+        visible: sql<boolean>`${or(eq(lists.visibility, "shared"), eq(lists.createdBy, userId))}`,
+      })
+      .from(lists)
+      .where(eq(lists.spaceId, spaceId))
+      .orderBy(asc(lists.position), asc(lists.id));
+
+    const visible = new Set(rows.filter((r) => r.visible).map((r) => r.id));
+    if (!visible.has(listId) || (afterId !== null && !visible.has(afterId))) {
+      return NOT_FOUND;
+    }
+    if (afterId === listId) return { ok: true } as const;
+    const order = rows.map((r) => r.id).filter((id) => id !== listId);
+    order.splice(afterId === null ? 0 : order.indexOf(afterId) + 1, 0, listId);
+
+    const changed = order.flatMap((id, position) =>
+      rows.find((r) => r.id === id)?.position === position
+        ? []
+        : [sql`(${id}::uuid, ${position}::int)`],
+    );
+    if (changed.length > 0) {
+      await tx.execute(sql`
+        update "lists" set "position" = v.position
+        from (values ${sql.join(changed, sql`, `)}) as v(id, position)
+        where "lists"."id" = v.id`);
+    }
+    return { ok: true } as const;
+  });
 }
 
 // Bumps updated_at of a visible list and row-locks it for the rest of the

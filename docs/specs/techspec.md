@@ -24,8 +24,8 @@ expenses(+space_id → spaces CASCADE, +created_by → user RESTRICT, −user_id
     INDEX(space_id, spent_at DESC) · INDEX(space_id, created_by, created_at DESC)
     · INDEX(account_id, created_at) [ф.4]
 lists(id, space_id → spaces CASCADE, created_by → user RESTRICT, name,
-    visibility list_visibility DEFAULT 'shared', created_at, updated_at)
-    UNIQUE(id,space_id) · INDEX(space_id, updated_at DESC)
+    visibility list_visibility DEFAULT 'shared', position int DEFAULT 0, created_at, updated_at)
+    UNIQUE(id,space_id) · INDEX(space_id, position)
 list_items(id, list_id, space_id, created_by → user RESTRICT, text, checked, created_at, updated_at)
     FK(list_id,space_id) → lists(id,space_id) CASCADE · INDEX(list_id, checked, created_at)
 accounts(id, space_id → spaces CASCADE, created_by → user RESTRICT, name, currency currency_code,
@@ -441,9 +441,10 @@ Google-путь проверяется локально только при те
    // src/repositories/lists.ts
    type ListSummary = { id; name; visibility; isMine: boolean; doneCount: number; totalCount: number; updatedAt: Date };
    type ListWithItems = ListSummary & { items: Array<{ id; text; checked: boolean }> };   // ORDER BY checked, created_at, id
-   listLists(spaceId, userId): Promise<ListSummary[]>              // ORDER BY updated_at DESC
+   listLists(spaceId, userId): Promise<ListSummary[]>              // ORDER BY position, id
    getList(spaceId, userId, listId): Promise<ListWithItems | null>
-   createList(spaceId, userId, input)
+   createList(spaceId, userId, input)                              // наверх: position = least(min(position), 0) − 1
+   moveList(spaceId, userId, listId, afterId | null)               // сразу после afterId (null — первым), пространство перенумеровывается
    renameList(spaceId, userId, listId, name)
    setListVisibility(spaceId, userId, listId, v): Promise<{ ok: true } | { ok: false; reason: "not_found" | "forbidden" }> // только автор
    resetList(spaceId, userId, listId)
@@ -523,7 +524,7 @@ Google-путь проверяется локально только при те
 
 - Общие команды и поиски зелёные.
 - Нижняя панель «Траты / История / Списки» на всех продуктовых экранах — сверка `TabBar` на пяти маршрутах.
-- Экран «Списки» (название, «N из M», приватность, создание с «Виден только мне», порядок по изменению) — `lists.itest.ts`; сверка `Lists`/`ListsEmpty`/`ListNew`.
+- Экран «Списки» (название, «N из M», приватность, создание с «Виден только мне», порядок перетаскиванием) — `lists.itest.ts`; сверка `Lists`/`ListsEmpty`/`ListNew`.
 - Экран списка (галочки, отмеченные внизу, добавление, правка и удаление пункта, сброс, переименование, приватность, удаление) — `lists.itest.ts`; сверка `List`/`ListEmpty`/`ListItemEdit`/`ListMenu`/`ListRename` с жестами.
 - Пункт — только текст — схема `list_items`.
 - Таблицы со `space_id`, `created_by`, `visibility` — схема (`visibility` у списка, пункты наследуют через составной FK).
@@ -682,7 +683,7 @@ Google-путь проверяется локально только при те
 - Выход и удаление участника, передача владения, удаление пространства.
 - Отдельные сообщения и надписи для приглашённых; поле имени на приглашении; отдельный текст для истёкшей ссылки.
 - Real-time и автообновление экранов.
-- Списки: шаблоны, архив, перетаскивание, количество и цена у пунктов, связь с тратами.
+- Списки: шаблоны, архив, перетаскивание пунктов, количество и цена у пунктов, связь с тратами.
 - Счета: приватные счета, тип счёта, копилки, заметки, смена валюты счёта, история уточнений остатка и якорей.
 - Конвертации и комиссии в остатках; переводы, пополнения, леджер.
 - Правка категорий из карточки траты.

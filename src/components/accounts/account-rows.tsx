@@ -28,7 +28,7 @@ export function AccountRows({
             <button
               type="button"
               onClick={() => setOpenId(row.id)}
-              className="flex min-h-[72px] w-full cursor-pointer items-center gap-3.5 px-4 py-3 text-left text-ink focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+              className="flex min-h-[72px] w-full cursor-pointer items-center gap-3.5 px-4 py-3 text-left text-ink hover-row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
             >
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="flex items-center gap-2 text-base font-semibold">

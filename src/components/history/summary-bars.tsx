@@ -43,7 +43,7 @@ export function SummaryBars({
               type="button"
               aria-expanded={open}
               onClick={() => setOpenId(open ? null : row.categoryId)}
-              className="flex w-full cursor-pointer flex-col gap-2.5 px-4 py-3.5 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+              className="flex w-full cursor-pointer flex-col gap-2.5 px-4 py-3.5 text-left hover-row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
             >
               <span className="flex w-full items-center gap-2">
                 <span
@@ -92,7 +92,7 @@ export function SummaryBars({
                     <button
                       type="button"
                       onClick={() => onSelect(e)}
-                      className="flex min-h-14 w-full cursor-pointer items-center gap-3 px-3.5 py-[9px] text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+                      className="flex min-h-14 w-full cursor-pointer items-center gap-3 px-3.5 py-[9px] text-left hover-row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
                     >
                       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                         <span className="truncate text-[15px]/[18px] font-medium">

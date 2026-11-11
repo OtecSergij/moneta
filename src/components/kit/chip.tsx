@@ -23,7 +23,7 @@ export function Chip({
       type={type}
       aria-pressed={pressed}
       className={cn(
-        "inline-flex h-10 cursor-pointer items-center rounded-chip text-sm font-medium transition-colors",
+        "inline-flex h-10 cursor-pointer items-center rounded-chip text-sm font-medium hover-chip",
         wide ? "pr-4" : "pr-3.5",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
         "disabled:cursor-not-allowed disabled:opacity-60",

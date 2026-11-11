@@ -42,8 +42,8 @@ export function GoogleContinueButton({
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cn(
-        "inline-flex h-13 w-full cursor-pointer items-center justify-center gap-2.5 rounded-field bg-card px-4 text-base font-semibold text-ink transition-colors",
-        "shadow-[inset_0_0_0_1px_var(--color-control-line)] hover:bg-page",
+        "inline-flex h-13 w-full cursor-pointer items-center justify-center gap-2.5 rounded-field bg-card px-4 text-base font-semibold text-ink",
+        "shadow-[inset_0_0_0_1px_var(--color-control-line)] hover-outline",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
         "disabled:cursor-not-allowed disabled:opacity-60",
         className,

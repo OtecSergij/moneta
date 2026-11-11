@@ -38,7 +38,7 @@ export function Segment<T extends string>({
             aria-pressed={selected}
             onClick={() => onChange(option.value)}
             className={cn(
-              "h-10 cursor-pointer rounded-[10px] tabular-nums transition-colors",
+              "h-10 cursor-pointer rounded-[10px] tabular-nums hover-seg",
               tone === "symbol"
                 ? "text-[15px] font-medium"
                 : "text-sm font-semibold",

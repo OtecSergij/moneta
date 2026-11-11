@@ -153,10 +153,10 @@ export function ListScreen({ list: serverList }: { list: ListWithItems }) {
 
   return (
     <>
-      <div className="flex items-center justify-between pt-3 pr-2.5 pl-1.5">
+      <div className="flex items-center justify-between pt-3 pr-2.5 pl-1.5 lg:pt-8 lg:pr-4">
         <Link
           href="/lists"
-          className="flex h-11 items-center gap-0.5 rounded-control pr-2.5 pl-1 text-base font-medium text-primary-ink focus-visible:outline-2 focus-visible:outline-primary"
+          className="flex h-11 items-center gap-0.5 rounded-control pr-2.5 pl-1 text-base font-medium text-primary-ink hover-ghost focus-visible:outline-2 focus-visible:outline-primary"
         >
           <ChevronLeft aria-hidden className="size-[22px]" strokeWidth={1.75} />
           Списки
@@ -165,7 +165,7 @@ export function ListScreen({ list: serverList }: { list: ListWithItems }) {
           type="button"
           aria-label="Действия со списком"
           onClick={() => setMenuOpen(true)}
-          className="flex size-11 cursor-pointer items-center justify-center rounded-chip bg-card text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          className="flex size-11 cursor-pointer items-center justify-center rounded-chip bg-card text-ink hover-outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         >
           <MoreHorizontal aria-hidden className="size-[22px]" strokeWidth={1.75} />
         </button>
@@ -200,7 +200,7 @@ export function ListScreen({ list: serverList }: { list: ListWithItems }) {
               aria-label="Сохранить"
               onMouseDown={keepFocus}
               onClick={saveTitle}
-              className="flex size-12 flex-none cursor-pointer items-center justify-center rounded-field bg-primary text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              className="flex size-12 flex-none cursor-pointer items-center justify-center rounded-field bg-primary text-white hover-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
               <Check aria-hidden className="size-[22px]" strokeWidth={1.75} />
             </button>

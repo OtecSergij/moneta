@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type CSSProperties,
   type PointerEvent,
   type ReactNode,
 } from "react";
@@ -30,6 +31,11 @@ const BODY_CLASS = {
   gray: "gap-3 px-4 pt-px pb-[calc(32px+env(safe-area-inset-bottom))]",
   compact: "gap-4 px-5 pt-[5px] pb-[calc(28px+env(safe-area-inset-bottom))]",
 } as const;
+
+// From lg up the sheet is a dialog centred in the visible viewport: top-0 +
+// the inline `bottom` (keyboard height, 0 without one) + my-auto + h-fit.
+const DESKTOP_CLASS =
+  "lg:top-0 lg:my-auto lg:h-fit lg:max-h-[calc(var(--sheet-max-h)-24px)] lg:w-[440px] lg:max-w-none lg:rounded-sheet lg:shadow-dialog";
 
 function subscribeViewport(onChange: () => void) {
   const vv = window.visualViewport;
@@ -118,18 +124,21 @@ export function BottomSheet({
           aria-describedby={undefined}
           onOpenAutoFocus={onOpenAutoFocus}
           className={cn(
-            "fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[calc(100dvh-24px)] w-full max-w-[480px] flex-col rounded-t-sheet text-ink shadow-sheet outline-none",
+            "fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-(--sheet-max-h) w-full max-w-[480px] flex-col rounded-t-sheet text-ink shadow-sheet outline-none",
+            DESKTOP_CLASS,
             dragY === 0 && "transition-transform duration-200",
             variant === "gray" ? "bg-page" : "bg-card",
           )}
-          style={{
-            bottom: viewport.bottom,
-            maxHeight:
-              viewport.height === null
-                ? undefined
-                : viewport.height - TOP_GAP_PX,
-            transform: dragY ? `translateY(${dragY}px)` : undefined,
-          }}
+          style={
+            {
+              bottom: viewport.bottom,
+              "--sheet-max-h":
+                viewport.height === null
+                  ? `calc(100dvh - ${TOP_GAP_PX}px)`
+                  : `${viewport.height - TOP_GAP_PX}px`,
+              transform: dragY ? `translateY(${dragY}px)` : undefined,
+            } as CSSProperties
+          }
         >
           <div
             aria-hidden
@@ -137,7 +146,7 @@ export function BottomSheet({
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerCancel}
-            className="flex h-6 flex-none cursor-grab touch-none justify-center pt-2"
+            className="flex h-6 flex-none cursor-grab touch-none justify-center pt-2 lg:hidden"
           >
             <span className="h-[5px] w-9 rounded-chip bg-control-line" />
           </div>
@@ -145,6 +154,7 @@ export function BottomSheet({
             className={cn(
               "flex min-h-0 flex-col overflow-y-auto overscroll-contain",
               BODY_CLASS[variant],
+              "lg:p-6",
               className,
             )}
           >

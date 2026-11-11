@@ -146,7 +146,7 @@ export function AccountSheet({
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                className={`${CONFIRM_BUTTON} bg-card text-ink`}
+                className={`${CONFIRM_BUTTON} bg-card text-ink hover-white`}
                 disabled={busy !== null}
                 onClick={() => setConfirming(false)}
               >
@@ -154,7 +154,7 @@ export function AccountSheet({
               </button>
               <button
                 type="button"
-                className={`${CONFIRM_BUTTON} bg-error text-white`}
+                className={`${CONFIRM_BUTTON} bg-error text-white hover-danger`}
                 disabled={busy !== null}
                 aria-busy={busy === "delete" || undefined}
                 onClick={() => void remove()}

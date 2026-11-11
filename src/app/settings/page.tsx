@@ -20,11 +20,11 @@ export default async function SettingsPage() {
   ]);
 
   return (
-    <AppScreen tab="none">
-      <div className="pt-3 pr-2.5 pl-1.5">
+    <AppScreen tab="settings">
+      <div className="pt-3 pr-2.5 pl-1.5 lg:hidden">
         <BackButton />
       </div>
-      <h1 className="mx-5 mt-1 text-[28px] leading-9 font-bold tracking-[-0.02em]">
+      <h1 className="mx-5 mt-1 text-[28px] leading-9 font-bold tracking-[-0.02em] lg:mt-9">
         Настройки
       </h1>
 

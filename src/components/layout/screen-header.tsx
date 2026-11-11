@@ -15,7 +15,7 @@ export function ScreenHeader({
   action?: ReactNode;
 }) {
   return (
-    <header className="flex items-center justify-between gap-2 pt-4 pr-2.5 pb-2 pl-5">
+    <header className="flex items-center justify-between gap-2 pt-4 pr-2.5 pb-2 pl-5 lg:pt-8 lg:pr-4">
       <h1 className="text-[28px]/9 font-bold tracking-[-0.02em]">{title}</h1>
       <div
         className={cn(
@@ -32,7 +32,7 @@ export function ScreenHeader({
         <Link
           href="/settings"
           aria-label="Настройки"
-          className="flex size-11 items-center justify-center rounded-control text-ink focus-visible:outline-2 focus-visible:outline-primary"
+          className="flex size-11 items-center justify-center rounded-control text-ink hover-ghost focus-visible:outline-2 focus-visible:outline-primary lg:hidden"
         >
           <Settings aria-hidden className="size-[22px]" strokeWidth={1.75} />
         </Link>
@@ -54,7 +54,7 @@ export function HeaderAddButton({
     <button
       type="button"
       aria-label={label}
-      className="flex size-11 cursor-pointer items-center justify-center rounded-chip bg-select text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      className="flex size-11 cursor-pointer items-center justify-center rounded-chip bg-select text-white hover-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       {...props}
     >
       <Plus aria-hidden className="size-[22px]" strokeWidth={1.75} />

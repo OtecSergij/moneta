@@ -36,7 +36,7 @@ function MenuButton({
       onClick={onClick}
       className={cn(
         ROW,
-        "cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary",
+        "cursor-pointer hover-row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary",
         className,
       )}
     >

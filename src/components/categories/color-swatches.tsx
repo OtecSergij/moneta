@@ -36,7 +36,7 @@ export function ColorSwatches({
           value={color}
           aria-label={CATEGORY_COLOR_NAMES[color]}
           className={cn(
-            "flex cursor-pointer items-center justify-center rounded-chip",
+            "flex cursor-pointer items-center justify-center rounded-chip hover-swatch",
             "focus-visible:outline-2 focus-visible:outline-primary",
             s.item,
           )}

@@ -78,7 +78,7 @@ function DateField({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="relative flex h-[58px] cursor-pointer items-center justify-between gap-2 rounded-field bg-page px-3.5 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-primary">
+    <label className="relative flex h-[58px] cursor-pointer items-center justify-between gap-2 rounded-field bg-page px-3.5 hover-soft has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-primary">
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className="text-xs text-ink-2">{label}</span>
         <span className="truncate text-[15px] font-medium tabular-nums">

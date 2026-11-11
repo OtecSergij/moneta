@@ -84,7 +84,7 @@ export function CategoryChips({
             aria-expanded={edit.newOpen}
             onClick={edit.onNewToggle}
             className={cn(
-              "inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-chip border border-dashed bg-card pr-3.5 pl-2.5 text-sm font-medium transition-colors",
+              "inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-chip border border-dashed bg-card pr-3.5 pl-2.5 text-sm font-medium hover-white",
               "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
               edit.newOpen
                 ? "border-primary text-primary-ink"

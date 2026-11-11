@@ -26,7 +26,7 @@ export function BackButton() {
     <Link
       href="/"
       onClick={onClick}
-      className="inline-flex h-11 items-center gap-0.5 rounded-control pr-2.5 pl-1 text-base font-medium text-primary-ink focus-visible:outline-2 focus-visible:outline-primary"
+      className="inline-flex h-11 items-center gap-0.5 rounded-control pr-2.5 pl-1 text-base font-medium text-primary-ink hover-ghost focus-visible:outline-2 focus-visible:outline-primary"
     >
       <ChevronLeft className="size-[22px]" strokeWidth={1.75} aria-hidden />
       Назад

@@ -17,15 +17,15 @@ type ButtonProps = ComponentProps<"button"> & {
 
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
   primary:
-    "h-13 rounded-field bg-primary text-base font-semibold text-white hover:bg-primary-ink",
+    "h-13 rounded-field bg-primary text-base font-semibold text-white hover-primary",
   secondary:
-    "h-12 rounded-field bg-page text-[15px] font-medium text-ink hover:bg-line",
+    "h-12 rounded-field bg-page text-[15px] font-medium text-ink hover-soft",
   danger:
-    "h-13 rounded-field bg-danger-soft text-base font-semibold text-danger-ink",
+    "h-13 rounded-field bg-danger-soft text-base font-semibold text-danger-ink hover-danger-soft",
   "danger-text":
-    "h-12 rounded-field bg-transparent text-[15px] font-medium text-danger-ink",
+    "h-12 rounded-field bg-transparent text-[15px] font-medium text-danger-ink hover-ghost-danger",
   select:
-    "h-10 rounded-[10px] bg-select text-sm font-semibold text-white",
+    "h-10 rounded-[10px] bg-select text-sm font-semibold text-white hover-dark",
 };
 
 export function Button({
@@ -44,7 +44,7 @@ export function Button({
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cn(
-        "inline-flex cursor-pointer items-center justify-center gap-2 transition-colors",
+        "inline-flex cursor-pointer items-center justify-center gap-2",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
         "disabled:cursor-not-allowed disabled:opacity-60",
         VARIANT_CLASS[variant],

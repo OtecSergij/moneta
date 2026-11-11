@@ -31,7 +31,7 @@ export function LogoutButton() {
       onClick={onLogout}
       disabled={loading}
       aria-busy={loading || undefined}
-      className="flex min-h-14 w-full cursor-pointer items-center gap-2.5 border-t border-row-line bg-transparent px-4 text-left text-base font-medium text-danger-ink focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60"
+      className="flex min-h-14 w-full cursor-pointer items-center gap-2.5 border-t border-row-line bg-transparent px-4 text-left text-base font-medium text-danger-ink hover-row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60"
     >
       {loading ? (
         <Loader2 className="size-5 animate-spin" strokeWidth={1.75} aria-hidden />

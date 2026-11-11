@@ -64,7 +64,7 @@ function ItemEditor({
         aria-label="Удалить пункт"
         onMouseDown={keepFocus}
         onClick={onRemove}
-        className="flex size-11 flex-none cursor-pointer items-center justify-center rounded-control bg-danger-soft text-danger-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        className="flex size-11 flex-none cursor-pointer items-center justify-center rounded-control bg-danger-soft text-danger-ink hover-danger-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
         <Trash2 aria-hidden className="size-5" strokeWidth={1.75} />
       </button>
@@ -73,7 +73,7 @@ function ItemEditor({
         aria-label="Сохранить"
         onMouseDown={keepFocus}
         onClick={save}
-        className="flex size-11 flex-none cursor-pointer items-center justify-center rounded-control bg-primary text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        className="flex size-11 flex-none cursor-pointer items-center justify-center rounded-control bg-primary text-white hover-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
         <Check aria-hidden className="size-5" strokeWidth={1.75} />
       </button>
@@ -124,7 +124,7 @@ export function ListItemRow({
       onClick={onToggle}
       {...longPress}
       className={cn(
-        "flex min-h-[52px] w-full cursor-pointer items-center gap-3 pr-4 pl-[15px] text-left text-base focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary",
+        "flex min-h-[52px] w-full cursor-pointer items-center gap-3 pr-4 pl-[15px] text-left text-base hover-row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary",
         item.checked ? "text-ink-3" : "text-ink",
         longPress.className,
       )}

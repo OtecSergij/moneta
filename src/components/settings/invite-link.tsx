@@ -94,7 +94,7 @@ export function InviteLink({ initialUrl }: { initialUrl: string | null }) {
         type="button"
         onClick={create}
         disabled={pending}
-        className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-control bg-page text-[15px] font-medium text-ink transition-colors hover:bg-line focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-control bg-page text-[15px] font-medium text-ink hover-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60"
       >
         <RotateCcw className="size-4" strokeWidth={1.75} aria-hidden />
         Создать новую ссылку

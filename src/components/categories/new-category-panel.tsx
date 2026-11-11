@@ -48,7 +48,7 @@ export function NewCategoryPanel({
           <button
             type="button"
             onClick={onCancel}
-            className="h-11 cursor-pointer rounded-control px-4 text-[15px] font-medium text-ink focus-visible:outline-2 focus-visible:outline-primary"
+            className="h-11 cursor-pointer rounded-control px-4 text-[15px] font-medium text-ink hover-ghost focus-visible:outline-2 focus-visible:outline-primary"
           >
             Отмена
           </button>
@@ -58,7 +58,7 @@ export function NewCategoryPanel({
           onClick={submit}
           disabled={saving}
           aria-busy={saving || undefined}
-          className="inline-flex h-11 min-w-[104px] cursor-pointer items-center justify-center rounded-control bg-primary px-[18px] text-[15px] font-semibold text-white hover:bg-primary-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex h-11 min-w-[104px] cursor-pointer items-center justify-center rounded-control bg-primary px-[18px] text-[15px] font-semibold text-white hover-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60"
         >
           {saving ? (
             <Loader2

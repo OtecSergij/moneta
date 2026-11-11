@@ -48,7 +48,7 @@ export function ListRows({ lists }: { lists: ListSummary[] }) {
         <li key={list.id} className={cn(i > 0 && "border-t border-row-line")}>
           <Link
             href={`/lists/${list.id}`}
-            className="flex flex-col gap-2.5 p-4 text-ink focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+            className="flex flex-col gap-2.5 p-4 text-ink hover-row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
           >
             <span className="flex items-center gap-2">
               <span className="min-w-0 truncate text-base font-semibold">

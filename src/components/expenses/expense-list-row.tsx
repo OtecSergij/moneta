@@ -27,7 +27,7 @@ export function ExpenseListRow({
         type="button"
         onClick={() => onClick(expense)}
         className={cn(
-          "flex min-h-16 w-full cursor-pointer items-center gap-3 border-t px-4 py-[11px] text-left text-ink transition-colors hover:bg-page focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary",
+          "flex min-h-16 w-full cursor-pointer items-center gap-3 border-t px-4 py-[11px] text-left text-ink hover-row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary",
           index === 0 ? "border-transparent" : "border-row-line",
         )}
       >

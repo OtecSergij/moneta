@@ -45,7 +45,7 @@ export function HistoryFilter({ from, to }: { from: string; to: string }) {
           }
         />
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {RANGE_PRESETS.map((preset) => {
           const range = preset.range();
           const pressed =
@@ -56,6 +56,7 @@ export function HistoryFilter({ from, to }: { from: string; to: string }) {
               pressed={pressed}
               wide
               onClick={() => apply(range)}
+              className="whitespace-nowrap max-[374px]:px-3"
             >
               {preset.label}
             </Chip>

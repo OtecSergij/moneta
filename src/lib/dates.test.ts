@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  RANGE_PRESETS,
+  currentMonthFromFirst,
   currentWeekFromMonday,
   formatChipDate,
   formatDayTitle,
   formatRelativeDay,
   isFutureISO,
-  lastNDays,
   parseISODate,
   resolveHistoryRange,
   toISODate,
@@ -28,17 +29,40 @@ describe("toISODate / parseISODate", () => {
 });
 
 describe("range helpers", () => {
-  it("lastNDays is inclusive of both ends", () => {
-    expect(lastNDays(7, NOW)).toEqual({ from: "2026-05-11", to: "2026-05-17" });
-    expect(lastNDays(30, NOW)).toEqual({
-      from: "2026-04-18",
-      to: "2026-05-17",
-    });
-    expect(lastNDays(1, NOW)).toEqual({ from: "2026-05-17", to: "2026-05-17" });
-  });
-
   it("todayRange collapses to a single day", () => {
     expect(todayRange(NOW)).toEqual({ from: "2026-05-17", to: "2026-05-17" });
+  });
+
+  it("currentMonthFromFirst spans the 1st through the reference day", () => {
+    expect(currentMonthFromFirst(NOW)).toEqual({
+      from: "2026-05-01",
+      to: "2026-05-17",
+    });
+    expect(currentMonthFromFirst(new Date(2026, 1, 28))).toEqual({
+      from: "2026-02-01",
+      to: "2026-02-28",
+    });
+  });
+
+  it("currentMonthFromFirst collapses to a single day on the 1st", () => {
+    expect(currentMonthFromFirst(new Date(2026, 5, 1))).toEqual({
+      from: "2026-06-01",
+      to: "2026-06-01",
+    });
+  });
+});
+
+describe("RANGE_PRESETS", () => {
+  it("offers today, the week from Monday and the month from the 1st", () => {
+    // Wednesday 13 May 2026.
+    const wednesday = new Date(2026, 4, 13);
+    expect(
+      RANGE_PRESETS.map((p) => [p.label, p.range(wednesday)]),
+    ).toEqual([
+      ["Сегодня", { from: "2026-05-13", to: "2026-05-13" }],
+      ["За неделю", { from: "2026-05-11", to: "2026-05-13" }],
+      ["За месяц", { from: "2026-05-01", to: "2026-05-13" }],
+    ]);
   });
 });
 
@@ -50,11 +74,13 @@ describe("resolveHistoryRange", () => {
     });
   });
 
-  it("defaults to the last 7 days for missing, invalid or reversed params", () => {
-    const week = { from: "2026-05-11", to: "2026-05-17" };
-    expect(resolveHistoryRange(undefined, undefined, NOW)).toEqual(week);
-    expect(resolveHistoryRange("2026-02-30", "2026-05-10", NOW)).toEqual(week);
-    expect(resolveHistoryRange("2026-05-10", "2026-05-01", NOW)).toEqual(week);
+  it("defaults to the week from Monday for missing, invalid or reversed params", () => {
+    // Wednesday 13 May 2026 -> Monday 11 May.
+    const wednesday = new Date(2026, 4, 13);
+    const week = { from: "2026-05-11", to: "2026-05-13" };
+    expect(resolveHistoryRange(undefined, undefined, wednesday)).toEqual(week);
+    expect(resolveHistoryRange("2026-02-30", "2026-05-10", wednesday)).toEqual(week);
+    expect(resolveHistoryRange("2026-05-10", "2026-05-01", wednesday)).toEqual(week);
   });
 });
 

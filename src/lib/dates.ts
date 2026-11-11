@@ -10,8 +10,8 @@ import {
   differenceInCalendarDays,
   endOfWeek,
   format,
+  startOfMonth,
   startOfWeek,
-  subDays,
 } from "date-fns";
 import { ru } from "date-fns/locale";
 import { z } from "zod";
@@ -76,12 +76,7 @@ export function todayISO(now: Date = new Date()): string {
   return toISODate(now);
 }
 
-/** Last N calendar days ending today, inclusive. `lastNDays(7)` spans 7 dates. */
-export function lastNDays(n: number, now: Date = new Date()): DateRange {
-  return { from: toISODate(subDays(now, n - 1)), to: toISODate(now) };
-}
-
-/** Single-day range covering today — the History screen's default filter. */
+/** Single-day range covering today. */
 export function todayRange(now: Date = new Date()): DateRange {
   const today = toISODate(now);
   return { from: today, to: today };
@@ -96,6 +91,11 @@ export function currentWeekFromMonday(now: Date = new Date()): DateRange {
     from: toISODate(startOfWeek(now, { weekStartsOn: 1 })),
     to: toISODate(now),
   };
+}
+
+/** Current month from the 1st through today. */
+export function currentMonthFromFirst(now: Date = new Date()): DateRange {
+  return { from: toISODate(startOfMonth(now)), to: toISODate(now) };
 }
 
 /** The whole Monday–Sunday week containing `now`. */
@@ -141,12 +141,21 @@ export function formatDayTitle(iso: string, now: Date = new Date()): string {
 /** Quick range presets for the history screen (business-spec §5.2). */
 export const RANGE_PRESETS = [
   { key: "today", label: "Сегодня", range: (now?: Date) => todayRange(now) },
-  { key: "7d", label: "7 дней", range: (now?: Date) => lastNDays(7, now) },
+  {
+    key: "week",
+    label: "За неделю",
+    range: (now?: Date) => currentWeekFromMonday(now),
+  },
+  {
+    key: "month",
+    label: "За месяц",
+    range: (now?: Date) => currentMonthFromFirst(now),
+  },
 ] as const;
 
 const isoDate = z.iso.date();
 
-/** History range from the URL; missing, invalid or reversed params fall back to the last 7 days. */
+/** History range from the URL; missing, invalid or reversed params fall back to the current week from Monday. */
 export function resolveHistoryRange(
   from?: string,
   to?: string,
@@ -157,7 +166,7 @@ export function resolveHistoryRange(
   if (f.success && t.success && f.data <= t.data) {
     return { from: f.data, to: t.data };
   }
-  return lastNDays(7, now);
+  return currentWeekFromMonday(now);
 }
 
 export type RangePresetKey = (typeof RANGE_PRESETS)[number]["key"];

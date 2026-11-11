@@ -2,12 +2,8 @@ import { after } from "next/server";
 import { addDays } from "date-fns";
 import { requireSpace, userNow } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
-import {
-  lastUsedAccountId,
-  lastUsedCategoryId,
-  listExpenses,
-} from "@/repositories/expenses";
-import { listAccounts } from "@/repositories/accounts";
+import { lastUsedIds, listExpenses } from "@/repositories/expenses";
+import { listAccountOptions } from "@/repositories/accounts";
 import { defaultAccountSelection } from "@/lib/expense-account";
 import { getUserSettings } from "@/repositories/user-settings";
 import {
@@ -45,24 +41,17 @@ export default async function HomePage() {
   ]);
   const displayCurrency = settings.displayCurrency;
 
-  const [
-    categories,
-    accounts,
-    weekRows,
-    recent,
-    lastCategoryId,
-    lastAccountId,
-  ] = await Promise.all([
+  const [categories, accounts, weekRows, recent, lastUsed] = await Promise.all([
     listCategories(spaceId),
-    listAccounts(spaceId).then((rows) =>
-      rows.map(({ id, name, currency }) => ({ id, name, currency })),
-    ),
+    listAccountOptions(spaceId),
     listExpenses(spaceId, displayCurrency, elapsed, rateIndex),
     listExpenses(spaceId, displayCurrency, { limit: 10 }, rateIndex),
-    lastUsedCategoryId(spaceId, user.id),
-    lastUsedAccountId(spaceId, user.id),
+    lastUsedIds(spaceId, user.id),
   ]);
-  const selection = defaultAccountSelection(accounts, lastAccountId);
+  const selection = defaultAccountSelection(
+    accounts,
+    lastUsed?.accountId ?? null,
+  );
 
   const weekTotal = sumConverted(weekRows, displayCurrency, rateIndex);
   const byDay = new Map(
@@ -99,7 +88,7 @@ export default async function HomePage() {
       />
       <QuickAddForm
         initialCategories={categories}
-        initialCategoryId={lastCategoryId ?? ""}
+        initialCategoryId={lastUsed?.categoryId ?? ""}
         initialSelection={selection}
         accounts={accounts}
         displayCurrency={displayCurrency}

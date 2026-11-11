@@ -74,9 +74,13 @@ API-based отправка через HTTPS, не нужен открытый SM
 IP клиента берётся из `X-Real-Ip` (`advanced.ipAddress.ipAddressHeaders`): Traefik в
 Coolify перезаписывает этот заголовок адресом клиента, а первое значение
 `X-Forwarded-For` клиент может подделать. Если заголовка нет, Better Auth не знает IP
-и пропускает лимиты. После деплоя проверить логи на «Rate limiting skipped» — строк
-быть не должно — и убедиться curl'ом, что поддельный `X-Forwarded-For` не сбрасывает
-счётчик.
+и пропускает лимиты, предупредив об этом в логе один раз за процесс; поэтому
+`hooks.before` в production пишет `auth.client_ip_missing` на каждый такой запрос.
+Caddy (второй прокси на выбор в Coolify) `X-Real-Ip` сам не ставит и пропускает
+клиентский как есть — при переходе на него нужен `header_up X-Real-Ip {remote_host}`.
+После деплоя проверить логи на `auth.client_ip_missing` и «Rate limiting skipped» —
+строк быть не должно — и убедиться curl'ом, что поддельные `X-Real-Ip` и
+`X-Forwarded-For` не сбрасывают счётчик.
 
 ## Схема БД
 

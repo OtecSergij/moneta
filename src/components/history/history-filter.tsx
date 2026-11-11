@@ -1,9 +1,10 @@
 "use client";
 
-import { useSyncExternalStore, useTransition } from "react";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Calendar } from "lucide-react";
 import { RANGE_PRESETS, formatDayHeading, type DateRange } from "@/lib/dates";
+import { useMounted } from "@/lib/hooks/use-mounted";
 import { Chip } from "@/components/kit/chip";
 
 export function HistoryFilter({ from, to }: { from: string; to: string }) {
@@ -15,11 +16,7 @@ export function HistoryFilter({ from, to }: { from: string; to: string }) {
   // the client using the user's local today. `mounted` is false during SSR and
   // the first hydration render, then true: that keeps the server HTML
   // highlight-free and avoids a hydration mismatch.
-  const mounted = useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false,
-  );
+  const mounted = useMounted();
 
   function apply(range: DateRange) {
     if (range.from === from && range.to === to) return;

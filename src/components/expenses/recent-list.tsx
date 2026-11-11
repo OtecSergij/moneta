@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useSyncExternalStore } from "react";
+import { useMemo } from "react";
 import type { Category } from "@/repositories/categories";
 import type { ExpenseWithConversion } from "@/repositories/expenses";
 import { formatDayHeading, formatRelativeDay } from "@/lib/dates";
+import { useMounted } from "@/lib/hooks/use-mounted";
 import { ExpenseListRow } from "@/components/expenses/expense-list-row";
 import { useExpenseEditor } from "@/components/expenses/use-expense-editor";
 import type { ExpenseAccount } from "@/components/expenses/account-chips";
@@ -18,11 +19,7 @@ export function RecentList({
   accounts: ExpenseAccount[];
 }) {
   const { openEditor, editor } = useExpenseEditor(categories, accounts);
-  const mounted = useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false,
-  );
+  const mounted = useMounted();
   const categoryById = useMemo(
     () => new Map(categories.map((c) => [c.id, c])),
     [categories],

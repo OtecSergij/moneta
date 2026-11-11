@@ -13,6 +13,12 @@ import {
 import { revalidateFor } from "./revalidate";
 import { INVALID, isUuid, type ActionResult } from "./types";
 
+type CategoryActionResult<T> =
+  | ActionResult<T>
+  | { ok: false; error: string; notFound: true };
+
+const NOT_FOUND = { ok: false, error: "Категория не найдена", notFound: true } as const;
+
 // Server actions are reachable via direct POST (Next.js docs: "Mutating Data" —
 // always verify auth inside every action), so each one starts with
 // requireSpace() and re-validates input server-side. Never trust the client.
@@ -39,18 +45,16 @@ export async function createCategoryAction(
 export async function updateCategoryAction(
   id: string,
   patch: unknown,
-): Promise<ActionResult<Category>> {
+): Promise<CategoryActionResult<Category>> {
   const { spaceId } = await requireSpace();
-  if (!isUuid(id)) {
-    return { ok: false, error: "Категория не найдена" };
-  }
+  if (!isUuid(id)) return NOT_FOUND;
   const parsed = CategoryPatch.safeParse(patch);
   if (!parsed.success) return INVALID;
 
   try {
     const category = await updateCategory(spaceId, id, parsed.data);
-    if (!category) return { ok: false, error: "Категория не найдена" };
     revalidateFor("category");
+    if (!category) return NOT_FOUND;
     return { ok: true, data: category };
   } catch (err) {
     if (isUniqueViolation(err)) {
@@ -62,20 +66,16 @@ export async function updateCategoryAction(
 
 export async function deleteCategoryAction(
   id: string,
-): Promise<ActionResult<{ id: string }>> {
+): Promise<CategoryActionResult<{ id: string }>> {
   const { spaceId } = await requireSpace();
-  if (!isUuid(id)) {
-    return { ok: false, error: "Категория не найдена" };
-  }
+  if (!isUuid(id)) return NOT_FOUND;
   const result = await deleteCategory(spaceId, id);
   if (!result.ok) {
-    return {
-      ok: false,
-      error:
-        result.reason === "has_expenses"
-          ? "Сначала удалите или перенесите траты этой категории"
-          : "Категория не найдена",
-    };
+    if (result.reason === "has_expenses") {
+      return { ok: false, error: "Сначала удалите или перенесите траты этой категории" };
+    }
+    revalidateFor("category");
+    return NOT_FOUND;
   }
   revalidateFor("category");
   return { ok: true, data: { id } };

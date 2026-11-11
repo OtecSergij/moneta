@@ -92,7 +92,7 @@ Backfill: `updatedAt = created_at`, `syncSeq = nextval(seq)` упорядоче�
 
 `id` остаётся `uuid`, но **генерируется на клиенте** (`crypto.randomUUID()`) —
 сервер принимает его в upsert. `created_at` обязан попасть в Dexie (нужен для
-клиентского `lastUsedCategoryId`, §4).
+клиентского `lastUsedIds`, §4).
 
 **LWW:** «выигрывает последняя по серверному `updatedAt = now()` на момент
 применения» (sync-time). Не зависит от кривых клиентских часов. Компромисс:
@@ -171,8 +171,8 @@ SQL-агрегатом** (`expenses.ts:181-192`: sort `sum desc`, `::int`) — �
 `quick-add-form` (локальный `useState(categories)`), `edit-expense-dialog`,
 `use-expense-editor`, `recent-list`, `history-list`, `period-tabs`,
 `category-select`, `expense-form-fields` (инлайн-создание категории),
-`settings/category-manager`. `lastUsedCategoryId` (сервер сортирует по
-`createdAt`, `expenses.ts:75`) пересчитывается на клиенте → потому `createdAt`
+`settings/category-manager`. `lastUsedIds` (сервер сортирует по
+`createdAt` в `repositories/expenses.ts`) пересчитывается на клиенте → потому `createdAt`
 обязателен в Dexie (§1, §3).
 
 ## 5. Путь записи (outbox)
@@ -297,7 +297,7 @@ zod-валидация (`ExpenseInput`/`CategoryInput`/`expenseFormSchema` уж�
 - **B. Локальный стор + чтение** — Dexie-схема (с `createdAt`/`syncSeq`/раздельными
   курсорами), `SyncProvider` + seed, хуки `useExpenses/useCategories/useSummary`,
   перевод всех читающих компонентов (§4) на Dexie, клиентская агрегация +
-  `lastUsedCategoryId` + тесты.
+  `lastUsedIds` + тесты.
 - **C. Запись + sync-движок** — `mutations`, перенос форм на outbox, движок
   (flush/pull/runSync, ack-перезапись, триггеры, бэкофф, статус, реконсиляция
   конфликтов), тесты merge/outbox.

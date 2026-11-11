@@ -1,0 +1,1 @@
+DROP INDEX "accounts_space_idx";

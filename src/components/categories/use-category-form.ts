@@ -61,6 +61,11 @@ export function useCategoryForm({
         ? await updateCategoryAction(category.id, { name: trimmed, color })
         : await createCategoryAction({ name: trimmed, color });
       if (!res.ok) {
+        if (category && "notFound" in res) {
+          toast.error(res.error);
+          onRemoved?.(category.id);
+          return;
+        }
         setNameError(res.error);
         return;
       }
@@ -83,7 +88,8 @@ export function useCategoryForm({
       const res = await deleteCategoryAction(category.id);
       if (!res.ok) {
         toast.error(res.error);
-        onRemoveRejected?.();
+        if ("notFound" in res) onRemoved?.(category.id);
+        else onRemoveRejected?.();
         return;
       }
       toast.success("Категория удалена");

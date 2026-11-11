@@ -102,36 +102,21 @@ export async function listExpenses(
   }));
 }
 
-// Category of the most recent expense this user created in the space —
-// pre-selects the quick-add form (business-spec §5.1). Personal: a partner's
-// entries don't change it. Ordered by creation, not spending date, so a
-// backdated entry doesn't change "last used". Null when there are none.
-export async function lastUsedCategoryId(
+// Category and account of the most recent expense this user created in the
+// space — pre-select the quick-add form (business-spec §5.1). Personal: a
+// partner's entries don't change them. Ordered by creation, not spending date,
+// so a backdated entry doesn't change "last used". Null when there are none.
+export async function lastUsedIds(
   spaceId: SpaceId,
   userId: string,
-): Promise<string | null> {
-  const rows = await db
-    .select({ categoryId: expenses.categoryId })
+): Promise<{ categoryId: string; accountId: string } | null> {
+  const [row] = await db
+    .select({ categoryId: expenses.categoryId, accountId: expenses.accountId })
     .from(expenses)
     .where(and(eq(expenses.spaceId, spaceId), eq(expenses.createdBy, userId)))
     .orderBy(desc(expenses.createdAt))
     .limit(1);
-  return rows[0]?.categoryId ?? null;
-}
-
-// Account of the user's most recently created expense in the space. Null when
-// there are none.
-export async function lastUsedAccountId(
-  spaceId: SpaceId,
-  userId: string,
-): Promise<string | null> {
-  const rows = await db
-    .select({ accountId: expenses.accountId })
-    .from(expenses)
-    .where(and(eq(expenses.spaceId, spaceId), eq(expenses.createdBy, userId)))
-    .orderBy(desc(expenses.createdAt))
-    .limit(1);
-  return rows[0]?.accountId ?? null;
+  return row ?? null;
 }
 
 export async function getExpense(

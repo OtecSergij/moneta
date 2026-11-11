@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { db } from "@/db";
 import { expenses, fxRates } from "@/db/schema";
 import { type CurrencyCode } from "@/lib/currency";
@@ -177,6 +177,43 @@ export async function loadRateIndex(
       ),
     )
     .orderBy(asc(fxRates.effectiveDate));
+
+  for (const row of rows) {
+    index.get(row.currency)?.push({
+      effectiveDate: row.effectiveDate,
+      rateToUsd: parseRate(row.rateToUsd),
+    });
+  }
+
+  return index;
+}
+
+/**
+ * Only the rate in force on `onDate` for each currency — the point rateFor
+ * would pick from loadRateIndex(currencies, onDate) — for a render that
+ * converts on that one date alone. Useless for rows dated earlier.
+ */
+export async function loadRatesOn(
+  currencies: CurrencyCode[],
+  onDate: string,
+): Promise<RateIndex> {
+  const index: RateIndex = new Map(currencies.map((c) => [c, [] as RatePoint[]]));
+  if (currencies.length === 0) return index;
+
+  const rows = await db
+    .selectDistinctOn([fxRates.currency], {
+      currency: fxRates.currency,
+      effectiveDate: fxRates.effectiveDate,
+      rateToUsd: fxRates.rateToUsd,
+    })
+    .from(fxRates)
+    .where(
+      and(
+        inArray(fxRates.currency, currencies),
+        lte(fxRates.effectiveDate, onDate),
+      ),
+    )
+    .orderBy(fxRates.currency, desc(fxRates.effectiveDate));
 
   for (const row of rows) {
     index.get(row.currency)?.push({

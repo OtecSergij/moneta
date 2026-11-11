@@ -4,16 +4,19 @@ import { db } from "@/db";
 import { fxRates } from "@/db/schema";
 import { isCurrentDate, maxEntryDate } from "@/lib/fx/provider";
 import { CATEGORY_COLORS, createCategory } from "@/repositories/categories";
+import { rateFor } from "@/lib/fx/convert";
 import {
   backfillRates,
   ensureRates,
   loadRateIndex,
+  loadRatesOn,
 } from "@/repositories/fx-rates";
 import { callsTo, stubFxSources } from "@/test/fx-fixtures";
 import {
   clearRates,
   mkExpense,
   mkMember,
+  mkRate,
   mkSpaceUser,
 } from "@/test/factories";
 
@@ -286,5 +289,27 @@ describe("loadRateIndex", () => {
     expect(dates).toContain("2025-02-18");
     expect(dates.every((d) => d <= "2025-02-18")).toBe(true);
     expect([...dates].sort()).toEqual(dates);
+  });
+});
+
+describe("loadRatesOn", () => {
+  it("keeps only each currency's latest rate on or before the date, as rateFor would pick it", async () => {
+    await mkRate({ currency: "RUB", effectiveDate: "2025-02-16", rateToUsd: "0.0110" });
+    await mkRate({ currency: "RUB", effectiveDate: "2025-02-18", rateToUsd: "0.0111" });
+    await mkRate({ currency: "RUB", effectiveDate: "2025-02-20", rateToUsd: "0.0112" });
+    await mkRate({ currency: "EUR", effectiveDate: "2025-01-10", rateToUsd: "1.04" });
+    await mkRate({ currency: "USD", effectiveDate: "2025-02-20", rateToUsd: "1" });
+
+    const on = "2025-02-19";
+    const index = await loadRatesOn(["RUB", "EUR", "USD"], on);
+
+    expect(index.get("RUB")!.map((p) => p.effectiveDate)).toEqual(["2025-02-18"]);
+    expect(index.get("EUR")!.map((p) => p.effectiveDate)).toEqual(["2025-01-10"]);
+    expect(index.get("USD")).toEqual([]);
+
+    const full = await loadRateIndex(["RUB", "EUR", "USD"], "2025-02-20");
+    for (const currency of ["RUB", "EUR", "USD"] as const) {
+      expect(rateFor(index, currency, on)).toBe(rateFor(full, currency, on));
+    }
   });
 });

@@ -34,6 +34,19 @@ function roundHalfEven(amount: number, scale: number): number {
  * handled defensively).
  */
 export function formatMoney(amountMinor: number, currency: CurrencyCode): string {
+  const { amount, symbol } = formatMoneyParts(amountMinor, currency);
+  return `${amount}${NBSP}${symbol}`;
+}
+
+/**
+ * The two halves of `formatMoney`, for layouts that style the number and the
+ * symbol separately: `formatMoneyParts(1248050, "RUB")` ->
+ * `{ amount: "12 480,50", symbol: "₽" }`.
+ */
+export function formatMoneyParts(
+  amountMinor: number,
+  currency: CurrencyCode,
+): { amount: string; symbol: string } {
   const meta = currencyMeta(currency);
   const negative = amountMinor < 0;
   const abs = Math.abs(Math.trunc(amountMinor));
@@ -55,7 +68,7 @@ export function formatMoney(amountMinor: number, currency: CurrencyCode): string
   const body = fracStr === "" ? intPart : `${intPart},${fracStr}`;
   const sign = negative ? "-" : "";
 
-  return `${sign}${body}${NBSP}${meta.symbol}`;
+  return { amount: `${sign}${body}`, symbol: meta.symbol };
 }
 
 /**

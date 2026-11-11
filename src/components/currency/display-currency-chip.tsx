@@ -14,6 +14,11 @@ export function DisplayCurrencyChip({
   initialCurrency: CurrencyCode;
 }) {
   const [value, setValue] = useState(initialCurrency);
+  const [seenCurrency, setSeenCurrency] = useState(initialCurrency);
+  if (seenCurrency !== initialCurrency) {
+    setSeenCurrency(initialCurrency);
+    setValue(initialCurrency);
+  }
   const [open, setOpen] = useState(false);
   const [, startTransition] = useTransition();
 

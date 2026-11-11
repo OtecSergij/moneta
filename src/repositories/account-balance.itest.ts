@@ -11,7 +11,7 @@ import {
   createExpense,
   deleteExpense,
   getExpense,
-  lastUsedAccountId,
+  lastUsedIds,
   updateExpense,
 } from "@/repositories/expenses";
 import { mkAccount, mkExpense, mkMember, mkSpaceUser } from "@/test/factories";
@@ -254,20 +254,20 @@ describe("account balance", () => {
     expect(await balance(a.spaceId, account.id)).toBe(-2500);
   });
 
-  it("10. lastUsedAccountId is per member and null once the account is gone", async () => {
+  it("10. the last used account is per member and null once the account is gone", async () => {
     const a = await mkSpaceUser();
     const b = await mkMember(a.spaceId);
     const mine = await anchoredAccount(a.spaceId, a.user.id, 10000);
     const theirs = await anchoredAccount(a.spaceId, a.user.id, 10000);
-    expect(await lastUsedAccountId(a.spaceId, a.user.id)).toBeNull();
+    expect(await lastUsedIds(a.spaceId, a.user.id)).toBeNull();
 
     await mkExpense(a.spaceId, a.user.id, { accountId: mine.id });
     await mkExpense(b.spaceId, b.user.id, { accountId: theirs.id });
-    expect(await lastUsedAccountId(a.spaceId, a.user.id)).toBe(mine.id);
-    expect(await lastUsedAccountId(a.spaceId, b.user.id)).toBe(theirs.id);
+    expect((await lastUsedIds(a.spaceId, a.user.id))?.accountId).toBe(mine.id);
+    expect((await lastUsedIds(a.spaceId, b.user.id))?.accountId).toBe(theirs.id);
 
     await deleteAccount(a.spaceId, mine.id);
-    expect(await lastUsedAccountId(a.spaceId, a.user.id)).toBeNull();
-    expect(await lastUsedAccountId(a.spaceId, b.user.id)).toBe(theirs.id);
+    expect(await lastUsedIds(a.spaceId, a.user.id)).toBeNull();
+    expect((await lastUsedIds(a.spaceId, b.user.id))?.accountId).toBe(theirs.id);
   });
 });

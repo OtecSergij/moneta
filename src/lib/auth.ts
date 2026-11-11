@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthMiddleware, getIp } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
@@ -22,6 +22,14 @@ import { sendEmail } from "@/lib/email";
 //   - Generic responses everywhere (no email enumeration via sign-up / reset).
 //   - Rate limits: BA keys by ip+path (not by email — see auth-decisions.md
 //     section "Rate limiting" for the caveat).
+
+// Counted in code points, like the char_length CHECK on user.name.
+function fitName<T extends { name?: unknown }>(user: T) {
+  if (typeof user.name !== "string") return;
+  const chars = Array.from(user.name);
+  if (chars.length <= USER_NAME_MAX) return;
+  return { data: { ...user, name: chars.slice(0, USER_NAME_MAX).join("") } };
+}
 
 export const auth = betterAuth({
   appName: "moneta",
@@ -67,6 +75,11 @@ export const auth = betterAuth({
 
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
+      // Without a client IP the limiter skips the request and warns only once
+      // per process; log every such request instead.
+      if (ctx.request && !getIp(ctx.request, ctx.context.options)) {
+        console.error("auth.client_ip_missing", { path: ctx.path });
+      }
       await inviteGuard(ctx);
       const name = (ctx.body as { name?: unknown } | undefined)?.name;
       if (
@@ -80,19 +93,17 @@ export const auth = betterAuth({
   },
 
   databaseHooks: {
+    // Names from paths the hook above doesn't check (OAuth profiles) are
+    // trimmed to fit the DB check instead of failing it.
     user: {
       create: {
-        // OAuth profiles bypass the hook above; trim them to fit the DB check.
         before: async (user, ctx) => {
           if ((await beforeUserCreate(user, ctx)) === false) return false;
-          if (user.name.length > USER_NAME_MAX) {
-            return {
-              data: { ...user, name: user.name.slice(0, USER_NAME_MAX) },
-            };
-          }
+          return fitName(user);
         },
         after: afterUserCreate,
       },
+      update: { before: async (user) => fitName(user) },
     },
   },
 

@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useSyncExternalStore } from "react";
+import { useRef } from "react";
 import { subDays } from "date-fns";
 import { Calendar } from "lucide-react";
 import { formatChipDate, toISODate, todayISO } from "@/lib/dates";
+import { useMounted } from "@/lib/hooks/use-mounted";
 import { Chip } from "@/components/kit/chip";
 
 export function DateChips({
@@ -18,11 +19,7 @@ export function DateChips({
   const pickerRef = useRef<HTMLInputElement | null>(null);
   // "Today" is the user's local date; the server clock may sit in another
   // timezone, so nothing is marked pressed until hydration is over.
-  const mounted = useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false,
-  );
+  const mounted = useMounted();
   const today = todayISO();
   const yesterday = toISODate(subDays(new Date(), 1));
   const custom =

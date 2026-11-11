@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { CurrencyCode } from "@/lib/currency";
-import { formatMoney, minorToInput, parseMoney } from "@/lib/money";
+import {
+  formatMoney,
+  formatMoneyParts,
+  minorToInput,
+  parseMoney,
+} from "@/lib/money";
 
 const NBSP = " ";
 const THIN = " ";
@@ -41,6 +46,27 @@ describe("formatMoney", () => {
     expect(formatMoney(12480, "XYZ" as CurrencyCode)).toBe(
       `124,80${NBSP}XYZ`,
     );
+  });
+});
+
+describe("formatMoneyParts", () => {
+  it("splits the number from the symbol without the joining NBSP", () => {
+    expect(formatMoneyParts(1248050, "RUB")).toEqual({
+      amount: `12${THIN}480,50`,
+      symbol: "₽",
+    });
+    expect(formatMoneyParts(300000, "RSD")).toEqual({
+      amount: `3${THIN}000`,
+      symbol: "RSD",
+    });
+    expect(formatMoneyParts(45000, "BTC")).toEqual({
+      amount: "0,00045",
+      symbol: "₿",
+    });
+    expect(formatMoneyParts(-1248000, "RUB")).toEqual({
+      amount: `-12${THIN}480`,
+      symbol: "₽",
+    });
   });
 });
 

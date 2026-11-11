@@ -41,6 +41,16 @@ export async function listAccounts(spaceId: SpaceId): Promise<AccountWithBalance
   return selectWithBalance(db, eq(accounts.spaceId, spaceId));
 }
 
+export async function listAccountOptions(
+  spaceId: SpaceId,
+): Promise<Pick<Account, "id" | "name" | "currency">[]> {
+  return db
+    .select({ id: accounts.id, name: accounts.name, currency: accounts.currency })
+    .from(accounts)
+    .where(eq(accounts.spaceId, spaceId))
+    .orderBy(asc(accounts.createdAt), asc(accounts.id));
+}
+
 export async function getAccount(
   spaceId: SpaceId,
   id: string,

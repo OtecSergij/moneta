@@ -1,5 +1,5 @@
 import { type CurrencyCode } from "@/lib/currency";
-import { formatMoney } from "@/lib/money";
+import { formatMoneyParts } from "@/lib/money";
 import { Money } from "@/components/ui/money";
 import { cn } from "@/lib/utils";
 
@@ -32,8 +32,7 @@ export function TotalMoney({
       : `${noteLabel}: ${unconverted} — ${noteReason}`;
 
   if (size !== "default") {
-    const formatted = formatMoney(minor, currency);
-    const split = formatted.lastIndexOf(" ");
+    const { amount, symbol } = formatMoneyParts(minor, currency);
     return (
       <span
         className={cn(
@@ -44,14 +43,14 @@ export function TotalMoney({
         title={note ?? undefined}
       >
         {note ? <span aria-hidden="true">≈ </span> : null}
-        {formatted.slice(0, split)}
+        {amount}
         <span
           className={cn(
             "ml-2 text-ink-3",
             size === "hero" ? "text-[28px]" : "text-[26px]",
           )}
         >
-          {formatted.slice(split + 1)}
+          {symbol}
         </span>
         {note ? <span className="sr-only">{note}</span> : null}
       </span>

@@ -1,14 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { isAPIError } from "better-auth/api";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { pendingSpaceJoins, spaceInvites, user } from "@/db/schema";
 import { auth } from "@/lib/auth";
-import { afterUserCreate, beforeUserCreate } from "@/lib/auth-invite-hook";
 import { claimInvite, findActiveInviteByToken } from "@/repositories/invites";
 import { resolveSpace } from "@/repositories/spaces";
 import { mkInvite, mkSpaceUser, mkUser } from "@/test/factories";
+
+vi.hoisted(() => {
+  vi.stubEnv("GOOGLE_CLIENT_ID", "test-client-id");
+  vi.stubEnv("GOOGLE_CLIENT_SECRET", "test-client-secret");
+});
 
 vi.mock("@/repositories/invites", async (importOriginal) => {
   const original =
@@ -68,8 +72,59 @@ async function pendingFor(userId: string) {
     .where(eq(pendingSpaceJoins.userId, userId));
 }
 
+// Real Google flow: sign-in stores the OAuth state and the callback reads it
+// back; only the token endpoint is faked.
+async function startGoogleSignIn(additionalData?: Record<string, unknown>) {
+  const { headers, response } = await auth.api.signInSocial({
+    body: { provider: "google", callbackURL: "/", additionalData },
+    returnHeaders: true,
+  });
+  return {
+    state: new URL(response.url!).searchParams.get("state")!,
+    cookie: headers
+      .getSetCookie()
+      .map((c) => c.split(";")[0])
+      .join("; "),
+  };
+}
+
+function fakeIdToken(claims: Record<string, unknown>): string {
+  const part = (value: object) =>
+    Buffer.from(JSON.stringify(value)).toString("base64url");
+  return `${part({ alg: "none" })}.${part(claims)}.`;
+}
+
+async function finishGoogleSignIn(
+  started: { state: string; cookie: string },
+  profile: { email: string; name: string },
+) {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+    Response.json({
+      access_token: "access-token",
+      token_type: "Bearer",
+      expires_in: 3600,
+      id_token: fakeIdToken({
+        sub: randomUUID(),
+        email_verified: true,
+        ...profile,
+      }),
+    }),
+  );
+  const res = await auth.api.callbackOAuth({
+    params: { id: "google" },
+    query: { code: "code", state: started.state },
+    headers: new Headers({ cookie: started.cookie }),
+    asResponse: true,
+  });
+  return res.headers.get("location") ?? "";
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+afterAll(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("sign-up with an invite (auth.api.signUpEmail)", () => {
@@ -176,31 +231,40 @@ describe("sign-up with an invite (auth.api.signUpEmail)", () => {
   });
 });
 
-describe("OAuth path (hooks with OAuth state)", () => {
-  it("(6a) afterUserCreate claims the link from OAuth state", async () => {
+describe("Google sign-in (OAuth state through Better Auth)", () => {
+  it("(6a) invite in additionalData: the callback creates the user and claims the link", async () => {
     const owner = await mkSpaceUser();
     const invite = await mkInvite(owner.spaceId, owner.user.id);
-    const u = await mkUser();
+    const email = newEmail();
 
-    await afterUserCreate(u, null, {
-      readOAuthState: async () => ({ inviteToken: invite.token }),
-    });
+    const started = await startGoogleSignIn({ inviteToken: invite.token });
+    const location = await finishGoogleSignIn(started, { email, name: "Гость" });
 
-    expect((await inviteRow(invite.token)).usedBy).toBe(u.id);
-    expect(await pendingFor(u.id)).toHaveLength(1);
+    expect(location).not.toContain("error");
+    const created = await userByEmail(email);
+    expect((await inviteRow(invite.token)).usedBy).toBe(created.id);
+    expect(await pendingFor(created.id)).toEqual([
+      expect.objectContaining({ spaceId: owner.spaceId, inviteId: invite.id }),
+    ]);
   });
 
-  it("(6b) beforeUserCreate rejects a revoked token from OAuth state", async () => {
+  it("(6b) invite revoked before the callback: no user created, link not claimed", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
     const owner = await mkSpaceUser();
-    const revoked = await mkInvite(owner.spaceId, owner.user.id, {
-      revokedAt: new Date(),
-    });
+    const invite = await mkInvite(owner.spaceId, owner.user.id);
+    const email = newEmail();
 
-    expect(
-      await beforeUserCreate({}, null, {
-        readOAuthState: async () => ({ inviteToken: revoked.token }),
-      }),
-    ).toBe(false);
+    const started = await startGoogleSignIn({ inviteToken: invite.token });
+    await db
+      .update(spaceInvites)
+      .set({ revokedAt: new Date() })
+      .where(eq(spaceInvites.id, invite.id));
+    const location = await finishGoogleSignIn(started, { email, name: "Гость" });
+
+    expect(location).toContain("error=unable_to_create_user");
+    expect(await userByEmail(email)).toBeUndefined();
+    expect((await inviteRow(invite.token)).usedBy).toBeNull();
   });
 });
 
@@ -214,5 +278,26 @@ describe("display name length", () => {
     const fits = newEmail();
     expect((await signUpWith(fits, { name: "я".repeat(60) })).status).toBe(200);
     expect((await userByEmail(fits))?.name).toBe("я".repeat(60));
+  });
+
+  it("trims a long Google profile name by code points, keeping an emoji at the boundary whole", async () => {
+    const email = newEmail();
+
+    const location = await finishGoogleSignIn(await startGoogleSignIn(), {
+      email,
+      name: "я".repeat(59) + "😀😀",
+    });
+
+    expect(location).not.toContain("error");
+    expect((await userByEmail(email))?.name).toBe("я".repeat(59) + "😀");
+  });
+
+  it("trims an over-long name on an update the before hook does not see", async () => {
+    const u = await mkUser();
+    const ctx = await auth.$context;
+
+    await ctx.internalAdapter.updateUser(u.id, { name: "я".repeat(61) });
+
+    expect((await userByEmail(u.email))?.name).toBe("я".repeat(60));
   });
 });

@@ -6,6 +6,7 @@ import {
   createAccount,
   deleteAccount,
   getAccount,
+  listAccountOptions,
   listAccounts,
   updateAccount,
 } from "@/repositories/accounts";
@@ -40,6 +41,7 @@ describe("accounts repository — isolation", () => {
 
     expect(await row(account.id)).toEqual(before);
     expect((await listAccounts(a.spaceId)).map((x) => x.id)).toEqual([account.id]);
+    expect(await listAccountOptions(b.spaceId)).toEqual([]);
   });
 
   it("a member edits and deletes the owner's accounts", async () => {
@@ -81,6 +83,16 @@ describe("accounts repository — anchor", () => {
     ).toEqual([
       [first.id, 1],
       [second.id, 2],
+    ]);
+  });
+
+  it("lists account options in the same order as listAccounts", async () => {
+    const a = await mkSpaceUser();
+    const first = await mkAccount(a.spaceId, a.user.id, { name: "Б", currency: "EUR" });
+    const second = await mkAccount(a.spaceId, a.user.id, { name: "А", currency: "USD" });
+    expect(await listAccountOptions(a.spaceId)).toEqual([
+      { id: first.id, name: "Б", currency: "EUR" },
+      { id: second.id, name: "А", currency: "USD" },
     ]);
   });
 

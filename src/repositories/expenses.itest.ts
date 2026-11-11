@@ -12,7 +12,7 @@ import {
   createExpense,
   deleteExpense,
   getExpense,
-  lastUsedCategoryId,
+  lastUsedIds,
   listExpenses,
   summary,
   updateExpense,
@@ -210,13 +210,13 @@ describe("expenses repository — isolation", () => {
   });
 });
 
-describe("lastUsedCategoryId", () => {
+describe("lastUsedIds", () => {
   it("returns null when the user has no expenses", async () => {
     const u = await mkSpaceUser();
-    expect(await lastUsedCategoryId(u.spaceId, u.user.id)).toBeNull();
+    expect(await lastUsedIds(u.spaceId, u.user.id)).toBeNull();
   });
 
-  it("returns the most recently created expense's category, ignoring other users", async () => {
+  it("returns the most recently created expense's category and account, ignoring other users", async () => {
     const u = await mkSpaceUser();
     const other = await mkSpaceUser();
     const food = await createCategory(u.spaceId, u.user.id, {
@@ -241,8 +241,9 @@ describe("lastUsedCategoryId", () => {
       spentAt: today,
     });
     // Created later but spent earlier — "last used" follows creation order.
+    const taxiAccountId = await rubAccount(u);
     await createExpense(u.spaceId, u.user.id, {
-      accountId: await rubAccount(u),
+      accountId: taxiAccountId,
       categoryId: taxi.id,
       amountMinor: 200,
       currency: "RUB",
@@ -259,7 +260,10 @@ describe("lastUsedCategoryId", () => {
       spentAt: today,
     });
 
-    expect(await lastUsedCategoryId(u.spaceId, u.user.id)).toBe(taxi.id);
+    expect(await lastUsedIds(u.spaceId, u.user.id)).toEqual({
+      categoryId: taxi.id,
+      accountId: taxiAccountId,
+    });
   });
 });
 
@@ -582,10 +586,10 @@ describe("expenses repository — shared space", () => {
       currency: "USD",
     });
 
-    expect(await lastUsedCategoryId(owner.spaceId, owner.user.id)).toBe(food.id);
-    expect(await lastUsedCategoryId(owner.spaceId, member.user.id)).toBe(taxi.id);
+    expect((await lastUsedIds(owner.spaceId, owner.user.id))?.categoryId).toBe(food.id);
+    expect((await lastUsedIds(owner.spaceId, member.user.id))?.categoryId).toBe(taxi.id);
 
     const newcomer = await mkMember(owner.spaceId);
-    expect(await lastUsedCategoryId(newcomer.spaceId, newcomer.user.id)).toBeNull();
+    expect(await lastUsedIds(newcomer.spaceId, newcomer.user.id)).toBeNull();
   });
 });

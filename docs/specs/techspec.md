@@ -328,14 +328,14 @@ npx drizzle-kit generate   # должно ответить «No schema changes»
    createExpense(spaceId, userId, input)
    updateExpense(spaceId, id, patch) // категория только своего пространства; 23503 → null
    deleteExpense(spaceId, id)
-   lastUsedCategoryId(spaceId, userId)
+   lastUsedCategoryId(spaceId, userId)   // ф.4: заменён на lastUsedIds
 
    // src/repositories/fx-rates.ts
    backfillRates(spaceId, deps?)
    syncSpaceRates(spaceId, { throttleMs? })   // троттлинг по spaceId
    ```
    Цвет новой категории — первый цвет палитры, не занятый в пространстве; если заняты все — `DEFAULT_CATEGORY_COLOR`.
-6. **Auth.** `src/lib/auth-invite-hook.ts`: `inviteGuard(ctx)`, `beforeUserCreate(user, ctx, deps?)`, `afterUserCreate(user, ctx, deps?)` (`deps = { readOAuthState }` для тестов) по шагам 4–6 «Приглашения». В `src/lib/auth.ts`: `hooks: { before: createAuthMiddleware(inviteGuard) }`, `databaseHooks.user.create: { before: beforeUserCreate, after: afterUserCreate }`.
+6. **Auth.** `src/lib/auth-invite-hook.ts`: `inviteGuard(ctx)`, `beforeUserCreate(user, ctx)`, `afterUserCreate(user, ctx)` (OAuth state читают через `getOAuthState` из `better-auth/api`) по шагам 4–6 «Приглашения». В `src/lib/auth.ts`: `hooks: { before: createAuthMiddleware(inviteGuard) }`, `databaseHooks.user.create: { before: beforeUserCreate, after: afterUserCreate }`.
 7. **Actions и страницы.**
    - `src/lib/actions/{categories,expenses,display-currency}.ts` → `requireSpace()` и `revalidateFor(...)` из нового `revalidate.ts`; `fx.ts` без изменений.
    - `src/lib/actions/invites.ts`: `createInviteAction(): Promise<ActionResult<{ url: string }>>`.
@@ -375,7 +375,7 @@ npx drizzle-kit generate   # должно ответить «No schema changes»
 | `src/db/migrations.itest.ts`, describe «phase-1 data migration» | Временная папка с журналом 0000–0002 → отдельная БД → сиды: (a) пользователь с данными, (b) без данных, (c) неподтверждённый, (d) двое с одинаковым именем категории. Затем `migrate()` всей папкой со всеми следующими миграциями. Одно пространство на пользователя (`id = user.id`) и одна строка `owner`; `space_id` и `created_by` равны прежнему `user_id`; NOT NULL; `user_id` удалён; `(space_id,name)` уникально (23505); число строк не изменилось; трату с категорией чужого пространства не вставить (23503). AC-21 и AC-24 зелёные. |
 | `src/repositories/spaces.itest.ts` | Без pending → `owner` своего пространства. С pending → `member`, своего пространства нет, pending удалён. Повторный вызов ничего не меняет. `Promise.all` из 5 вызовов → одно членство и одно пространство. `listMembers`: порядок и поля. Spy на `console`: `space.created` / `space.joined`; `space.created_despite_claim` при захваченной ссылке без pending; email в данных нет. |
 | `src/repositories/invites.itest.ts` | Создаёт только владелец. Новая отзывает старую, действующая одна. `Promise.all` двух `createInvite` → одна действующая, без исключения. `claimInvite` одноразовый; отозванную и использованную не погасить. `getActiveInviteForOwner` для участника → `null`. Ссылка с `created_at = now() - 7 дней + 1 мин` действует; с `- 7 дней - 1 мин` `findActiveInviteByToken`, `claimInvite`, `getActiveInviteForOwner` дают `null`; `createInvite` после истечения отзывает истёкшую строку и создаёт новую без 23505. Spy: `invite.created` / `invite.claimed` без токена в данных. |
-| `src/lib/auth-invite.itest.ts` | Через `auth.api.signUpEmail`: (1) действующий токен и новый email → 200, у ссылки `used_by` = новый пользователь, есть pending. (2) Фиктивный токен с новым и с существующим email → одинаковые статус и тело (`INVITE_INVALID`), строки `user` для нового нет. (3) Действующий токен и существующий email → 200, ссылка действует. (4) Отозванный и истёкший токены → `INVITE_INVALID` с одинаковыми статусом и телом для нового и существующего email. (5) Принудительный сбой `claimInvite` (`vi.spyOn`) → регистрация 200, лог `invite.claim_failed`, затем `resolveSpace` → своё пространство. (6) OAuth: `afterUserCreate(user, ctxWithoutBody, { readOAuthState: async () => ({ inviteToken }) })` захватывает ссылку; `beforeUserCreate` с отозванным токеном из OAuth state → `false`. Если `nextCookies()` мешает `auth.api` вне Next — те же сценарии через `inviteGuard` / `beforeUserCreate` / `afterUserCreate` с фейковым `ctx` против той же БД; сценарий (2) обязателен в любом варианте. |
+| `src/lib/auth-invite.itest.ts` | Через `auth.api.signUpEmail`: (1) действующий токен и новый email → 200, у ссылки `used_by` = новый пользователь, есть pending. (2) Фиктивный токен с новым и с существующим email → одинаковые статус и тело (`INVITE_INVALID`), строки `user` для нового нет. (3) Действующий токен и существующий email → 200, ссылка действует. (4) Отозванный и истёкший токены → `INVITE_INVALID` с одинаковыми статусом и телом для нового и существующего email. (5) Принудительный сбой `claimInvite` (`vi.spyOn`) → регистрация 200, лог `invite.claim_failed`, затем `resolveSpace` → своё пространство. (6) OAuth через настоящий поток Better Auth: `auth.api.signInSocial` с `additionalData: { inviteToken }`, затем `auth.api.callbackOAuth`; подменён только запрос токена к Google (неподписанный id_token). (6a) Колбэк создаёт пользователя и захватывает ссылку. (6b) Ссылку отозвали до колбэка → пользователь не создан, ссылка не захвачена. Длина имени: больше 60 символов при регистрации по email → 400; длинное имя из Google и из `updateUser` обрезается до 60 кодовых точек. |
 | `src/lib/invites.test.ts` | `InviteToken`, `displayInviteUrl`. `extractInviteToken`: из body, из OAuth state, нет → `none`, кривой → `invalid`, getter бросает → `none`. `decideInvitePage`: сессия при любом токене → `redirect`; кривой формат → `invalid`; `invite: null` → `invalid`; иначе `form`. |
 | `src/repositories/isolation.itest.ts` | Пространство формы миграции M (`id = owner.id`) с участником P и свежее пространство F. Данные M видит P и не видит F. Пользователь F со своим `SpaceId` не читает и не меняет данные M. Строка `// @ts-expect-error` над `listCategories(user.id)`: если тип перестанет ловить подмену, упадёт `npm run build`. |
 | `src/repositories/categories.itest.ts` | Изоляция A/B для list/get/create/update/delete. Участник видит категории владельца. `hasExpenses` по всему пространству. Удаление при трате партнёра → `has_expenses`, в том числе через 23503 (трата вставляется между проверкой и удалением, `vi.spyOn`). |
@@ -542,7 +542,7 @@ Google-путь проверяется локально только при те
    - `currency`: `currencyEnum("currency").notNull()` без default (AC-21); валюту счёта не меняют — в `AccountPatch` её нет;
    - `anchorAmountMinor`: bigint в режиме number, NOT NULL, CHECK `>= 0`;
    - `anchorAt`: timestamptz NOT NULL default now(), ставит только БД (`sql\`now()\``);
-   - `createdAt`, `updatedAt`, `index("accounts_space_idx")`.
+   - `createdAt`, `updatedAt`. Отдельного индекса по `space_id` нет: его покрывает `accounts_space_name_uniq` (`accounts_space_idx` снят миграцией `0010_drop_accounts_space_idx.sql`).
 2. **Логика, репозиторий, actions:**
    ```ts
    // src/lib/accounts.ts (без БД): ACCOUNT_NAME_MAX=40
@@ -562,7 +562,7 @@ Google-путь проверяется локально только при те
    //   23505 → «Счёт с таким названием уже есть»
    ```
    `summarizeAccounts`: курс на `today` через `convertRow` и `sumConverted`; сортировка по `convertedMinor` по убыванию, `null` в конце, при равенстве — по имени; доли (‰) только по положительным суммам; тон — по рангу.
-3. **Экран** `src/app/accounts/page.tsx` — доски `Accounts`, `AccountsEmpty`: `loadRateIndex(ALL, maxEntryDate())`, `after(() => ensureRates(todayISO()))`; шапка «Счета» с чипом валюты, чёрным «+» и шестерёнкой; есть счета — итог и строки, нет — только шапка и панель; `TabBar active="accounts"`.
+3. **Экран** `src/app/accounts/page.tsx` — доски `Accounts`, `AccountsEmpty`: `today = todayISO(await userNow())`, `loadRatesOn(ALL, today)` (последний курс каждой валюты не позже `today`), `after(() => ensureRates(today))`; шапка «Счета» с чипом валюты, чёрным «+» и шестерёнкой; есть счета — итог и строки, нет — только шапка и панель; `TabBar active="accounts"`.
    - `src/components/accounts/accounts-total.tsx`: «Всего на счетах», `TotalMoney`, «По курсу на сегодня», полоса долей.
    - `src/components/accounts/account-rows.tsx`: точка тона, название, «≈ X» в валюте отображения (только если валюта счёта другая), остаток; без курса — маркер `TotalMoney`, строка в конце.
    - `src/components/accounts/account-new-sheet.tsx` (доска `AccountNew`): белое окно «Новый счёт» — `TextField` «Название», сегмент из 5 валют (по умолчанию валюта отображения), `TextField` «Остаток» с `suffix` (пусто = 0), «Добавить счёт».
@@ -608,12 +608,13 @@ Google-путь проверяется локально только при те
    // src/repositories/expenses.ts
    ExpenseInput += accountId: z.uuid()
    createExpense / updateExpense       // проверка счёта
-   lastUsedAccountId(spaceId, userId): Promise<string | null>
+   lastUsedIds(spaceId, userId): Promise<{ categoryId; accountId } | null>   // заменяет lastUsedCategoryId
    // src/repositories/accounts.ts
    listAccounts(spaceId)               // остаток по формуле
+   listAccountOptions(spaceId)         // id, name, currency для чипов; порядок created_at
    ```
    - `createExpense` и `updateExpense` проверяют итоговую строку (текущая плюс патч): счёт должен быть в том же пространстве и `currency === account.currency`, иначе `null` и лог `expense.account_rejected`. Патч с одним `accountId` проверяется против текущей валюты, патч с одной валютой — против текущего счёта.
-   - `lastUsedAccountId` — счёт последней траты `created_by = я` в пространстве; трат нет → `null`.
+   - `lastUsedIds` — категория и счёт последней траты `created_by = я` в пространстве одним запросом; трат нет → `null`.
    - `listAccounts`: формула остатка из «Деньги и остатки счетов» через LEFT JOIN с агрегатом; `sum(...)::bigint` приходит строкой → `Number()` с проверкой `Number.isSafeInteger`; порядок `created_at`.
    - `updateAccount`: правило переякорения прежнее; `loadedBalanceMinor` — вычисленный остаток, который показало окно.
 3. **Отрицательные суммы:** правки `divRoundHalfEven` и `minorToInput` из «Деньги и остатки счетов».
@@ -628,7 +629,7 @@ Google-путь проверяется локально только при те
    - Выбор счёта: `currency` = валюта счёта, введённое число остаётся; если оно не парсится в новой валюте, срабатывает обычная валидация.
    - Счетов в пространстве нет → вместо чипов ссылка «Создайте первый счёт» на `/accounts`, поля суммы и описания и кнопка «Добавить трату» неактивны.
    - По умолчанию (`defaultAccountSelection`): последний счёт автора, если он существует, иначе первый счёт. После сохранения траты выбранный счёт остаётся.
-   - `ExpenseSheet` показывает чипы счетов с выбранным счётом траты; открывается с главной и из «Истории»: `src/app/history/page.tsx` загружает `listAccounts`, `src/components/history/**` пробрасывает счета.
+   - `ExpenseSheet` показывает чипы счетов с выбранным счётом траты; открывается с главной и из «Истории»: `src/app/page.tsx` и `src/app/history/page.tsx` загружают `listAccountOptions`, `src/components/history/**` пробрасывает счета.
    - Файлы: `src/components/expenses/{account-chips,expense-form-fields,quick-add-form,expense-sheet,use-expense-editor}.tsx`, `src/app/page.tsx`.
 6. **Окно счёта:** `src/components/accounts/account-sheet.tsx` показывает отрицательный остаток с минусом; переименование такого счёта работает (остаток не отправляется, если поле не меняли).
 7. **Actions:** `src/lib/actions/expenses.ts` прокидывает `accountId`; `expense` ревалидирует `/accounts`.
@@ -646,7 +647,7 @@ Google-путь проверяется локально только при те
 7. Отказы: валюта ≠ валюте счёта; счёт другого пространства; патч только `accountId` при несовпадении валют; патч только `currency` при привязанном счёте.
 8. `loaded = 585` при вычисленных 575 и правке только имени → якорь не двигается; правка значения → двигается.
 9. Отрицательный остаток считается верно.
-10. `lastUsedAccountId`: свой у каждого участника; `null` после удаления счёта.
+10. `lastUsedIds`: свой у каждого участника; `null` после удаления счёта.
 
 | Unit-тест | Что утверждает |
 |---|---|

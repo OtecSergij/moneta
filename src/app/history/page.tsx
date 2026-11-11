@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { requireSpace, userNow } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
-import { listAccounts } from "@/repositories/accounts";
+import { listAccountOptions } from "@/repositories/accounts";
 import {
   listExpenses,
   summary,
@@ -37,9 +37,7 @@ export default async function HistoryPage({
   // waiting on the settings lookup.
   const [categories, accounts, settings, rateIndex] = await Promise.all([
     listCategories(spaceId),
-    listAccounts(spaceId).then((rows) =>
-      rows.map(({ id, name, currency }) => ({ id, name, currency })),
-    ),
+    listAccountOptions(spaceId),
     getUserSettings(user.id),
     loadRateIndex([...CURRENCY_CODES], range.to),
   ]);

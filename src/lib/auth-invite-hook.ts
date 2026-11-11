@@ -7,10 +7,6 @@ import {
 } from "@/lib/invites";
 import { claimInvite, findActiveInviteByToken } from "@/repositories/invites";
 
-type HookDeps = { readOAuthState: () => Promise<unknown> };
-
-const defaultDeps: HookDeps = { readOAuthState: getOAuthState };
-
 async function isActiveToken(value: unknown): Promise<boolean> {
   if (typeof value !== "string" || !InviteToken.safeParse(value).success) {
     return false;
@@ -40,9 +36,8 @@ export async function inviteGuard(ctx: {
 export async function beforeUserCreate(
   _user: { id?: string },
   ctx: InviteCtx,
-  deps: HookDeps = defaultDeps,
 ): Promise<boolean | void> {
-  const extracted = await extractInviteToken(ctx, deps.readOAuthState);
+  const extracted = await extractInviteToken(ctx, getOAuthState);
   if (extracted.kind === "none") return;
   if (
     extracted.kind === "token" &&
@@ -57,10 +52,9 @@ export async function beforeUserCreate(
 export async function afterUserCreate(
   user: { id: string },
   ctx: InviteCtx,
-  deps: HookDeps = defaultDeps,
 ): Promise<void> {
   try {
-    const extracted = await extractInviteToken(ctx, deps.readOAuthState);
+    const extracted = await extractInviteToken(ctx, getOAuthState);
     if (extracted.kind !== "token") return;
     await claimInvite(user.id, extracted.token);
   } catch {

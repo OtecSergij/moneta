@@ -26,9 +26,8 @@ Better Auth на бэке. Оба сервиса крутятся в Coolify н�
 
 Источники правды:
 
-- [`docs/product-spec.md`](./docs/product-spec.md) — что делаем в фазах 0–4;
-  [`docs/deferred-concepts.md`](./docs/deferred-concepts.md) — что отложено;
-  [`docs/acceptance-checklist.md`](./docs/acceptance-checklist.md) — приёмка фаз.
+- [`docs/product-spec.md`](./docs/product-spec.md) — что делаем;
+  [`docs/deferred-concepts.md`](./docs/deferred-concepts.md) — что отложено.
 - [`docs/auth-decisions.md`](./docs/auth-decisions.md) — стек, параметры
   сессии, OAuth, account linking, email verification, rate limiting.
 - [Холст «moneta — новые фичи»](https://claude.ai/artifact/9o9CcCapwUEJNtu4SoZE3C) —

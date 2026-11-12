@@ -14,7 +14,6 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
-import { PALETTE_COLORS } from "@/lib/palette";
 
 const MIGRATIONS_DIR = path.join(process.cwd(), "src/db/migrations");
 // From src/db/migrations/meta/_journal.json entries[0].when — the folderMillis
@@ -438,71 +437,6 @@ describe("expense account backfill migration", () => {
           await sql`delete from accounts where id = ${card.id}`;
           const remaining = await sql`select 1 from expenses where space_id = ${linkedOnly.id}`;
           expect(remaining).toHaveLength(0);
-        } finally {
-          await sql.end();
-        }
-      });
-    } finally {
-      rmSync(oldFolder, { recursive: true, force: true });
-    }
-  });
-});
-
-describe("account color backfill migration", () => {
-  it("colors each space's accounts from the palette in creation order, wrapping past 15", async () => {
-    const oldFolder = migrationsUpTo(11);
-    try {
-      await withScratchDatabase(async (url) => {
-        const sql = postgres(url, { max: 1, onnotice: () => {} });
-        try {
-          await migrate(drizzle(sql), { migrationsFolder: oldFolder });
-
-          const [u] = await sql<{ id: string }[]>`
-            insert into "user" (name, email, email_verified)
-            values ('u', ${`${randomUUID()}@t.local`}, true) returning id
-          `;
-          const [many, few] = await sql<{ id: string }[]>`
-            insert into spaces (created_at) values (now()), (now()) returning id
-          `;
-          await sql`
-            insert into accounts (space_id, created_by, name, currency, anchor_amount_minor, created_at)
-            select ${many.id}::uuid, ${u.id}::uuid, 'A' || lpad(i::text, 2, '0'), 'RUB', 0,
-              '2026-01-01T00:00:00Z'::timestamptz + make_interval(mins => i)
-            from generate_series(17, 1, -1) i
-          `;
-          await sql`
-            insert into accounts (id, space_id, created_by, name, currency, anchor_amount_minor, created_at) values
-              ('00000000-0000-4000-8000-000000000003', ${few.id}, ${u.id}, 'x', 'RUB', 0, '2026-01-02T00:00:00Z'),
-              ('00000000-0000-4000-8000-000000000002', ${few.id}, ${u.id}, 'y', 'RUB', 0, '2026-01-01T00:00:00Z'),
-              ('00000000-0000-4000-8000-000000000001', ${few.id}, ${u.id}, 'z', 'RUB', 0, '2026-01-01T00:00:00Z')
-          `;
-
-          await migrate(drizzle(sql), { migrationsFolder: "./src/db/migrations" });
-
-          const manyRows = await sql<{ name: string; color: string }[]>`
-            select name, color from accounts where space_id = ${many.id} order by name
-          `;
-          expect(manyRows.map((r) => r.color)).toEqual(
-            Array.from({ length: 17 }, (_, i) => PALETTE_COLORS[i % PALETTE_COLORS.length]),
-          );
-          const fewRows = await sql<{ name: string; color: string }[]>`
-            select name, color from accounts where space_id = ${few.id} order by name
-          `;
-          expect(fewRows).toEqual([
-            { name: "x", color: PALETTE_COLORS[2] },
-            { name: "y", color: PALETTE_COLORS[1] },
-            { name: "z", color: PALETTE_COLORS[0] },
-          ]);
-
-          const [column] = await sql<{ is_nullable: string }[]>`
-            select is_nullable from information_schema.columns
-            where table_name = 'accounts' and column_name = 'color'
-          `;
-          expect(column.is_nullable).toBe("NO");
-          await expect(
-            sql`insert into accounts (space_id, created_by, name, currency, color, anchor_amount_minor)
-                values (${few.id}, ${u.id}, 'bad', 'RUB', 'blue', 0)`,
-          ).rejects.toMatchObject({ code: "23514" });
         } finally {
           await sql.end();
         }

@@ -25,10 +25,11 @@ export default async function AccountsPage() {
   ]);
   const displayCurrency = settings.displayCurrency;
   const summary = summarizeAccounts(
-    accounts.map(({ id, name, currency, balanceMinor, expenseCount }) => ({
+    accounts.map(({ id, name, currency, color, balanceMinor, expenseCount }) => ({
       id,
       name,
       currency,
+      color,
       balanceMinor,
       expenseCount,
     })),
@@ -44,7 +45,12 @@ export default async function AccountsPage() {
       <ScreenHeader
         title="Счета"
         displayCurrency={displayCurrency}
-        action={<AccountNewButton displayCurrency={displayCurrency} />}
+        action={
+          <AccountNewButton
+            displayCurrency={displayCurrency}
+            usedColors={accounts.map((a) => a.color)}
+          />
+        }
       />
       {summary.rows.length > 0 ? (
         <>

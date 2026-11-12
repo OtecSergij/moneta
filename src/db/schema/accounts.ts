@@ -25,6 +25,7 @@ export const accounts = pgTable(
       .references(() => user.id, { onDelete: "restrict" }),
     name: text("name").notNull(),
     currency: currencyEnum("currency").notNull(),
+    color: text("color").notNull(),
     anchorAmountMinor: bigint("anchor_amount_minor", { mode: "number" }).notNull(),
     anchorAt: timestamp("anchor_at", { withTimezone: true })
       .notNull()
@@ -44,5 +45,6 @@ export const accounts = pgTable(
       sql`char_length(trim(${t.name})) between 1 and 40`,
     ),
     check("accounts_anchor_nonneg", sql`${t.anchorAmountMinor} >= 0`),
+    check("accounts_color_hex", sql`${t.color} ~ '^#[0-9A-Fa-f]{6}$'`),
   ],
 );

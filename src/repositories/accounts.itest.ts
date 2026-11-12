@@ -10,7 +10,7 @@ import {
   listAccounts,
   updateAccount,
 } from "@/repositories/accounts";
-import { mkAccount, mkMember, mkSpaceUser } from "@/test/factories";
+import { mkAccount, mkExpense, mkMember, mkSpaceUser } from "@/test/factories";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -57,32 +57,42 @@ describe("accounts repository — isolation", () => {
 });
 
 describe("accounts repository — anchor", () => {
-  it("createAccount anchors the balance at the DB clock", async () => {
+  it("createAccount anchors the balance at the DB clock and keeps the color", async () => {
     const a = await mkSpaceUser();
     const created = await createAccount(a.spaceId, a.user.id, {
       name: "Карта USD",
       currency: "USD",
+      color: "#8B5CF6",
       balanceMinor: 124050,
     });
     expect(created).toMatchObject({
       anchorAmountMinor: 124050,
       balanceMinor: 124050,
       currency: "USD",
+      color: "#8B5CF6",
       createdBy: a.user.id,
     });
     expect(created.anchorAt).toEqual(created.createdAt);
     expect(await getAccount(a.spaceId, created.id)).toEqual(created);
   });
 
-  it("lists accounts by created_at with balance = anchor", async () => {
+  it("lists accounts by created_at with balance = anchor and their colors", async () => {
     const a = await mkSpaceUser();
-    const first = await mkAccount(a.spaceId, a.user.id, { name: "Б", anchorAmountMinor: 1 });
-    const second = await mkAccount(a.spaceId, a.user.id, { name: "А", anchorAmountMinor: 2 });
+    const first = await mkAccount(a.spaceId, a.user.id, {
+      name: "Б",
+      color: "#10B981",
+      anchorAmountMinor: 1,
+    });
+    const second = await mkAccount(a.spaceId, a.user.id, {
+      name: "А",
+      color: "#F97316",
+      anchorAmountMinor: 2,
+    });
     expect(
-      (await listAccounts(a.spaceId)).map((x) => [x.id, x.balanceMinor]),
+      (await listAccounts(a.spaceId)).map((x) => [x.id, x.balanceMinor, x.color]),
     ).toEqual([
-      [first.id, 1],
-      [second.id, 2],
+      [first.id, 1, "#10B981"],
+      [second.id, 2, "#F97316"],
     ]);
   });
 
@@ -102,6 +112,63 @@ describe("accounts repository — anchor", () => {
     const updated = await updateAccount(a.spaceId, account.id, { name: "Новое" });
     expect(updated).toMatchObject({ name: "Новое", anchorAmountMinor: 700, balanceMinor: 700 });
     expect(updated!.anchorAt).toEqual(account.anchorAt);
+  });
+
+  it("a color-only patch changes the color and leaves the balance and anchor alone", async () => {
+    const a = await mkSpaceUser();
+    const account = await mkAccount(a.spaceId, a.user.id, {
+      color: "#10B981",
+      anchorAmountMinor: 700,
+      anchorAt: new Date("2026-01-01T00:00:00Z"),
+    });
+    await mkExpense(a.spaceId, a.user.id, { accountId: account.id, amountMinor: 200 });
+    const updated = await updateAccount(a.spaceId, account.id, { color: "#EC4899" });
+    expect(updated).toMatchObject({
+      name: account.name,
+      color: "#EC4899",
+      anchorAmountMinor: 700,
+      balanceMinor: 500,
+    });
+    expect(updated!.anchorAt).toEqual(account.anchorAt);
+    expect((await row(account.id)).color).toBe("#EC4899");
+  });
+
+  it("a color patch with an unchanged balance does not re-anchor", async () => {
+    const a = await mkSpaceUser();
+    const account = await mkAccount(a.spaceId, a.user.id, {
+      color: "#10B981",
+      anchorAmountMinor: 700,
+    });
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const updated = await updateAccount(a.spaceId, account.id, {
+      color: "#EC4899",
+      balanceMinor: 700,
+      loadedBalanceMinor: 700,
+    });
+    expect(updated).toMatchObject({ color: "#EC4899", anchorAmountMinor: 700 });
+    expect(updated!.anchorAt).toEqual(account.anchorAt);
+    expect(info).not.toHaveBeenCalledWith("account.reanchored", expect.anything());
+  });
+
+  it("a color patch with a new balance changes the color and re-anchors", async () => {
+    const a = await mkSpaceUser();
+    const account = await mkAccount(a.spaceId, a.user.id, {
+      color: "#10B981",
+      anchorAmountMinor: 700,
+      anchorAt: new Date("2026-01-01T00:00:00Z"),
+    });
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const updated = await updateAccount(a.spaceId, account.id, {
+      color: "#EC4899",
+      balanceMinor: 300,
+      loadedBalanceMinor: 700,
+    });
+    expect(updated).toMatchObject({ color: "#EC4899", anchorAmountMinor: 300, balanceMinor: 300 });
+    expect(updated!.anchorAt.getTime()).toBeGreaterThan(account.anchorAt.getTime());
+    expect(info).toHaveBeenCalledWith("account.reanchored", {
+      accountId: account.id,
+      spaceId: a.spaceId,
+    });
   });
 
   it("balanceMinor equal to the loaded balance changes nothing", async () => {
@@ -157,6 +224,13 @@ describe("accounts repository — constraints", () => {
     const a = await mkSpaceUser();
     await expect(
       mkAccount(a.spaceId, a.user.id, { anchorAmountMinor: -1 }),
+    ).rejects.toMatchObject({ cause: { code: "23514" } });
+  });
+
+  it("rejects a color that is not a hex code", async () => {
+    const a = await mkSpaceUser();
+    await expect(
+      mkAccount(a.spaceId, a.user.id, { color: "blue" }),
     ).rejects.toMatchObject({ cause: { code: "23514" } });
   });
 });

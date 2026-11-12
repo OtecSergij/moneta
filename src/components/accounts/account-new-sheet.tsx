@@ -6,9 +6,11 @@ import { toast } from "sonner";
 import type { CurrencyCode } from "@/lib/currency";
 import { parseMoney } from "@/lib/money";
 import { ACCOUNT_NAME_MAX } from "@/lib/accounts";
+import { firstFreeColor } from "@/lib/palette";
 import { createAccountAction } from "@/lib/actions/accounts";
 import { BottomSheet } from "@/components/kit/bottom-sheet";
 import { Button } from "@/components/kit/button";
+import { ColorSwatches } from "@/components/kit/color-swatches";
 import { TextField } from "@/components/kit/text-field";
 import { CurrencySegment } from "@/components/currency/currency-segment";
 import { HeaderAddButton } from "@/components/layout/screen-header";
@@ -16,12 +18,15 @@ import { BalanceField } from "@/components/accounts/balance-field";
 
 function AccountNewForm({
   displayCurrency,
+  usedColors,
   onCreated,
 }: {
   displayCurrency: CurrencyCode;
+  usedColors: string[];
   onCreated: () => void;
 }) {
   const [name, setName] = useState("");
+  const [color, setColor] = useState(() => firstFreeColor(usedColors));
   const [currency, setCurrency] = useState(displayCurrency);
   const [balance, setBalance] = useState("");
   const [errors, setErrors] = useState<{ name?: string; balance?: string }>({});
@@ -40,7 +45,7 @@ function AccountNewForm({
 
     setSaving(true);
     try {
-      const res = await createAccountAction({ name: trimmed, currency, balanceMinor });
+      const res = await createAccountAction({ name: trimmed, currency, color, balanceMinor });
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -74,6 +79,7 @@ function AccountNewForm({
         autoFocus
         error={errors.name}
       />
+      <ColorSwatches value={color} onChange={setColor} size="sheet" />
       <CurrencySegment value={currency} onChange={setCurrency} label="Валюта" />
       <BalanceField
         id="account-new-balance"
@@ -91,8 +97,10 @@ function AccountNewForm({
 
 export function AccountNewButton({
   displayCurrency,
+  usedColors,
 }: {
   displayCurrency: CurrencyCode;
+  usedColors: string[];
 }) {
   const [open, setOpen] = useState(false);
 
@@ -102,6 +110,7 @@ export function AccountNewButton({
       <BottomSheet open={open} onOpenChange={setOpen} title="Новый счёт">
         <AccountNewForm
           displayCurrency={displayCurrency}
+          usedColors={usedColors}
           onCreated={() => setOpen(false)}
         />
       </BottomSheet>

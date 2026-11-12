@@ -20,7 +20,7 @@ vi.mock("@/lib/dal", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { revalidatePath } from "next/cache";
-import { getAccount } from "@/repositories/accounts";
+import { getAccount, listAccounts } from "@/repositories/accounts";
 import {
   createAccountAction,
   deleteAccountAction,
@@ -45,7 +45,12 @@ describe("accounts actions", () => {
     const other = await mkAccount(me.spaceId, me.user.id, { name: "Карта" });
 
     expect(
-      await createAccountAction({ name: "Наличные", currency: "RUB", balanceMinor: 0 }),
+      await createAccountAction({
+        name: "Наличные",
+        currency: "RUB",
+        color: "#3B82F6",
+        balanceMinor: 0,
+      }),
     ).toEqual(DUPLICATE);
     expect(await updateAccountAction(other.id, { name: "Наличные" })).toEqual(DUPLICATE);
   });
@@ -66,22 +71,70 @@ describe("accounts actions", () => {
     const account = await mkAccount(me.spaceId, me.user.id);
 
     expect(
-      await createAccountAction({ name: "Карта", currency: "GBP", balanceMinor: 0 }),
+      await createAccountAction({
+        name: "Карта",
+        currency: "GBP",
+        color: "#3B82F6",
+        balanceMinor: 0,
+      }),
     ).toEqual(INVALID);
+    expect(
+      await createAccountAction({
+        name: "Карта",
+        currency: "RUB",
+        color: "#123456",
+        balanceMinor: 0,
+      }),
+    ).toEqual(INVALID);
+    expect(
+      await createAccountAction({ name: "Карта", currency: "RUB", balanceMinor: 0 }),
+    ).toEqual(INVALID);
+    expect(await listAccounts(me.spaceId)).toHaveLength(1);
     expect(await updateAccountAction(account.id, {})).toEqual(INVALID);
     expect(await updateAccountAction(account.id, { balanceMinor: 100 })).toEqual(INVALID);
   });
 
-  it("creates in the session's space and revalidates /accounts", async () => {
+  it("rejects a color outside the palette and leaves the account unchanged", async () => {
+    const account = await mkAccount(me.spaceId, me.user.id, { color: "#10B981" });
+    const before = await getAccount(me.spaceId, account.id);
+
+    expect(await updateAccountAction(account.id, { color: "#123456" })).toEqual(INVALID);
+    expect(await getAccount(me.spaceId, account.id)).toEqual(before);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("changes only the color and revalidates /accounts", async () => {
+    const account = await mkAccount(me.spaceId, me.user.id, {
+      color: "#10B981",
+      anchorAmountMinor: 700,
+    });
+
+    const result = await updateAccountAction(account.id, { color: "#EC4899" });
+
+    expect(result.ok).toBe(true);
+    const stored = await getAccount(me.spaceId, account.id);
+    expect(stored).toMatchObject({
+      name: account.name,
+      color: "#EC4899",
+      anchorAmountMinor: 700,
+      balanceMinor: 700,
+    });
+    expect(stored!.anchorAt).toEqual(account.anchorAt);
+    expect(revalidatePath).toHaveBeenCalledWith("/accounts");
+  });
+
+  it("creates in the session's space with the chosen color and revalidates /accounts", async () => {
     const result = await createAccountAction({
       name: "Карта USD",
       currency: "USD",
+      color: "#EC4899",
       balanceMinor: 124050,
     });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.data.spaceId).toBe(me.spaceId);
+    expect(result.data).toMatchObject({ spaceId: me.spaceId, color: "#EC4899" });
+    expect((await getAccount(me.spaceId, result.data.id))?.color).toBe("#EC4899");
     expect(revalidatePath).toHaveBeenCalledWith("/accounts");
   });
 });

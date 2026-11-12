@@ -3,10 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { expenses } from "@/db/schema";
 import { CURRENCY_CODES, currencyMeta } from "@/lib/currency";
-import {
-  CATEGORY_COLORS,
-  createCategory,
-} from "@/repositories/categories";
+import { PALETTE_COLORS } from "@/lib/palette";
+import { createCategory } from "@/repositories/categories";
 import {
   ExpenseInput,
   createExpense,
@@ -41,11 +39,11 @@ describe("expenses repository — isolation", () => {
     const b = await mkSpaceUser();
     const catA = await createCategory(a.spaceId, a.user.id, {
       name: "A-food",
-      color: CATEGORY_COLORS[0],
+      color: PALETTE_COLORS[0],
     });
     const catB = await createCategory(b.spaceId, b.user.id, {
       name: "B-food",
-      color: CATEGORY_COLORS[0],
+      color: PALETTE_COLORS[0],
     });
 
     await createExpense(a.spaceId, a.user.id, {
@@ -76,7 +74,7 @@ describe("expenses repository — isolation", () => {
     const b = await mkSpaceUser();
     const catA = await createCategory(a.spaceId, a.user.id, {
       name: "A-cat",
-      color: CATEGORY_COLORS[0],
+      color: PALETTE_COLORS[0],
     });
     const exp = await createExpense(a.spaceId, a.user.id, {
       accountId: await rubAccount(a),
@@ -100,7 +98,7 @@ describe("expenses repository — isolation", () => {
     const b = await mkSpaceUser();
     const catA = await createCategory(a.spaceId, a.user.id, {
       name: "A-cat",
-      color: CATEGORY_COLORS[0],
+      color: PALETTE_COLORS[0],
     });
     const exp = await createExpense(a.spaceId, a.user.id, {
       accountId: await rubAccount(a),
@@ -120,7 +118,7 @@ describe("expenses repository — isolation", () => {
     const b = await mkSpaceUser();
     const catA = await createCategory(a.spaceId, a.user.id, {
       name: "A-private",
-      color: CATEGORY_COLORS[0],
+      color: PALETTE_COLORS[0],
     });
 
     // B tries to attach an expense to A's category — must be rejected.
@@ -142,11 +140,11 @@ describe("expenses repository — isolation", () => {
     const b = await mkSpaceUser();
     const catA = await createCategory(a.spaceId, a.user.id, {
       name: "Food",
-      color: CATEGORY_COLORS[5],
+      color: PALETTE_COLORS[5],
     });
     const catB = await createCategory(b.spaceId, b.user.id, {
       name: "Food",
-      color: CATEGORY_COLORS[5],
+      color: PALETTE_COLORS[5],
     });
 
     await createExpense(a.spaceId, a.user.id, {
@@ -193,7 +191,7 @@ describe("expenses repository — isolation", () => {
     const u = await mkSpaceUser();
     const cat = await createCategory(u.spaceId, u.user.id, {
       name: "Food",
-      color: CATEGORY_COLORS[0],
+      color: PALETTE_COLORS[0],
     });
     const exp = await createExpense(u.spaceId, u.user.id, {
       accountId: await rubAccount(u),
@@ -221,15 +219,15 @@ describe("lastUsedIds", () => {
     const other = await mkSpaceUser();
     const food = await createCategory(u.spaceId, u.user.id, {
       name: "Food",
-      color: CATEGORY_COLORS[0],
+      color: PALETTE_COLORS[0],
     });
     const taxi = await createCategory(u.spaceId, u.user.id, {
       name: "Taxi",
-      color: CATEGORY_COLORS[1],
+      color: PALETTE_COLORS[1],
     });
     const otherCat = await createCategory(other.spaceId, other.user.id, {
       name: "Other",
-      color: CATEGORY_COLORS[2],
+      color: PALETTE_COLORS[2],
     });
 
     await createExpense(u.spaceId, u.user.id, {
@@ -417,7 +415,7 @@ describe("summary — category totals reconcile with the period total (AC-29)", 
       categories.push(
         await createCategory(u.spaceId, u.user.id, {
           name: `Category ${i}`,
-          color: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
+          color: PALETTE_COLORS[i % PALETTE_COLORS.length],
         }),
       );
     }
@@ -461,7 +459,7 @@ describe("createExpense — entry date bound", () => {
     const u = await mkSpaceUser();
     const cat = await createCategory(u.spaceId, u.user.id, {
       name: "Future guard",
-      color: CATEGORY_COLORS[3],
+      color: PALETTE_COLORS[3],
     });
     const base = {
       categoryId: cat.id,
@@ -515,7 +513,7 @@ describe("expenses repository — shared space", () => {
     const b = await mkSpaceUser();
     const foreign = await createCategory(b.spaceId, b.user.id, {
       name: "B-cat",
-      color: CATEGORY_COLORS[0],
+      color: PALETTE_COLORS[0],
     });
     const exp = await mkExpense(a.spaceId, a.user.id);
 
@@ -550,7 +548,7 @@ describe("expenses repository — shared space", () => {
     const member = await mkMember(owner.spaceId);
     const cat = await createCategory(owner.spaceId, owner.user.id, {
       name: "Food",
-      color: CATEGORY_COLORS[5],
+      color: PALETTE_COLORS[5],
     });
     await mkExpense(owner.spaceId, owner.user.id, {
       categoryId: cat.id,
@@ -570,11 +568,11 @@ describe("expenses repository — shared space", () => {
     const member = await mkMember(owner.spaceId);
     const food = await createCategory(owner.spaceId, owner.user.id, {
       name: "Food",
-      color: CATEGORY_COLORS[0],
+      color: PALETTE_COLORS[0],
     });
     const taxi = await createCategory(owner.spaceId, owner.user.id, {
       name: "Taxi",
-      color: CATEGORY_COLORS[1],
+      color: PALETTE_COLORS[1],
     });
 
     await mkExpense(owner.spaceId, owner.user.id, {

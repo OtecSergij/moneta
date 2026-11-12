@@ -5,10 +5,7 @@ import type { CurrencyCode } from "@/lib/currency";
 import { formatMoney } from "@/lib/money";
 import type { AccountSummaryRow } from "@/lib/accounts-total";
 import { AccountSheet } from "@/components/accounts/account-sheet";
-import { accountToneClass } from "@/components/accounts/tones";
 import { cn } from "@/lib/utils";
-
-const NO_RATE_NOTE = "Не пересчитано: нет курса на сегодня";
 
 export function AccountRows({
   rows,
@@ -34,26 +31,26 @@ export function AccountRows({
                 <span className="flex items-center gap-2 text-base font-semibold">
                   <span
                     aria-hidden
-                    className={cn(
-                      "size-2.5 flex-none rounded-chip",
-                      accountToneClass(row.toneIndex),
-                    )}
+                    className="size-2.5 flex-none rounded-chip"
+                    style={{ background: row.color }}
                   />
                   <span className="min-w-0 truncate">{row.name}</span>
                 </span>
-                {row.currency === displayCurrency ? null : row.convertedMinor === null ? (
-                  <span className="pl-[18px] text-[13px] text-ink-2" title={NO_RATE_NOTE}>
-                    <span aria-hidden="true">≈</span>
-                    <span className="sr-only">{NO_RATE_NOTE}</span>
-                  </span>
-                ) : (
+                {row.currency === displayCurrency || row.convertedMinor === null ? null : (
                   <span className="pl-[18px] text-[13px] text-ink-2 tabular-nums">
-                    ≈ {formatMoney(row.convertedMinor, displayCurrency)}
+                    {formatMoney(row.balanceMinor, row.currency)}
                   </span>
                 )}
               </span>
               <span className="text-[17px] font-semibold whitespace-nowrap tabular-nums">
-                {formatMoney(row.balanceMinor, row.currency)}
+                {row.currency === displayCurrency || row.convertedMinor === null ? (
+                  formatMoney(row.balanceMinor, row.currency)
+                ) : (
+                  <>
+                    <span className="text-ink-3">≈ </span>
+                    {formatMoney(row.convertedMinor, displayCurrency)}
+                  </>
+                )}
               </span>
             </button>
           </li>

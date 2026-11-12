@@ -2,10 +2,10 @@
 
 import { RadioGroup } from "radix-ui";
 import {
-  CATEGORY_COLORS,
-  CATEGORY_COLOR_NAMES,
-  type CategoryColor,
-} from "@/lib/categories";
+  PALETTE_COLORS,
+  PALETTE_COLOR_NAMES,
+  type PaletteColor,
+} from "@/lib/palette";
 import { cn } from "@/lib/utils";
 
 const SIZES = {
@@ -18,23 +18,23 @@ export function ColorSwatches({
   onChange,
   size,
 }: {
-  value: CategoryColor;
-  onChange: (color: CategoryColor) => void;
+  value: PaletteColor;
+  onChange: (color: PaletteColor) => void;
   size: keyof typeof SIZES;
 }) {
   const s = SIZES[size];
   return (
     <RadioGroup.Root
       value={value}
-      onValueChange={(v) => onChange(v as CategoryColor)}
+      onValueChange={(v) => onChange(v as PaletteColor)}
       aria-label="Цвет"
       className={cn("grid grid-cols-5 justify-items-center", s.grid)}
     >
-      {CATEGORY_COLORS.map((color) => (
+      {PALETTE_COLORS.map((color) => (
         <RadioGroup.Item
           key={color}
           value={color}
-          aria-label={CATEGORY_COLOR_NAMES[color]}
+          aria-label={PALETTE_COLOR_NAMES[color]}
           className={cn(
             "flex cursor-pointer items-center justify-center rounded-chip hover-swatch",
             "focus-visible:outline-2 focus-visible:outline-primary",

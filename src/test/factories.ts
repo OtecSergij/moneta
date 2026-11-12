@@ -12,8 +12,9 @@ import {
   user,
 } from "@/db/schema";
 import { todayISO } from "@/lib/dates";
+import { PALETTE_COLORS } from "@/lib/palette";
 import type { SpaceId } from "@/lib/space-id";
-import { CATEGORY_COLORS, createCategory } from "@/repositories/categories";
+import { createCategory } from "@/repositories/categories";
 import {
   type Expense,
   type ExpenseInput,
@@ -110,7 +111,7 @@ export async function mkExpense(
     (
       await createCategory(spaceId, userId, {
         name: `Test ${randomUUID().slice(0, 8)}`,
-        color: CATEGORY_COLORS[0],
+        color: PALETTE_COLORS[0],
       })
     ).id;
 
@@ -211,6 +212,7 @@ export async function mkAccount(
       createdBy: userId,
       name: `Счёт ${randomUUID().slice(0, 8)}`,
       currency: "RUB",
+      color: PALETTE_COLORS[0],
       anchorAmountMinor: 0,
       ...overrides,
     })

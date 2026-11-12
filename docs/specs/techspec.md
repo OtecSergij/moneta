@@ -29,7 +29,7 @@ lists(id, space_id → spaces CASCADE, created_by → user RESTRICT, name,
 list_items(id, list_id, space_id, created_by → user RESTRICT, text, checked, created_at, updated_at)
     FK(list_id,space_id) → lists(id,space_id) CASCADE · INDEX(list_id, checked, created_at)
 accounts(id, space_id → spaces CASCADE, created_by → user RESTRICT, name, currency currency_code,
-    anchor_amount_minor bigint ≥0, anchor_at, created_at, updated_at)  UNIQUE(space_id,name)
+    color text #RRGGBB, anchor_amount_minor bigint ≥0, anchor_at, created_at, updated_at)  UNIQUE(space_id,name)
 user_settings — без изменений (личное), fx_rates — без изменений (глобальное)
 ```
 
@@ -138,7 +138,7 @@ export const requireSpace = cache(async (): Promise<SpaceContext> => {
 
 - Скругления вне системных (12, 10, 16, 7, 9 px) — произвольными значениями (`rounded-[12px]`), как на доске. #8E8E96 и #F8FAFF — токены `--color-check-line` (рамка пустого чекбокса, 2 px) и `--color-edit-row` (строка в правке); #7A7A80 снапается к ближайшему токену.
 - Аватар: тон по порядку участников (владелец первый, затем по `joined_at`), пары по кругу: #E8EFFD/#1D4ED8 (владелец), #FCE7F3/#9D174D, #DCFCE7/#166534, #FEF3C7/#92400E. На приглашении у владельца всегда синий. `src/lib/avatar.ts`: `avatarInitial(name)`, `avatarTone(index)`.
-- Синие тона счетов по рангу: #1D4ED8, #60A5FA, #BFDBFE, дальше повторяется последний.
+- Цвет счёта — из общей с категориями палитры (`PALETTE_COLORS`, `src/lib/palette.ts`), выбирается при создании; им красятся точка в строке и отрезок полосы долей.
 - Шрифт Inter; везде `tabular-nums`, символ валюты справа, иконки lucide со `strokeWidth={1.75}`.
 
 | Элемент | Размер / вес |
@@ -161,6 +161,7 @@ export const requireSpace = cache(async (): Promise<SpaceContext> => {
 | `switch.tsx` → `Switch` | `role="switch"`, дорожка `primary` / `control-line` |
 | `bottom-sheet.tsx` → `BottomSheet` | см. ниже |
 | `avatar-initial.tsx` → `AvatarInitial` | `name`, `toneIndex` |
+| `color-swatches.tsx` → `ColorSwatches` | `value`/`onChange: PaletteColor`, `size: "panel" \| "sheet"`; сетка 5×3, кольцо у выбранного; категории и счета |
 | `google-continue-button.tsx` → `GoogleContinueButton` | белая с рамкой и цветным логотипом |
 
 **`BottomSheet`** на Radix `Dialog` (пакет `radix-ui` уже в зависимостях):
@@ -334,7 +335,7 @@ npx drizzle-kit generate   # должно ответить «No schema changes»
    backfillRates(spaceId, deps?)
    syncSpaceRates(spaceId, { throttleMs? })   // троттлинг по spaceId
    ```
-   Цвет новой категории — первый цвет палитры, не занятый в пространстве; если заняты все — `DEFAULT_CATEGORY_COLOR`.
+   Цвет новой категории — первый цвет палитры, не занятый в пространстве; если заняты все — `DEFAULT_PALETTE_COLOR`.
 6. **Auth.** `src/lib/auth-invite-hook.ts`: `inviteGuard(ctx)`, `beforeUserCreate(user, ctx)`, `afterUserCreate(user, ctx)` (OAuth state читают через `getOAuthState` из `better-auth/api`) по шагам 4–6 «Приглашения». В `src/lib/auth.ts`: `hooks: { before: createAuthMiddleware(inviteGuard) }`, `databaseHooks.user.create: { before: beforeUserCreate, after: afterUserCreate }`.
 7. **Actions и страницы.**
    - `src/lib/actions/{categories,expenses,display-currency}.ts` → `requireSpace()` и `revalidateFor(...)` из нового `revalidate.ts`; `fx.ts` без изменений.
@@ -358,7 +359,7 @@ npx drizzle-kit generate   # должно ответить «No schema changes»
     - `src/components/expenses/expense-form-fields.tsx`: `CategoryChips`, `NewCategoryPanel`, `CategoryEditSheet` вместо `CategorySelect`, проп `categoriesEditable`.
     - `src/components/expenses/quick-add-form.tsx`: локальный список категорий (создание, обновление, удаление, `hasExpenses`).
     - `src/components/expenses/edit-expense-dialog.tsx`: чипы без `editable`.
-    - `src/components/categories/color-swatches.tsx`: кольцо выбранного `0 0 0 3px <фон>, 0 0 0 5px <цвет>`.
+    - `src/components/kit/color-swatches.tsx`: кольцо выбранного `0 0 0 3px <фон>, 0 0 0 5px <цвет>`.
     - `src/components/categories/use-category-form.ts`: `remove()` и цвет по умолчанию.
     - Удалить `src/components/settings/category-manager.tsx`, `src/components/categories/category-form-dialog.tsx`, `src/components/expenses/category-select.tsx`.
 12. **Фабрики и сид.**
@@ -541,17 +542,18 @@ Google-путь проверяется локально только при те
    - `space_id → spaces` CASCADE, `created_by → user` RESTRICT;
    - `name`: CHECK 1..40 после trim; `uniqueIndex("accounts_space_name_uniq").on(spaceId, name)`;
    - `currency`: `currencyEnum("currency").notNull()` без default (AC-21); валюту счёта не меняют — в `AccountPatch` её нет;
+   - `color`: text NOT NULL, CHECK `#RRGGBB`, членство в палитре проверяет zod; миграция `0012_account_color.sql` раздала существующим счетам цвета палитры по порядку создания внутри пространства;
    - `anchorAmountMinor`: bigint в режиме number, NOT NULL, CHECK `>= 0`;
    - `anchorAt`: timestamptz NOT NULL default now(), ставит только БД (`sql\`now()\``);
    - `createdAt`, `updatedAt`. Отдельного индекса по `space_id` нет: его покрывает `accounts_space_name_uniq` (`accounts_space_idx` снят миграцией `0010_drop_accounts_space_idx.sql`).
 2. **Логика, репозиторий, actions:**
    ```ts
    // src/lib/accounts.ts (без БД): ACCOUNT_NAME_MAX=40
-   //   AccountInput{ name, currency, balanceMinor: z.int().nonnegative() }
-   //   AccountPatch{ name?, balanceMinor?: z.int().nonnegative(), loadedBalanceMinor?: z.int() }  // refine: balanceMinor ⇔ loadedBalanceMinor; loaded может быть < 0
+   //   AccountInput{ name, currency, color: z.enum(PALETTE_COLORS), balanceMinor: z.int().nonnegative() }
+   //   AccountPatch{ name?, color?: z.enum(PALETTE_COLORS), balanceMinor?: z.int().nonnegative(), loadedBalanceMinor?: z.int() }  // refine: balanceMinor ⇔ loadedBalanceMinor; loaded может быть < 0; хотя бы одно из name, color, balanceMinor
    // src/lib/accounts-total.ts (чистая)
-   summarizeAccounts(accounts: Array<{ id; name; currency; balanceMinor }>, display, index, today)
-     : { totalMinor; unconverted; rows: Array<{ id; name; currency; balanceMinor; convertedMinor: number | null; sharePermille: number; toneIndex: number }> }
+   summarizeAccounts(accounts: Array<{ id; name; currency; color; balanceMinor }>, display, index, today)
+     : { totalMinor; unconverted; rows: Array<{ id; name; currency; color; balanceMinor; convertedMinor: number | null; sharePermille: number }> }
    // src/repositories/accounts.ts
    type AccountWithBalance = Account & { balanceMinor: number };
    listAccounts(spaceId): Promise<AccountWithBalance[]>          // ф.3: balance = anchor; порядок created_at
@@ -562,12 +564,12 @@ Google-путь проверяется локально только при те
    // src/lib/actions/accounts.ts: create/update/delete; requireSpace(); z.uuid(); revalidateFor("account");
    //   23505 → «Счёт с таким названием уже есть»
    ```
-   `summarizeAccounts`: курс на `today` через `convertRow` и `sumConverted`; сортировка по `convertedMinor` по убыванию, `null` в конце, при равенстве — по имени; доли (‰) только по положительным суммам; тон — по рангу.
+   `summarizeAccounts`: курс на `today` через `convertRow` и `sumConverted`; сортировка по `convertedMinor` по убыванию, `null` в конце, при равенстве — по имени; доли (‰) только по положительным суммам.
 3. **Экран** `src/app/accounts/page.tsx` — доски `Accounts`, `AccountsEmpty`: `today = todayISO(await userNow())`, `loadRatesOn(ALL, today)` (последний курс каждой валюты не позже `today`), `after(() => ensureRates(today))`; шапка «Счета» с чипом валюты, чёрным «+» и шестерёнкой; есть счета — итог и строки, нет — только шапка и панель; `TabBar active="accounts"`.
    - `src/components/accounts/accounts-total.tsx`: «Всего на счетах», `TotalMoney`, «По курсу на сегодня», полоса долей.
-   - `src/components/accounts/account-rows.tsx`: точка тона, название, «≈ X» в валюте отображения (только если валюта счёта другая), остаток; без курса — маркер `TotalMoney`, строка в конце.
-   - `src/components/accounts/account-new-sheet.tsx` (доска `AccountNew`): белое окно «Новый счёт» — `TextField` «Название», сегмент из 5 валют (по умолчанию валюта отображения), `TextField` «Остаток» с `suffix` (пусто = 0), «Добавить счёт».
-   - `src/components/accounts/account-sheet.tsx` (доски `AccountSheet`, `AccountDelete`): белое окно — `TextField variant="title"` с названием, «Остаток» с `suffix`, начальное значение `minorToInput(balanceMinor)`; «Сохранить»; `Button danger` «Удалить счёт» → инлайн-подтверждение «Удалить «X»?» / «Отменить это нельзя.» с «Отмена» и «Удалить». Остаток уходит на сервер только при изменении поля.
+   - `src/components/accounts/account-rows.tsx`: точка цвета счёта и название, под ними остаток в валюте счёта; справа «≈ X» в валюте отображения. Если валюта счёта совпадает с валютой отображения или курса нет, справа остаток в валюте счёта, а строки под названием нет; без курса счёт стоит в конце.
+   - `src/components/accounts/account-new-sheet.tsx` (доска `AccountNew`): белое окно «Новый счёт» — `TextField` «Название», `ColorSwatches size="sheet"` (по умолчанию `firstFreeColor` по цветам остальных счетов), сегмент из 5 валют (по умолчанию валюта отображения), `TextField` «Остаток» с `suffix` (пусто = 0), «Добавить счёт».
+   - `src/components/accounts/account-sheet.tsx` (доски `AccountSheet`, `AccountDelete`): белое окно — `TextField variant="title"` с названием, «Остаток» с `suffix`, начальное значение `minorToInput(balanceMinor)`; «Сохранить»; `Button danger` «Удалить счёт» → инлайн-подтверждение «Удалить «X»?» / «Отменить это нельзя.» с «Отмена» и «Удалить». Остаток уходит на сервер только при изменении поля. Выбора цвета в окне нет: он появится в «Изменить» на странице счёта.
 4. **Навигация и ревалидация:** `src/components/nav/tab-bar.tsx` — 4 вкладки, `active` += `"accounts"`; `src/proxy.ts`: `PROTECTED` += `"/accounts"`; `displayCurrency` ревалидирует `/accounts`.
 5. **Фабрики и сид:** `mkAccount`; 4 счёта в порядке `created_at`: «Карта USD» 1 240,50 $, «Наличные EUR» 620 €, «Наличные RSD» 48 300 RSD, «Карта RUB» 86 420 ₽ (без рублёвого счёта трата в ₽ невозможна, а счёт обязателен). Экран показывает их по сумме в валюте отображения: RUB, USD, EUR, RSD.
 
@@ -575,9 +577,9 @@ Google-путь проверяется локально только при те
 
 | Тест | Что утверждает |
 |---|---|
-| `src/repositories/accounts.itest.ts` | Изоляция A/B для list/get/update/delete. Участник правит счета владельца. Якорь при создании. Только имя → `anchor_at` не меняется. `balanceMinor ≠ loaded` → новый якорь; `balanceMinor = loaded` → без изменений. Уникальность имени в пространстве. CHECK `>= 0`. |
+| `src/repositories/accounts.itest.ts` | Изоляция A/B для list/get/update/delete. Участник правит счета владельца. Якорь при создании. Только имя → `anchor_at` не меняется. Только цвет → цвет сменился, якорь и остаток с учётом трат прежние; цвет вместе с остатком переякоривает только при `balanceMinor ≠ loaded`. `balanceMinor ≠ loaded` → новый якорь; `balanceMinor = loaded` → без изменений. Уникальность имени в пространстве. CHECK `>= 0` и `#RRGGBB`. |
 | `src/lib/accounts-total.test.ts` | Фиксированный `RateIndex` (`src/test/fx-fixtures.ts`). Итог в каждой из 5 валют отображения. Тождественная валюта. Счёт без курса → `unconverted=1`, строка в конце. Сортировка и равенство сумм. Доли около 1000‰ только по положительным. Нулевой итог. |
-| `src/lib/accounts.test.ts` | `AccountPatch`: `balanceMinor` без `loaded` отвергается; отрицательный `loaded` допустим; отрицательный `balanceMinor` отвергается. |
+| `src/lib/accounts.test.ts` | `AccountPatch`: `balanceMinor` без `loaded` отвергается; отрицательный `loaded` допустим; отрицательный `balanceMinor` отвергается; патч из одного `color` допустим, цвет не из палитры отвергается. `AccountInput` без цвета или с цветом не из палитры отвергается. |
 
 Сверка с холстом: `TabBar` (4 вкладки), `Accounts`, `AccountsEmpty`, `AccountNew`, `AccountSheet`, `AccountDelete`, `CurrencySheet` из «Счетов»; после смены валюты пересчитываются итог и «≈».
 Отличие от холста в фазе 3: в `Main` и `ExpenseSheet` по-прежнему сегмент валют.

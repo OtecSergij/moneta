@@ -10,14 +10,15 @@ function acc(
   name: string,
   currency: CurrencyCode,
   balanceMinor: number,
+  color = "#3B82F6",
 ): AccountBalance {
-  return { id: name, name, currency, balanceMinor, expenseCount: 0 };
+  return { id: name, name, currency, color, balanceMinor, expenseCount: 0 };
 }
 
 const SEED = [
-  acc("Карта USD", "USD", 124050),
-  acc("Наличные RSD", "RSD", 4830000),
-  acc("Наличные EUR", "EUR", 62000),
+  acc("Карта USD", "USD", 124050, "#3B82F6"),
+  acc("Наличные RSD", "RSD", 4830000, "#F59E0B"),
+  acc("Наличные EUR", "EUR", 62000, "#10B981"),
 ];
 
 describe("summarizeAccounts", () => {
@@ -39,12 +40,12 @@ describe("summarizeAccounts", () => {
     expect(s.totalMinor).toBe(62001);
   });
 
-  it("sorts by converted amount descending with tone by rank", () => {
+  it("sorts by converted amount descending and keeps each account's color", () => {
     const s = summarizeAccounts(SEED, "USD", index, TODAY);
-    expect(s.rows.map((r) => [r.name, r.convertedMinor, r.toneIndex])).toEqual([
-      ["Карта USD", 124050, 0],
-      ["Наличные EUR", 68200, 1],
-      ["Наличные RSD", 48300, 2],
+    expect(s.rows.map((r) => [r.name, r.convertedMinor, r.color])).toEqual([
+      ["Карта USD", 124050, "#3B82F6"],
+      ["Наличные EUR", 68200, "#10B981"],
+      ["Наличные RSD", 48300, "#F59E0B"],
     ]);
   });
 

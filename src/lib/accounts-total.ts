@@ -5,6 +5,7 @@ export type AccountBalance = {
   id: string;
   name: string;
   currency: CurrencyCode;
+  color: string;
   balanceMinor: number;
   expenseCount: number;
 };
@@ -12,7 +13,6 @@ export type AccountBalance = {
 export type AccountSummaryRow = AccountBalance & {
   convertedMinor: number | null;
   sharePermille: number;
-  toneIndex: number;
 };
 
 export type AccountsSummary = {
@@ -51,13 +51,12 @@ export function summarizeAccounts(
     (sum, a) => (a.convertedMinor !== null && a.convertedMinor > 0 ? sum + a.convertedMinor : sum),
     0,
   );
-  const rows = converted.map((a, toneIndex) => ({
+  const rows = converted.map((a) => ({
     ...a,
     sharePermille:
       positive > 0 && a.convertedMinor !== null && a.convertedMinor > 0
         ? Math.round((a.convertedMinor * 1000) / positive)
         : 0,
-    toneIndex,
   }));
   return { totalMinor, unconverted, rows };
 }

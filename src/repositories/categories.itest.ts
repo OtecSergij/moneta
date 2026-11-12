@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { expenses } from "@/db/schema";
-import { DEFAULT_CATEGORY_COLOR } from "@/lib/categories";
 import { todayISO } from "@/lib/dates";
+import { DEFAULT_PALETTE_COLOR, PALETTE_COLORS } from "@/lib/palette";
 import {
-  CATEGORY_COLORS,
   createCategory,
   deleteCategory,
   getCategory,
@@ -33,11 +32,11 @@ describe("categories repository — isolation", () => {
     const b = await mkSpaceUser();
     await createCategory(a.spaceId, a.user.id, {
       name: "A-food",
-      color: CATEGORY_COLORS[0],
+      color: PALETTE_COLORS[0],
     });
     await createCategory(b.spaceId, b.user.id, {
       name: "B-rent",
-      color: CATEGORY_COLORS[1],
+      color: PALETTE_COLORS[1],
     });
 
     expect((await listCategories(a.spaceId)).map((c) => c.name)).toEqual([
@@ -53,7 +52,7 @@ describe("categories repository — isolation", () => {
     const b = await mkSpaceUser();
     const cat = await createCategory(a.spaceId, a.user.id, {
       name: "A-cat",
-      color: CATEGORY_COLORS[0],
+      color: PALETTE_COLORS[0],
     });
 
     expect(await getCategory(b.spaceId, cat.id)).toBeNull();
@@ -75,7 +74,7 @@ describe("categories repository — isolation", () => {
     const b = await mkSpaceUser();
     const cat = await createCategory(a.spaceId, a.user.id, {
       name: "A-cat",
-      color: CATEGORY_COLORS[0],
+      color: PALETTE_COLORS[0],
     });
 
     expect(await updateCategory(b.spaceId, cat.id, { name: "Hacked" })).toBeNull();
@@ -89,7 +88,7 @@ describe("categories repository — isolation", () => {
     const b = await mkSpaceUser();
     const cat = await createCategory(a.spaceId, a.user.id, {
       name: "A-cat",
-      color: CATEGORY_COLORS[0],
+      color: PALETTE_COLORS[0],
     });
 
     expect(await deleteCategory(b.spaceId, cat.id)).toEqual({
@@ -104,7 +103,7 @@ describe("categories repository — isolation", () => {
     const cat = await createCategory(u.spaceId, u.user.id, {
       name: "Coffee",
       description: "for the soul",
-      color: CATEGORY_COLORS[7],
+      color: PALETTE_COLORS[7],
     });
     expect(cat.name).toBe("Coffee");
     expect(cat.description).toBe("for the soul");
@@ -121,7 +120,7 @@ describe("categories repository — shared space", () => {
     const member = await mkMember(owner.spaceId);
     const cat = await createCategory(owner.spaceId, owner.user.id, {
       name: "Дом",
-      color: CATEGORY_COLORS[2],
+      color: PALETTE_COLORS[2],
     });
 
     expect(member.spaceId).toBe(owner.spaceId);
@@ -212,24 +211,24 @@ describe("createCategory — default colour", () => {
     const other = await mkSpaceUser();
     await createCategory(other.spaceId, other.user.id, {
       name: "Elsewhere",
-      color: CATEGORY_COLORS[1],
+      color: PALETTE_COLORS[1],
     });
     await createCategory(u.spaceId, u.user.id, {
       name: "First",
-      color: CATEGORY_COLORS[0],
+      color: PALETTE_COLORS[0],
     });
 
     const second = await createCategory(u.spaceId, u.user.id, { name: "Second" });
-    expect(second.color).toBe(CATEGORY_COLORS[1]);
+    expect(second.color).toBe(PALETTE_COLORS[1]);
   });
 
-  it("falls back to DEFAULT_CATEGORY_COLOR when the whole palette is taken", async () => {
+  it("falls back to DEFAULT_PALETTE_COLOR when the whole palette is taken", async () => {
     const u = await mkSpaceUser();
-    for (const [i, color] of CATEGORY_COLORS.entries()) {
+    for (const [i, color] of PALETTE_COLORS.entries()) {
       await createCategory(u.spaceId, u.user.id, { name: `C${i}`, color });
     }
 
     const extra = await createCategory(u.spaceId, u.user.id, { name: "Extra" });
-    expect(extra.color).toBe(DEFAULT_CATEGORY_COLOR);
+    expect(extra.color).toBe(DEFAULT_PALETTE_COLOR);
   });
 });

@@ -1,26 +1,20 @@
 import { and, asc, eq, getTableColumns, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { categories, expenses } from "@/db/schema";
-import {
-  CATEGORY_COLORS,
-  CategoryInput,
-  CategoryPatch,
-  firstFreeColor,
-  type CategoryColor,
-} from "@/lib/categories";
+import { CategoryInput, CategoryPatch } from "@/lib/categories";
 import { isForeignKeyViolation } from "@/lib/db-errors";
+import { firstFreeColor, type PaletteColor } from "@/lib/palette";
 import type { SpaceId } from "@/lib/space-id";
 
 // Re-exported from the DB-free @/lib/categories (which client components import
 // too) so server-side call sites can keep importing from the repository.
-export { CATEGORY_COLORS, CategoryInput, CategoryPatch };
-export type { CategoryColor };
+export { CategoryInput, CategoryPatch };
 
 export type Category = typeof categories.$inferSelect;
 export type CategoryWithUsage = Category & { hasExpenses: boolean };
 
 export type NewCategory = Omit<CategoryInput, "color"> & {
-  color?: CategoryColor;
+  color?: PaletteColor;
 };
 
 export async function listCategories(
@@ -50,7 +44,7 @@ export async function getCategory(
   return rows[0] ?? null;
 }
 
-async function freeColorInSpace(spaceId: SpaceId): Promise<CategoryColor> {
+async function freeColorInSpace(spaceId: SpaceId): Promise<PaletteColor> {
   const rows = await db
     .select({ color: categories.color })
     .from(categories)

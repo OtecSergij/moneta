@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { fxRates } from "@/db/schema";
 import { isCurrentDate, maxEntryDate } from "@/lib/fx/provider";
-import { CATEGORY_COLORS, createCategory } from "@/repositories/categories";
+import { PALETTE_COLORS } from "@/lib/palette";
+import { createCategory } from "@/repositories/categories";
 import { rateFor } from "@/lib/fx/convert";
 import {
   backfillRates,
@@ -179,7 +180,7 @@ describe("backfillRates", () => {
     const member = await mkMember(owner.spaceId);
     const cat = await createCategory(owner.spaceId, owner.user.id, {
       name: "Food",
-      color: CATEGORY_COLORS[0],
+      color: PALETTE_COLORS[0],
     });
     const dates = ["2024-11-01", "2024-11-02", "2024-11-03"]; // Fri, Sat, Sun
     const authors = [owner, member, member];

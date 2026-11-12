@@ -3,12 +3,12 @@
 import { useRef, useState } from "react";
 import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
+import { CATEGORY_NAME_MAX } from "@/lib/categories";
 import {
-  CATEGORY_COLORS,
-  CATEGORY_NAME_MAX,
-  DEFAULT_CATEGORY_COLOR,
-  type CategoryColor,
-} from "@/lib/categories";
+  DEFAULT_PALETTE_COLOR,
+  isPaletteColor,
+  type PaletteColor,
+} from "@/lib/palette";
 import {
   createCategoryAction,
   deleteCategoryAction,
@@ -16,25 +16,21 @@ import {
 } from "@/lib/actions/categories";
 import type { Category } from "@/repositories/categories";
 
-function isPaletteColor(value: string): value is CategoryColor {
-  return (CATEGORY_COLORS as readonly string[]).includes(value);
-}
-
 export function useCategoryForm({
   category,
-  defaultColor = DEFAULT_CATEGORY_COLOR,
+  defaultColor = DEFAULT_PALETTE_COLOR,
   onSaved,
   onRemoved,
   onRemoveRejected,
 }: {
   category?: Category;
-  defaultColor?: CategoryColor;
+  defaultColor?: PaletteColor;
   onSaved: (category: Category) => void;
   onRemoved?: (id: string) => void;
   onRemoveRejected?: () => void;
 }) {
   const [name, setName] = useState(category?.name ?? "");
-  const [color, setColor] = useState<CategoryColor>(
+  const [color, setColor] = useState<PaletteColor>(
     category && isPaletteColor(category.color) ? category.color : defaultColor,
   );
   const [nameError, setNameError] = useState<string | undefined>();

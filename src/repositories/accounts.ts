@@ -74,6 +74,7 @@ export async function createAccount(
       createdBy: userId,
       name: input.name,
       currency: input.currency,
+      color: input.color,
       anchorAmountMinor: input.balanceMinor,
     })
     .returning();
@@ -100,6 +101,7 @@ export async function updateAccount(
       .update(accounts)
       .set({
         ...(patch.name !== undefined && { name: patch.name }),
+        ...(patch.color !== undefined && { color: patch.color }),
         ...(reanchor && {
           anchorAmountMinor: patch.balanceMinor,
           anchorAt: sql`now()`,

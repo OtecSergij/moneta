@@ -1,7 +1,6 @@
 import type { CurrencyCode } from "@/lib/currency";
 import type { AccountsSummary } from "@/lib/accounts-total";
 import { TotalMoney } from "@/components/ui/total-money";
-import { accountToneClass } from "@/components/accounts/tones";
 
 export function AccountsTotal({
   summary,
@@ -31,8 +30,8 @@ export function AccountsTotal({
           {shares.map((row) => (
             <span
               key={row.id}
-              className={`rounded-chip ${accountToneClass(row.toneIndex)}`}
-              style={{ flex: `${row.sharePermille} 1 0` }}
+              className="rounded-chip"
+              style={{ flex: `${row.sharePermille} 1 0`, background: row.color }}
             />
           ))}
         </span>

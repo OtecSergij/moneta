@@ -1,10 +1,11 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { CATEGORY_NAME_MAX, firstFreeColor } from "@/lib/categories";
+import { CATEGORY_NAME_MAX } from "@/lib/categories";
+import { firstFreeColor } from "@/lib/palette";
 import type { Category } from "@/repositories/categories";
+import { ColorSwatches } from "@/components/kit/color-swatches";
 import { TextField } from "@/components/kit/text-field";
-import { ColorSwatches } from "@/components/categories/color-swatches";
 import { useCategoryForm } from "@/components/categories/use-category-form";
 
 export function NewCategoryPanel({

@@ -25,6 +25,7 @@ import {
   user,
 } from "@/db/schema";
 import { todayISO } from "@/lib/dates";
+import type { PaletteColor } from "@/lib/palette";
 import { createAccount, listAccounts } from "@/repositories/accounts";
 import { createCategory } from "@/repositories/categories";
 import { createExpense, type ExpenseInput } from "@/repositories/expenses";
@@ -98,13 +99,14 @@ const EARLIER: Array<SeedExpense & { daysAgo: number }> = [
 const ACCOUNTS: Array<{
   name: string;
   currency: ExpenseInput["currency"];
+  color: PaletteColor;
   balanceMinor: number;
   anchorDaysAgo: number;
 }> = [
-  { name: "Карта USD", currency: "USD", balanceMinor: 124050, anchorDaysAgo: 1 },
-  { name: "Наличные EUR", currency: "EUR", balanceMinor: 62000, anchorDaysAgo: 10 },
-  { name: "Наличные RSD", currency: "RSD", balanceMinor: 4830000, anchorDaysAgo: 20 },
-  { name: "Карта RUB", currency: "RUB", balanceMinor: 8642000, anchorDaysAgo: 5 },
+  { name: "Карта USD", currency: "USD", color: "#3B82F6", balanceMinor: 124050, anchorDaysAgo: 1 },
+  { name: "Наличные EUR", currency: "EUR", color: "#10B981", balanceMinor: 62000, anchorDaysAgo: 10 },
+  { name: "Наличные RSD", currency: "RSD", color: "#F59E0B", balanceMinor: 4830000, anchorDaysAgo: 20 },
+  { name: "Карта RUB", currency: "RUB", color: "#8B5CF6", balanceMinor: 8642000, anchorDaysAgo: 5 },
 ];
 
 const LISTS: Array<{ name: string; done: string[]; todo: string[]; isPrivate?: true; by: Author }> = [

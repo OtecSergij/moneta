@@ -8,8 +8,8 @@ import type {
 } from "@/repositories/categories";
 import { BottomSheet } from "@/components/kit/bottom-sheet";
 import { Button } from "@/components/kit/button";
+import { ColorSwatches } from "@/components/kit/color-swatches";
 import { TextField } from "@/components/kit/text-field";
-import { ColorSwatches } from "@/components/categories/color-swatches";
 import { useCategoryForm } from "@/components/categories/use-category-form";
 
 type Callbacks = {

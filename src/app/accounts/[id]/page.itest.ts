@@ -17,10 +17,6 @@ import { session } from "@/test/session-mock";
 import type { AccountScreen } from "@/components/accounts/account-screen";
 
 vi.mock("@/lib/dal", () => import("@/test/session-mock"));
-vi.mock("next/server", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("next/server")>()),
-  after: vi.fn(),
-}));
 
 import AccountPage from "./page";
 

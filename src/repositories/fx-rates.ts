@@ -1,37 +1,17 @@
-import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, asc, between, desc, eq, inArray, lte } from "drizzle-orm";
 import { db } from "@/db";
 import { expenses, fxRates, topUps, transfers } from "@/db/schema";
 import { type CurrencyCode } from "@/lib/currency";
-import type { SpaceId } from "@/lib/space-id";
+import { MAX_ENTRY_AGE_DAYS } from "@/lib/dates";
 import { type RateIndex, type RatePoint, parseRate } from "@/lib/fx/convert";
 import {
   type FxDeps,
-  OFFICIAL_HISTORY_FLOOR,
   fetchRates,
   fetchableCurrencies,
+  utcISODate,
 } from "@/lib/fx/provider";
 
-const BACKFILL_CONCURRENCY = 4;
-const BACKFILL_MAX_DATES = 400;
-const NEGATIVE_CACHE_MS = 60_000;
-
-/**
- * How long a page-render-triggered sync stays quiet for a space. The write
- * paths pass no throttle at all (they know something changed); this only
- * bounds the "opening the app is the retry" path, which would otherwise
- * re-scan the space's whole expense, top-up and transfer history on every
- * render.
- */
-export const PAGE_SYNC_THROTTLE_MS = 5 * 60_000;
-
-/**
- * Ceiling on how long a *foreground* caller waits for ensureRates. The fetch
- * itself is not cancelled — it stays in `inFlight` and still fills the table —
- * so exceeding the budget costs this one response, not the rate. Without it a
- * back-dated preview blocks on the ECB full-history download, whose own
- * budget is 10 s.
- */
-export const FOREGROUND_RATE_BUDGET_MS = 2_000;
+const GAP_PASS_CONCURRENCY = 4;
 
 // A thunk, not a captured reference: `{ fetch: globalThis.fetch }` binds once
 // at module import time, so a test stubbing the global afterwards would have
@@ -39,71 +19,15 @@ export const FOREGROUND_RATE_BUDGET_MS = 2_000;
 // into the wrapper reads globalThis.fetch fresh on every call.
 const defaultDeps: FxDeps = { fetch: (...args) => globalThis.fetch(...args) };
 
-// In-flight requests keyed by date, so a debounced preview firing alongside
-// the save it precedes shares one fetch instead of racing duplicates.
-const inFlight = new Map<string, Promise<boolean>>();
-// Dates that just failed, so retries inside the window don't hammer the
-// provider again.
-const negativeUntil = new Map<string, number>();
-
 /**
- * Lazily fills `fx_rates` for `date` if it isn't already fully covered.
- * Never throws — a provider outage must not break expense creation, only
- * leave the rate unavailable. Returns whether every currency
- * a source can supply for that date (`fetchableCurrencies`) ended up present
- * *for that exact date*: a snapshot the aggregator dated differently is
- * written under its own date and reported as a miss.
+ * Fills `fx_rates` for `date` if it isn't already fully covered. Never
+ * throws; a date that ends up short is logged on one line with the reason.
+ * Returns whether every currency a source can supply for that date
+ * (`fetchableCurrencies`) ended up present *for that exact date*: a snapshot
+ * the aggregator dated differently is written under its own date and
+ * reported as a miss.
  */
-export async function ensureRates(
-  date: string,
-  deps: FxDeps = defaultDeps,
-  budgetMs?: number,
-): Promise<boolean> {
-  const cached = inFlight.get(date);
-  if (cached) return withBudget(cached, budgetMs, date);
-
-  const blockedUntil = negativeUntil.get(date);
-  if (blockedUntil !== undefined) {
-    if (Date.now() < blockedUntil) return false;
-    // Expired: drop it rather than leave the key resident forever. The map is
-    // keyed by date and quoteConversionAction accepts ~8 600 of them.
-    negativeUntil.delete(date);
-  }
-
-  const promise = ensureRatesUncached(date, deps).finally(() => {
-    inFlight.delete(date);
-  });
-  inFlight.set(date, promise);
-  return withBudget(promise, budgetMs, date);
-}
-
-// Reports `false` if the fill outruns the budget, while leaving it running —
-// see FOREGROUND_RATE_BUDGET_MS. A late `resolve` is a no-op, so the two
-// racers need no interlock; only the timer has to be cleared, or a fast fill
-// would still hold the event loop for the whole delay.
-function withBudget(
-  promise: Promise<boolean>,
-  budgetMs: number | undefined,
-  date: string,
-): Promise<boolean> {
-  if (budgetMs === undefined) return promise;
-  return new Promise<boolean>((resolve) => {
-    const timer = setTimeout(() => {
-      console.info("fx.ensure_rates_slow", { date, budgetMs });
-      resolve(false);
-    }, budgetMs);
-    const settle = (covered: boolean) => {
-      clearTimeout(timer);
-      resolve(covered);
-    };
-    promise.then(settle, () => settle(false));
-  });
-}
-
-async function ensureRatesUncached(
-  date: string,
-  deps: FxDeps,
-): Promise<boolean> {
+async function ensureRates(date: string, deps: FxDeps, now: Date): Promise<boolean> {
   try {
     const have = new Set(
       (
@@ -116,31 +40,36 @@ async function ensureRatesUncached(
     const expected = fetchableCurrencies(date);
     if (expected.every((c) => have.has(c))) return true;
 
-    const fetched = await fetchRates(date, deps);
-    if (fetched.length === 0) {
-      negativeUntil.set(date, Date.now() + NEGATIVE_CACHE_MS);
-      return false;
+    const fetched = await fetchRates(date, deps, now);
+    if (fetched.length > 0) {
+      await db.insert(fxRates).values(fetched).onConflictDoNothing();
     }
-    await db.insert(fxRates).values(fetched).onConflictDoNothing();
 
-    // A row the aggregator dated to an earlier day (see AggregatorSnapshot in
-    // provider.ts) leaves the requested date genuinely uncovered, so it must
-    // be reported as a miss: readers then fall back to the nearest earlier
-    // snapshot (the rows just written) within the currency's window, and the
-    // dated snapshot for the requested date is still fetched later — by the
-    // next write on that date or by the backfill.
-    const covered = expected.every(
+    const missing = expected.filter(
       (c) =>
-        have.has(c) ||
-        fetched.some((r) => r.currency === c && r.effectiveDate === date),
+        !have.has(c) &&
+        !fetched.some((r) => r.currency === c && r.effectiveDate === date),
     );
-    if (!covered) negativeUntil.set(date, Date.now() + NEGATIVE_CACHE_MS);
-    return covered;
+    // An ECB file without the date is today on a weekend or a holiday: no
+    // rate exists yet, which is not a failure.
+    const ecbAnswered = fetched.some((r) => r.source === "ecb");
+    const failed = missing.filter((c) => c !== "EUR" || !ecbAnswered);
+    if (failed.length > 0) {
+      console.warn("fx.load_failed", date, `no rate for ${failed.join(", ")}`);
+    }
+    return missing.length === 0;
   } catch (err) {
-    console.warn("fx.fetch_failed", { date, err });
-    negativeUntil.set(date, Date.now() + NEGATIVE_CACHE_MS);
+    console.warn("fx.load_failed", date, String(err));
     return false;
   }
+}
+
+/** The daily run: today's rates, "today" being the server's UTC date. */
+export function loadTodayRates(
+  now: Date = new Date(),
+  deps: FxDeps = defaultDeps,
+): Promise<boolean> {
+  return ensureRates(utcISODate(now), deps, now);
 }
 
 /**
@@ -161,8 +90,7 @@ export async function loadRateIndex(
   currencies: CurrencyCode[],
   upTo: string,
 ): Promise<RateIndex> {
-  const index: RateIndex = new Map(currencies.map((c) => [c, [] as RatePoint[]]));
-  if (currencies.length === 0) return index;
+  if (currencies.length === 0) return new Map();
 
   const rows = await db
     .select({
@@ -178,15 +106,7 @@ export async function loadRateIndex(
       ),
     )
     .orderBy(asc(fxRates.effectiveDate));
-
-  for (const row of rows) {
-    index.get(row.currency)?.push({
-      effectiveDate: row.effectiveDate,
-      rateToUsd: parseRate(row.rateToUsd),
-    });
-  }
-
-  return index;
+  return toRateIndex(currencies, rows);
 }
 
 /**
@@ -198,8 +118,7 @@ export async function loadRatesOn(
   currencies: CurrencyCode[],
   onDate: string,
 ): Promise<RateIndex> {
-  const index: RateIndex = new Map(currencies.map((c) => [c, [] as RatePoint[]]));
-  if (currencies.length === 0) return index;
+  if (currencies.length === 0) return new Map();
 
   const rows = await db
     .selectDistinctOn([fxRates.currency], {
@@ -215,14 +134,20 @@ export async function loadRatesOn(
       ),
     )
     .orderBy(fxRates.currency, desc(fxRates.effectiveDate));
+  return toRateIndex(currencies, rows);
+}
 
+function toRateIndex(
+  currencies: CurrencyCode[],
+  rows: { currency: CurrencyCode; effectiveDate: string; rateToUsd: string }[],
+): RateIndex {
+  const index: RateIndex = new Map(currencies.map((c) => [c, [] as RatePoint[]]));
   for (const row of rows) {
     index.get(row.currency)?.push({
       effectiveDate: row.effectiveDate,
       rateToUsd: parseRate(row.rateToUsd),
     });
   }
-
   return index;
 }
 
@@ -255,87 +180,44 @@ type DayColumn =
   | typeof topUps.occurredOn
   | typeof transfers.enteredOn;
 
-function daysOf(spaceId: SpaceId, table: DatedTable, day: DayColumn) {
-  return db
-    .select({ date: day })
-    .from(table)
-    .where(and(eq(table.spaceId, spaceId), gte(day, OFFICIAL_HISTORY_FLOOR)));
+function daysOf(table: DatedTable, day: DayColumn, from: string, to: string) {
+  return db.select({ date: day }).from(table).where(between(day, from, to));
 }
 
 /**
- * Fills `fx_rates` for every distinct expense, top-up or transfer date in the
- * space, at or after `OFFICIAL_HISTORY_FLOOR`, that isn't already fully
- * covered. Runs up to `BACKFILL_CONCURRENCY` dates at once, caps a single call
- * at `BACKFILL_MAX_DATES` (the remainder is picked up by the next call), and
- * swallows per-date errors so one bad date doesn't stop the rest. Returns
- * the number of dates that ended up fully filled.
+ * The gap pass: fills `fx_rates` for every distinct expense, top-up or
+ * transfer date of any space from MAX_ENTRY_AGE_DAYS + 2 days ago up to
+ * yesterday (server UTC) that isn't already fully covered, up to
+ * `GAP_PASS_CONCURRENCY` dates at once. The two extra days cover a form's
+ * oldest date until the next pass: one day for the wait, one for a client
+ * west of UTC. Returns the number of dates that ended up fully filled.
  */
-export async function backfillRates(
-  spaceId: SpaceId,
+export async function fillRateGaps(
+  now: Date = new Date(),
   deps: FxDeps = defaultDeps,
 ): Promise<number> {
-  try {
-    const entryDates = await daysOf(spaceId, expenses, expenses.spentAt)
-      .union(daysOf(spaceId, topUps, topUps.occurredOn))
-      .union(daysOf(spaceId, transfers, transfers.enteredOn));
+  const from = utcISODate(now, MAX_ENTRY_AGE_DAYS + 2);
+  const to = utcISODate(now, 1);
+  const entryDates = await daysOf(expenses, expenses.spentAt, from, to)
+    .union(daysOf(topUps, topUps.occurredOn, from, to))
+    .union(daysOf(transfers, transfers.enteredOn, from, to));
 
-    const distinctDates = entryDates.map((r) => r.date);
-    if (distinctDates.length === 0) return 0;
+  const distinctDates = entryDates.map((r) => r.date);
+  const covered = await datesFullyCovered(distinctDates);
+  const pending = distinctDates.filter((d) => !covered.has(d)).sort();
 
-    const covered = await datesFullyCovered(distinctDates);
-    const pending = distinctDates
-      .filter((d) => !covered.has(d))
-      .slice(0, BACKFILL_MAX_DATES);
-
-    let filled = 0;
-    let cursor = 0;
-    async function worker(): Promise<void> {
-      while (cursor < pending.length) {
-        const date = pending[cursor++];
-        try {
-          if (await ensureRates(date, deps)) filled++;
-        } catch {
-          // A single date's failure must not stop the rest of the backfill.
-        }
-      }
+  let filled = 0;
+  let cursor = 0;
+  async function worker(): Promise<void> {
+    while (cursor < pending.length) {
+      const date = pending[cursor++];
+      if (await ensureRates(date, deps, now)) filled++;
     }
-    await Promise.all(
-      Array.from({ length: Math.min(BACKFILL_CONCURRENCY, pending.length) }, worker),
-    );
-
-    console.info("fx.backfill_done", { spaceId, filled });
-    return filled;
-  } catch (err) {
-    console.warn("fx.fetch_failed", { spaceId, err });
-    return 0;
   }
-}
+  await Promise.all(
+    Array.from({ length: Math.min(GAP_PASS_CONCURRENCY, pending.length) }, worker),
+  );
 
-const lastSyncAt = new Map<string, number>();
-
-/**
- * The background fill: the snapshots the space's expense, top-up and transfer
- * dates need.
- *
- * `throttleMs` is for callers that fire on plain navigation — the page
- * renders that make "opening the app" the retry for a provider outage. Write
- * paths pass nothing: they know state changed and must converge immediately.
- */
-export async function syncSpaceRates(
-  spaceId: SpaceId,
-  { throttleMs }: { throttleMs?: number } = {},
-): Promise<void> {
-  const last = lastSyncAt.get(spaceId);
-  if (
-    throttleMs !== undefined &&
-    last !== undefined &&
-    Date.now() - last < throttleMs
-  ) {
-    return;
-  }
-  // Recorded on every pass, throttled or not, so the page render that follows
-  // a save is covered by the save's own converged sync.
-  lastSyncAt.set(spaceId, Date.now());
-
-  await backfillRates(spaceId);
+  console.info("fx.gap_pass_done", `filled=${filled}`, `dates=${pending.join(",")}`);
+  return filled;
 }

@@ -26,11 +26,8 @@ export const OFFICIAL_HISTORY_FLOOR = "2003-01-01";
 // UTC+1/2) while this server runs UTC, so between local midnight and the
 // server's midnight the client's "today" is already the server's tomorrow.
 // The UI's date picker already forbids a genuinely future date, so instead
-// of rejecting (or misdating) a same-day entry, the server widens its own
-// notion of "today" by one day forward. `maxEntryDate` is the validation
-// upper bound (src/lib/actions/fx.ts); `isCurrentDate` backs every "is this
-// today" gate a client's clock could legitimately push one day ahead: the
-// `@latest` tag gate and the ECB carry-forward below.
+// of rejecting (or misdating) a same-day entry, the entry-date upper bound
+// is one day past the server's own today.
 export function maxEntryDate(now: Date = new Date()): string {
   return todayISO(addDays(now, 1));
 }
@@ -45,16 +42,27 @@ export function isAllowedEntryDate(iso: string, now: Date = new Date()): boolean
   return iso <= maxEntryDate(now);
 }
 
+/** The UTC calendar date `daysAgo` days before `now`. */
+export function utcISODate(now: Date, daysAgo = 0): string {
+  return new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysAgo),
+  )
+    .toISOString()
+    .slice(0, 10);
+}
+
+// The providers' today is the UTC date the scheduled run takes as today
+// (src/repositories/fx-rates.ts), with `now` handed down from that run.
 export function isCurrentDate(iso: string, now: Date = new Date()): boolean {
-  return iso >= todayISO(now);
+  return iso >= utcISODate(now);
 }
 
 /**
  * Currencies some source can still supply for `date` — what "fully covered"
- * means for it (ensureRates / backfillRates in src/repositories/fx-rates.ts).
+ * means for it (src/repositories/fx-rates.ts).
  * BTC only exists from PROVIDER_HISTORY_FLOOR, the fiat set from
  * OFFICIAL_HISTORY_FLOOR; expecting all five on a 2019 date would leave it
- * uncovered forever and have every backfill pass re-fetch it.
+ * uncovered forever and have every gap pass re-fetch it.
  */
 export function fetchableCurrencies(date: string): CurrencyCode[] {
   return CURRENCY_CODES.filter((code) => {
@@ -73,7 +81,6 @@ type RateSource =
   | "ecb"
   | "nbs"
   | "jsdelivr"
-  | "jsdelivr-latest"
   | "pivot";
 
 interface FetchedRate {
@@ -83,10 +90,8 @@ interface FetchedRate {
   source: RateSource;
 }
 
-const REQUEST_TIMEOUT_MS = 2000;
-// The full ECB history is several megabytes; the 2 s budget sized for a
-// small document would abort it on an ordinary connection.
-const ECB_HISTORY_TIMEOUT_MS = 10_000;
+// Enough for the several-megabyte ECB history on an ordinary connection.
+const REQUEST_TIMEOUT_MS = 10_000;
 const ECB_RECENT_TTL_MS = 60 * 60 * 1000;
 // Working days the ECB batch inserts around a requested date: the 90-day
 // file whole, and the same span cut out of the full history, which would
@@ -117,17 +122,12 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 // Never throws, never leaves a hung request: Node's fetch has no default
-// timeout, and a stalled request would block the form's conversion preview
-// and the background fill. Returns null on any failure — callers decide what "no data"
-// means for them.
-async function fetchOk(
-  url: string,
-  deps: FxDeps,
-  timeoutMs = REQUEST_TIMEOUT_MS,
-): Promise<Response | null> {
+// timeout, and a stalled request would hold up a scheduled run. Returns null
+// on any failure — callers decide what "no data" means for them.
+async function fetchOk(url: string, deps: FxDeps): Promise<Response | null> {
   try {
     const res = await deps.fetch(url, {
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     return res.ok ? res : null;
   } catch {
@@ -145,12 +145,8 @@ async function fetchJson(url: string, deps: FxDeps): Promise<unknown> {
   }
 }
 
-async function fetchText(
-  url: string,
-  deps: FxDeps,
-  timeoutMs = REQUEST_TIMEOUT_MS,
-): Promise<string | null> {
-  const res = await fetchOk(url, deps, timeoutMs);
+async function fetchText(url: string, deps: FxDeps): Promise<string | null> {
+  const res = await fetchOk(url, deps);
   if (!res) return null;
   try {
     return await res.text();
@@ -281,7 +277,7 @@ interface EcbCache {
 
 // Keyed by the transport rather than module-global, so an injected fetch
 // (tests, or a future proxy) never observes a series another one downloaded.
-// Promises are cached, not results, so the backfill's parallel workers share
+// Promises are cached, not results, so the gap pass's parallel workers share
 // one download instead of racing four.
 const ecbCaches = new WeakMap<FxDeps["fetch"], EcbCache>();
 
@@ -297,9 +293,8 @@ function ecbCacheFor(deps: FxDeps): EcbCache {
 async function loadEcbSeries(
   url: string,
   deps: FxDeps,
-  timeoutMs: number,
 ): Promise<EcbPoint[] | null> {
-  const xml = await fetchText(url, deps, timeoutMs);
+  const xml = await fetchText(url, deps);
   const series = xml === null ? null : parseEcbUsdSeries(xml);
   if (series === null) console.warn("fx.fetch_failed", { source: "ecb", url });
   return series;
@@ -311,7 +306,7 @@ function ecbRecentSeries(deps: FxDeps): Promise<EcbPoint[] | null> {
     return cache.recent.series;
   }
   const entry = {
-    series: loadEcbSeries(ECB_RECENT_URL, deps, REQUEST_TIMEOUT_MS),
+    series: loadEcbSeries(ECB_RECENT_URL, deps),
     at: Date.now(),
   };
   cache.recent = entry;
@@ -325,7 +320,7 @@ function ecbRecentSeries(deps: FxDeps): Promise<EcbPoint[] | null> {
 function ecbHistorySeries(deps: FxDeps): Promise<EcbPoint[] | null> {
   const cache = ecbCacheFor(deps);
   if (cache.history) return cache.history;
-  const series = loadEcbSeries(ECB_HISTORY_URL, deps, ECB_HISTORY_TIMEOUT_MS);
+  const series = loadEcbSeries(ECB_HISTORY_URL, deps);
   cache.history = series;
   return series.then((result) => {
     if (result === null && cache.history === series) delete cache.history;
@@ -344,6 +339,7 @@ function ecbHistorySeries(deps: FxDeps): Promise<EcbPoint[] | null> {
 export async function fetchEurToUsdRange(
   date: string,
   deps: FxDeps,
+  now: Date = new Date(),
 ): Promise<EcbPoint[] | null> {
   if (date < OFFICIAL_HISTORY_FLOOR) return null;
 
@@ -362,12 +358,12 @@ export async function fetchEurToUsdRange(
     (p) => p.effectiveDate >= from && p.effectiveDate <= to,
   );
 
-  // Skipped for today (or the client's today, one day ahead): the ECB
-  // publishes at ~16:00 CET, and a row written before that would freeze
-  // yesterday's rate onto today for good (the insert is onConflictDoNothing).
-  // Left uncovered, today is simply retried until the real determination
-  // lands; readers bridge the gap through the currency's lookback window.
-  if (!rows.some((p) => p.effectiveDate === date) && !isCurrentDate(date)) {
+  // Skipped for today: the ECB publishes at ~16:00 CET, and a row written
+  // before that would freeze yesterday's rate onto today for good (the insert
+  // is onConflictDoNothing). Left uncovered, the date goes to a later gap pass
+  // if an entry needs it; readers fall back to the latest earlier rate
+  // meanwhile.
+  if (!rows.some((p) => p.effectiveDate === date) && !isCurrentDate(date, now)) {
     for (let i = series.length - 1; i >= 0; i--) {
       if (series[i].effectiveDate <= date) {
         rows.push({ effectiveDate: date, rateToUsd: series[i].rateToUsd });
@@ -382,6 +378,7 @@ export async function fetchEurToUsdRange(
 export async function fetchRsdToUsd(
   date: string,
   deps: FxDeps,
+  now: Date = new Date(),
 ): Promise<string | null> {
   if (date < OFFICIAL_HISTORY_FLOOR) return null;
 
@@ -394,9 +391,17 @@ export async function fetchRsdToUsd(
 
   // `date_from` is when the quoted list took effect; like CBR's, it stays in
   // force over a weekend. A list dated after the requested day cannot be
-  // right for it.
+  // right for it. For today only today's own list counts: until NBS publishes
+  // it, and all weekend, the service answers with the last one, and filing
+  // that under today would freeze it there (the insert is onConflictDoNothing).
+  // Refusing that earlier list is routine, so it goes unlogged.
   const dateFrom = payload.date_from;
-  if (typeof dateFrom === "string" && dateFrom > date) {
+  const current = isCurrentDate(date, now);
+  if (current && typeof dateFrom === "string" && dateFrom < date) return null;
+  const stale = current
+    ? dateFrom !== date
+    : typeof dateFrom === "string" && dateFrom > date;
+  if (stale) {
     console.warn("fx.invalid_rate", { date, source: "nbs", dateFrom });
     return null;
   }
@@ -415,15 +420,10 @@ export async function fetchRsdToUsd(
 
 export interface AggregatorSnapshot {
   /**
-   * The snapshot's OWN effective date, which is not always the requested one:
-   * the `@latest` tag serves whatever day the provider last published, and
-   * around the UTC date boundary that is yesterday (observed: `@latest` on
-   * 2 Sept returning `date: 2026-09-01`). Callers must persist the rates under
-   * this date — filing them under the requested date would mislabel them
-   * permanently, and the primary key would then keep the real snapshot out.
+   * The snapshot's OWN effective date, the requested one when the payload
+   * carries none. Callers persist the rates under this date.
    */
   date: string;
-  source: "jsdelivr" | "jsdelivr-latest";
   rates: Partial<Record<Exclude<CurrencyCode, "USD">, string>>;
 }
 
@@ -439,13 +439,8 @@ export async function fetchAggregatorRates(
 ): Promise<AggregatorSnapshot | null> {
   if (date < PROVIDER_HISTORY_FLOOR) return null;
 
-  // @latest is only correct for today (or the client's today, one day
-  // ahead of the server's — see isCurrentDate above): for any earlier date
-  // it would silently substitute today's rate, breaking "rate on the
-  // transaction date".
-  const tag = isCurrentDate(date) ? "latest" : date;
-  const primaryUrl = `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${tag}/v1/currencies/usd.min.json`;
-  const mirrorUrl = `https://${tag}.currency-api.pages.dev/v1/currencies/usd.min.json`;
+  const primaryUrl = `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${date}/v1/currencies/usd.min.json`;
+  const mirrorUrl = `https://${date}.currency-api.pages.dev/v1/currencies/usd.min.json`;
 
   let payload = asRecord(await fetchJson(primaryUrl, deps));
   if (!payload) {
@@ -460,17 +455,8 @@ export async function fetchAggregatorRates(
   const usdRates = asRecord(payload.usd);
   if (!usdRates) return null;
 
-  // A dated tag can safely fall back to the requested date if the provider
-  // ever drops the field: the two agree by construction. For `latest` they do
-  // not, and guessing would file whatever day the provider last published
-  // under the requested date permanently — the exact mislabeling this type
-  // exists to prevent — so a `latest` payload without a valid date is refused.
   const hasPayloadDate =
     typeof payload.date === "string" && ISO_DATE.test(payload.date);
-  if (!hasPayloadDate && tag === "latest") {
-    console.warn("fx.fetch_failed", { date, reason: "latest payload without date" });
-    return null;
-  }
   const payloadDate = hasPayloadDate ? (payload.date as string) : date;
 
   // Partial on purpose: a single garbage currency in the payload shouldn't
@@ -487,11 +473,7 @@ export async function fetchAggregatorRates(
     rates[code] = inverted;
   }
 
-  return {
-    date: payloadDate,
-    source: tag === "latest" ? "jsdelivr-latest" : "jsdelivr",
-    rates,
-  };
+  return { date: payloadDate, rates };
 }
 
 /**
@@ -504,11 +486,12 @@ export async function fetchAggregatorRates(
 export async function fetchRates(
   date: string,
   deps: FxDeps,
+  now: Date = new Date(),
 ): Promise<FetchedRate[]> {
   const [rub, eur, rsd, aggregated] = await Promise.all([
     fetchRubToUsd(date, deps),
-    fetchEurToUsdRange(date, deps),
-    fetchRsdToUsd(date, deps),
+    fetchEurToUsdRange(date, deps, now),
+    fetchRsdToUsd(date, deps, now),
     fetchAggregatorRates(date, deps),
   ]);
 
@@ -516,7 +499,7 @@ export async function fetchRates(
   // Official rows sit under the requested date, not the source document's:
   // a central bank's list stays in force until the next one, so "the rate on
   // Sunday" genuinely is Friday's number. Filing it under Friday would leave
-  // Sunday uncovered, and the negative cache would then retry it forever.
+  // Sunday uncovered, and every gap pass would fetch it again.
   if (rub !== null) {
     rows.push({ currency: "RUB", effectiveDate: date, rateToUsd: rub, source: "cbr" });
   }
@@ -539,7 +522,7 @@ export async function fetchRates(
         currency,
         effectiveDate: aggregated.date,
         rateToUsd,
-        source: aggregated.source,
+        source: "jsdelivr",
       });
     }
   }

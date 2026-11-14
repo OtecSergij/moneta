@@ -1,17 +1,13 @@
 import { addDays } from "date-fns";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { toISODate } from "@/lib/dates";
 import { mkAccount, mkSpaceUser, mkTopUp, type SpaceUser } from "@/test/factories";
 import { session } from "@/test/session-mock";
 
 vi.mock("@/lib/dal", () => import("@/test/session-mock"));
-// The real helper calls after(), which throws outside a request scope; its own
-// behaviour is covered by entry-rates.test.ts.
-vi.mock("@/lib/actions/entry-rates", () => ({ fillRatesAfterWrite: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { revalidatePath } from "next/cache";
-import { fillRatesAfterWrite } from "@/lib/actions/entry-rates";
 import { deleteAccount } from "@/repositories/accounts";
 import { deleteTopUp, getTopUp, listTopUps } from "@/repositories/top-ups";
 import {
@@ -26,6 +22,13 @@ const ACCOUNT_NOT_FOUND = { ok: false, error: "Счёт не найден", notF
 const FUTURE_DATE = { ok: false, error: "Дата не может быть в будущем" };
 const ACCOUNT_PAGES = [["/accounts"], ["/accounts/[id]", "page"]];
 
+// Saves touch the database only: no exchange rate is fetched on the way.
+const outbound = vi.fn();
+vi.stubGlobal("fetch", outbound);
+afterAll(() => {
+  vi.unstubAllGlobals();
+});
+
 let me: SpaceUser;
 
 beforeEach(async () => {
@@ -35,7 +38,7 @@ beforeEach(async () => {
 });
 
 describe("top-up actions", () => {
-  it("create in the session's space revalidates /accounts and the account page and schedules rates", async () => {
+  it("create in the session's space revalidates /accounts and the account page and fetches no rates", async () => {
     const account = await mkAccount(me.spaceId, me.user.id);
 
     const result = await createTopUpAction({
@@ -57,7 +60,7 @@ describe("top-up actions", () => {
       }),
     ]);
     expect(vi.mocked(revalidatePath).mock.calls).toEqual(ACCOUNT_PAGES);
-    expect(vi.mocked(fillRatesAfterWrite).mock.calls).toEqual([[me.spaceId, "2024-11-01"]]);
+    expect(outbound).not.toHaveBeenCalled();
   });
 
   it("a blank description is saved as «Пополнение» on create and update", async () => {
@@ -85,7 +88,7 @@ describe("top-up actions", () => {
     expect(await getTopUp(me.spaceId, named.id)).toMatchObject({ note: "Пополнение" });
   });
 
-  it("update and delete revalidate the same pages; only update schedules rates", async () => {
+  it("update and delete revalidate the same pages and fetch no rates", async () => {
     const account = await mkAccount(me.spaceId, me.user.id);
     const topUp = await mkTopUp(me.spaceId, me.user.id, { accountId: account.id });
 
@@ -99,13 +102,13 @@ describe("top-up actions", () => {
       note: "Пополнение",
     });
     expect(vi.mocked(revalidatePath).mock.calls).toEqual(ACCOUNT_PAGES);
-    expect(vi.mocked(fillRatesAfterWrite).mock.calls).toEqual([[me.spaceId, undefined]]);
+    expect(outbound).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
     const moved = await updateTopUpAction(account.id, topUp.id, { occurredOn: "2024-11-04" });
     expect(moved).toEqual({ ok: true, data: null });
     expect(await getTopUp(me.spaceId, topUp.id)).toMatchObject({ occurredOn: "2024-11-04" });
-    expect(vi.mocked(fillRatesAfterWrite).mock.calls).toEqual([[me.spaceId, "2024-11-04"]]);
+    expect(outbound).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
     expect(await deleteTopUpAction(account.id, topUp.id)).toEqual({
@@ -114,7 +117,7 @@ describe("top-up actions", () => {
     });
     expect(await getTopUp(me.spaceId, topUp.id)).toBeNull();
     expect(vi.mocked(revalidatePath).mock.calls).toEqual(ACCOUNT_PAGES);
-    expect(fillRatesAfterWrite).not.toHaveBeenCalled();
+    expect(outbound).not.toHaveBeenCalled();
   });
 
   it("returns an error for a non-uuid id, invalid input, another space's top-up", async () => {
@@ -175,7 +178,7 @@ describe("top-up actions", () => {
     expect(await deleteTopUpAction(account.id, foreign.id)).toEqual(NOT_FOUND);
     expect(await getTopUp(stranger.spaceId, foreign.id)).toMatchObject({ amountMinor: 1234 });
     expect(vi.mocked(revalidatePath).mock.calls).toEqual([...ACCOUNT_PAGES, ...ACCOUNT_PAGES]);
-    expect(fillRatesAfterWrite).not.toHaveBeenCalled();
+    expect(outbound).not.toHaveBeenCalled();
   });
 
   it("a top-up gone from an existing account revalidates and keeps the user on the page", async () => {
@@ -189,7 +192,7 @@ describe("top-up actions", () => {
     vi.clearAllMocks();
     expect(await deleteTopUpAction(account.id, topUp.id)).toEqual(NOT_FOUND);
     expect(vi.mocked(revalidatePath).mock.calls).toEqual(ACCOUNT_PAGES);
-    expect(fillRatesAfterWrite).not.toHaveBeenCalled();
+    expect(outbound).not.toHaveBeenCalled();
   });
 
   it("a top-up whose account is gone returns notFound", async () => {
@@ -202,7 +205,7 @@ describe("top-up actions", () => {
     );
     expect(await deleteTopUpAction(account.id, topUp.id)).toEqual(ACCOUNT_NOT_FOUND);
     expect(revalidatePath).not.toHaveBeenCalled();
-    expect(fillRatesAfterWrite).not.toHaveBeenCalled();
+    expect(outbound).not.toHaveBeenCalled();
   });
 
   it("create on another space's account returns notFound", async () => {
@@ -234,7 +237,7 @@ describe("top-up actions", () => {
     expect(await deleteTopUpAction(foreignAccount.id, foreign.id)).toEqual(ACCOUNT_NOT_FOUND);
     expect(await getTopUp(stranger.spaceId, foreign.id)).toMatchObject({ amountMinor: 1234 });
     expect(revalidatePath).not.toHaveBeenCalled();
-    expect(fillRatesAfterWrite).not.toHaveBeenCalled();
+    expect(outbound).not.toHaveBeenCalled();
   });
 
   it("an empty patch is rejected as invalid", async () => {
@@ -265,6 +268,6 @@ describe("top-up actions", () => {
     );
     expect(await getTopUp(me.spaceId, topUp.id)).not.toBeNull();
     expect(revalidatePath).not.toHaveBeenCalled();
-    expect(fillRatesAfterWrite).not.toHaveBeenCalled();
+    expect(outbound).not.toHaveBeenCalled();
   });
 });

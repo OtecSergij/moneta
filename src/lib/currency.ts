@@ -1,5 +1,5 @@
-// Currency metadata — single source of truth for symbols, storage/display
-// precision, and fx rate lookup windows.
+// Currency metadata — single source of truth for symbols and storage/display
+// precision.
 
 export const CURRENCY_CODES = ["RUB", "USD", "EUR", "RSD", "BTC"] as const;
 

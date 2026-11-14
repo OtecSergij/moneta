@@ -322,7 +322,7 @@ describe("summary — rate selection uses the row's own date", () => {
   it("converts using the rate on file for the row's own spentAt, not a later rate for the same currency", async () => {
     const u = await mkSpaceUser();
     const earlyDate = "2025-04-10";
-    const lateDate = "2025-05-25"; // 45 days later — outside every lookup window
+    const lateDate = "2025-05-25";
 
     await mkRate({ currency: "RUB", effectiveDate: earlyDate, rateToUsd: "0.01050000000000000000" });
     await mkRate({ currency: "RUB", effectiveDate: lateDate, rateToUsd: "0.01300000000000000000" });

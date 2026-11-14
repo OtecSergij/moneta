@@ -59,15 +59,15 @@ describe("TopUpPatch", () => {
 describe("topUpFormSchema", () => {
   it("the form schema rejects a future date and a zero amount", () => {
     const values = { amount: "500", currency: "USD", note: "", occurredOn: todayISO() };
-    expect(topUpFormSchema.safeParse(values).success).toBe(true);
+    expect(topUpFormSchema().safeParse(values).success).toBe(true);
 
-    const zero = topUpFormSchema.safeParse({ ...values, amount: "0" });
+    const zero = topUpFormSchema().safeParse({ ...values, amount: "0" });
     expect(zero.error?.issues).toEqual([
       expect.objectContaining({ path: ["amount"], message: "Введите сумму больше нуля" }),
     ]);
 
     const tomorrow = toISODate(addDays(new Date(), 1));
-    const future = topUpFormSchema.safeParse({ ...values, occurredOn: tomorrow });
+    const future = topUpFormSchema().safeParse({ ...values, occurredOn: tomorrow });
     expect(future.error?.issues).toEqual([
       expect.objectContaining({ path: ["occurredOn"], message: FUTURE_DATE_ERROR }),
     ]);

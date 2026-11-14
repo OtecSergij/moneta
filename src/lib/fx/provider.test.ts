@@ -9,6 +9,8 @@ import {
   fetchRsdToUsd,
   fetchRubToUsd,
   fetchableCurrencies,
+  isCurrentDate,
+  maxEntryDate,
   type FxDeps,
 } from "@/lib/fx/provider";
 import {
@@ -37,6 +39,20 @@ const TWENTY_DIGIT_DECIMAL = /^\d+\.\d{20}$/;
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe("isCurrentDate / maxEntryDate", () => {
+  it("isCurrentDate takes the UTC date of `now` as today, and any later date as current", () => {
+    // Already 16 June in Belgrade, still 15 June in UTC.
+    const now = new Date("2026-06-15T23:30:00Z");
+    expect(isCurrentDate("2026-06-14", now)).toBe(false);
+    expect(isCurrentDate("2026-06-15", now)).toBe(true);
+    expect(isCurrentDate("2026-06-16", now)).toBe(true);
+  });
+
+  it("maxEntryDate lets an entry be dated one day past the server's today", () => {
+    expect(maxEntryDate(new Date(2026, 5, 15, 12))).toBe("2026-06-16");
+  });
 });
 
 describe("floors", () => {
@@ -161,12 +177,10 @@ describe("fetchEurToUsdRange — European Central Bank", () => {
   });
 
   it("leaves today uncovered instead of carrying yesterday's rate onto it", async () => {
-    const today = todayISO();
-    const fetch = stubFetch(ecbDocument([{ date: "2020-01-02", usd: "1.1" }]));
-    // A far-past single point: whatever today is, the file lacks it.
-    const rows = await fetchEurToUsdRange(today, { fetch });
-    expect(rows).not.toBeNull();
-    expect(rows!.some((p) => p.effectiveDate === today)).toBe(false);
+    const now = new Date("2026-06-13T16:00:00Z"); // Saturday
+    const fetch = stubFetch(ecbDocument(week));
+    const rows = await fetchEurToUsdRange("2026-06-13", { fetch }, now);
+    expect(rows!.map((p) => p.effectiveDate)).toEqual(week.map((p) => p.date));
   });
 
   it("requests the full history only for a date older than the 90-day window, and only once", async () => {
@@ -188,8 +202,6 @@ describe("fetchEurToUsdRange — European Central Bank", () => {
     const old = await fetchEurToUsdRange("2020-03-15", { fetch }); // Sunday
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(String(fetch.mock.calls[1][0])).toContain("eurofxref-hist.xml");
-    // The multi-megabyte file gets a longer budget than the small ones.
-    expect(fetch.mock.calls[1][1]?.signal).toBeInstanceOf(AbortSignal);
     // Only the span around the requested date, not the whole history.
     expect(old!.map((p) => p.effectiveDate)).toEqual([
       "2020-03-12",
@@ -283,6 +295,42 @@ describe("fetchRsdToUsd — National Bank of Serbia via kurs.resenje.org", () =>
     expect(await fetchRsdToUsd("2026-09-06", { fetch: later })).toBeNull();
   });
 
+  describe("for today", () => {
+    const now = new Date("2026-11-14T16:00:00Z"); // Saturday
+
+    it("takes only today's own list: yesterday's, still served for today, is refused without a warning", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const yesterdays = stubFetch(nbsPayload({ date: "2026-11-14", dateFrom: "2026-11-13" }));
+      expect(await fetchRsdToUsd("2026-11-14", { fetch: yesterdays }, now)).toBeNull();
+      expect(warn).not.toHaveBeenCalled();
+
+      const todays = stubFetch(nbsPayload({ date: "2026-11-14", dateFrom: "2026-11-14" }));
+      expect(await fetchRsdToUsd("2026-11-14", { fetch: todays }, now)).not.toBeNull();
+    });
+
+    it("still warns about a list from a later day or a broken rate", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const later = stubFetch(nbsPayload({ date: "2026-11-14", dateFrom: "2026-11-15" }));
+      expect(await fetchRsdToUsd("2026-11-14", { fetch: later }, now)).toBeNull();
+      expect(warn).toHaveBeenLastCalledWith(
+        "fx.invalid_rate",
+        expect.objectContaining({ source: "nbs", dateFrom: "2026-11-15" }),
+      );
+
+      const broken = stubFetch(nbsPayload({ date: "2026-11-14", middle: 0 }));
+      expect(await fetchRsdToUsd("2026-11-14", { fetch: broken }, now)).toBeNull();
+      expect(warn).toHaveBeenLastCalledWith(
+        "fx.invalid_rate",
+        expect.objectContaining({ source: "nbs", middle: 0 }),
+      );
+    });
+
+    it("a past date still takes the list in force since an earlier day", async () => {
+      const inForce = stubFetch(nbsPayload({ date: "2026-11-13", dateFrom: "2026-11-12" }));
+      expect(await fetchRsdToUsd("2026-11-13", { fetch: inForce }, now)).not.toBeNull();
+    });
+  });
+
   it("rejects a garbage or missing field rather than storing it", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const cases: Array<{ middle?: unknown; parity?: unknown }> = [
@@ -316,7 +364,6 @@ describe("fetchAggregatorRates — BTC, and the fallback for fiat", () => {
 
     expect(result).not.toBeNull();
     expect(result!.date).toBe("2024-10-05");
-    expect(result!.source).toBe("jsdelivr");
     expect("USD" in result!.rates).toBe(false);
     expect(Number(result!.rates.RUB)).toBeCloseTo(1 / 96.5, 10);
     expect(Number(result!.rates.EUR)).toBeCloseTo(1 / 0.923, 10);
@@ -344,9 +391,7 @@ describe("fetchAggregatorRates — BTC, and the fallback for fiat", () => {
   });
 
   it("reports the payload's own date, not the requested one", async () => {
-    // What @latest actually does around the UTC date boundary: asked for the
-    // client's today, it answers with the last published day. The caller needs
-    // that date to file the rows under, so it can't be swallowed here.
+    // The caller files the rows under that date, so it can't be swallowed here.
     const fetch = stubFetch(DAILY_FIXTURE_TEXT);
     const result = await fetchAggregatorRates("2024-10-06", { fetch });
 
@@ -381,24 +426,20 @@ describe("fetchAggregatorRates — BTC, and the fallback for fiat", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
-  it("uses the @latest tag for today (labelled as such), and the literal date for a past day", async () => {
-    const todayFetch = stubFetch(aggregatorPayload(todayISO()));
-    const today = await fetchAggregatorRates(todayISO(), { fetch: todayFetch });
-    expect(calls(todayFetch)[0][0]).toContain("@latest");
-    expect(today!.source).toBe("jsdelivr-latest");
-
-    const pastFetch = stubFetch(DAILY_FIXTURE_TEXT);
-    const past = await fetchAggregatorRates("2024-10-05", { fetch: pastFetch });
-    const pastUrl = calls(pastFetch)[0][0];
-    expect(pastUrl).toContain("@2024-10-05");
-    expect(pastUrl).not.toContain("latest");
-    expect(past!.source).toBe("jsdelivr");
-  });
-
-  it("refuses a @latest payload without a date rather than guessing", async () => {
+  it("always asks for the dated snapshot, today included, on the primary host and the mirror", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    const fetch = stubFetch(aggregatorPayload(undefined));
-    expect(await fetchAggregatorRates(todayISO(), { fetch })).toBeNull();
+    const today = todayISO();
+    for (const date of [today, "2024-10-05"]) {
+      const fetch = stubFetch("", 500);
+      await fetchAggregatorRates(date, { fetch });
+      expect(calls(fetch).map(([url]) => url)).toEqual([
+        `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${date}/v1/currencies/usd.min.json`,
+        `https://${date}.currency-api.pages.dev/v1/currencies/usd.min.json`,
+      ]);
+    }
+
+    const fetch = stubFetch(aggregatorPayload(today));
+    expect(await fetchAggregatorRates(today, { fetch })).toMatchObject({ date: today });
   });
 });
 

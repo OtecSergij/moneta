@@ -2,15 +2,14 @@ import { and, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { fxRates } from "@/db/schema";
-import { type FxDeps, isCurrentDate, maxEntryDate } from "@/lib/fx/provider";
-import { PALETTE_COLORS } from "@/lib/palette";
-import { createCategory } from "@/repositories/categories";
+import { CURRENCY_CODES } from "@/lib/currency";
+import { minEntryDate } from "@/lib/dates";
 import { rateFor } from "@/lib/fx/convert";
 import {
-  backfillRates,
-  ensureRates,
+  fillRateGaps,
   loadRateIndex,
   loadRatesOn,
+  loadTodayRates,
 } from "@/repositories/fx-rates";
 import { callsTo, stubFxSources } from "@/test/fx-fixtures";
 import {
@@ -31,6 +30,7 @@ import {
 beforeEach(clearRates);
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -43,94 +43,86 @@ async function sourcesFor(date: string): Promise<Record<string, string>> {
   return Object.fromEntries(rows.map((r) => [r.currency, r.source]));
 }
 
-// A date that was tried and missed is refused for a minute, even once its rate
-// exists: `true` here means the backfill never asked for it.
-async function expectNeverTried(date: string, deps: FxDeps) {
-  await mkRate({ currency: "USD", effectiveDate: date });
-  expect(await ensureRates(date, deps)).toBe(true);
+// The dates a stub was asked for, read off the NBS URLs (one per date).
+function requestedDates(fetch: ReturnType<typeof stubFxSources>): string[] {
+  return callsTo(fetch, "nbs").map((url) => url.slice(-10)).sort();
 }
 
-describe("isCurrentDate / maxEntryDate — client can be a day ahead of the server (timezone boundary)", () => {
-  it("treats today and any later date as current, but not yesterday", () => {
-    // A fixed instant rather than `new Date()` — pins the boundary so the
-    // test can't flake across a real midnight.
-    const serverNow = new Date(2026, 5, 15);
-    const yesterday = "2026-06-14";
-    const serverToday = "2026-06-15";
-    const tomorrow = "2026-06-16";
+describe("loadTodayRates — the daily run", () => {
+  it("stores all five currencies for the server's UTC today, asking the aggregator for that dated snapshot", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-06-10T16:00:00Z")); // Wednesday
+    const today = "2026-06-10";
+    const fetch = stubFxSources({ ecbDates: ["2026-06-08", "2026-06-09", today] });
 
-    expect(isCurrentDate(yesterday, serverNow)).toBe(false);
-    expect(isCurrentDate(serverToday, serverNow)).toBe(true);
-    // Deliberately unbounded above (`spentAt >= serverToday`): the upper
-    // bound is enforced separately by maxEntryDate() where user input is
-    // validated (quoteConversionAction, the expenses repository), so
-    // isCurrentDate only answers "not clearly in the past", not "within one
-    // day of today".
-    expect(isCurrentDate(tomorrow, serverNow)).toBe(true);
+    expect(await loadTodayRates(new Date(), { fetch })).toBe(true);
 
-    expect(maxEntryDate(serverNow)).toBe(tomorrow);
-  });
-});
-
-describe("ensureRates", () => {
-  it("composes the sources into all five currencies for a date, and a second call fetches nothing more", async () => {
-    const date = "2024-10-10"; // Thursday
-    const fetch = stubFxSources({
-      ecbDates: ["2024-10-08", "2024-10-09", "2024-10-10"],
-    });
-
-    expect(await ensureRates(date, { fetch })).toBe(true);
-
-    expect(await sourcesFor(date)).toEqual({
+    expect(await sourcesFor(today)).toEqual({
       RUB: "cbr",
       USD: "pivot",
       EUR: "ecb",
       RSD: "nbs",
       BTC: "jsdelivr",
     });
-    const rows = await rowsFor(date);
+    const rows = await rowsFor(today);
     expect(rows.find((r) => r.currency === "USD")!.rateToUsd).toBe("1.00000000000000000000");
+    expect(callsTo(fetch, "aggregator")).toEqual([
+      expect.stringContaining(`@${today}/`),
+    ]);
 
-    const callsAfterFirstFill = fetch.mock.calls.length;
-    expect(await ensureRates(date, { fetch })).toBe(true);
-    expect(fetch.mock.calls.length).toBe(callsAfterFirstFill);
+    const callsAfterFirstRun = fetch.mock.calls.length;
+    expect(await loadTodayRates(new Date(), { fetch })).toBe(true);
+    expect(fetch.mock.calls.length).toBe(callsAfterFirstRun);
   });
 
-  it("gives up on a slow source once the caller's budget runs out, without cancelling the fill", async () => {
-    const date = "2025-11-19";
-    let released!: () => void;
-    const inFlight = new Promise<void>((resolve) => {
-      released = resolve;
-    });
-    const fetch = vi.fn(async () => {
-      await inFlight;
-      throw new Error("slow source");
-    });
-
-    // The foreground caller (the typing preview) passes a budget so a stalled
-    // source costs this one response, not a stalled request. The fetch is not
-    // aborted — it stays in flight and still fills the table for whoever
-    // reads next.
-    const started = Date.now();
-    expect(await ensureRates(date, { fetch }, 50)).toBe(false);
-    expect(Date.now() - started).toBeLessThan(1000);
-    expect(fetch).toHaveBeenCalled();
-
-    released();
+  it("takes the UTC date, not the local one, as today", async () => {
+    // Already 6 August in Belgrade. The ECB file ends on Monday, and Monday's
+    // rate is not carried onto 5 August: for the providers it is today.
+    const fetch = stubFxSources({ ecbDates: ["2025-08-04"] });
+    await loadTodayRates(new Date("2025-08-05T23:30:00Z"), { fetch });
+    expect(requestedDates(fetch)).toEqual(["2025-08-05"]);
+    expect(await sourcesFor("2025-08-05")).not.toHaveProperty("EUR");
   });
 
-  it("a provider that always throws leaves fx_rates untouched and still resolves", async () => {
+  it("on a Saturday stores no EUR, takes RSD from the aggregator while NBS still serves Friday's list, and logs neither", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const saturday = "2025-08-09";
+    const friday = "2025-08-08";
+    const fetch = stubFxSources({
+      ecbDates: ["2025-08-04", "2025-08-05", "2025-08-06", "2025-08-07", friday],
+      nbsDateFrom: () => friday,
+    });
+
+    expect(await loadTodayRates(new Date(`${saturday}T16:00:00Z`), { fetch })).toBe(false);
+
+    expect(await sourcesFor(saturday)).toEqual({
+      RUB: "cbr",
+      USD: "pivot",
+      RSD: "jsdelivr",
+      BTC: "jsdelivr",
+    });
+    expect(callsTo(fetch, "aggregator")).toEqual([
+      expect.stringContaining(`@${saturday}/`),
+    ]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("a provider that always throws leaves fx_rates untouched, resolves, and logs the date once with the reason", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const date = "2024-10-11";
     const fetch = vi.fn(async () => {
       throw new Error("network down");
     });
 
-    await expect(ensureRates(date, { fetch })).resolves.toBe(false);
+    await expect(loadTodayRates(new Date(`${date}T16:00:00Z`), { fetch })).resolves.toBe(false);
     expect(await rowsFor(date)).toEqual([]);
+    expect(warn.mock.calls.filter((call) => call[0] === "fx.load_failed")).toEqual([
+      ["fx.load_failed", date, "no rate for RUB, USD, EUR, RSD, BTC"],
+    ]);
   });
 
   it("one source failing costs only its own currency: the other four are stored and the date reports a miss", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const date = "2025-08-06"; // Wednesday, own cluster
     // CBR is down and the aggregator has no ruble either — RUB is genuinely
     // unavailable, so this proves the miss is per currency, not per date.
@@ -140,7 +132,7 @@ describe("ensureRates", () => {
       aggregatorRates: '"usd":1,"eur":0.923,"rsd":107.7,"btc":1.2692964e-05',
     });
 
-    expect(await ensureRates(date, { fetch })).toBe(false);
+    expect(await loadTodayRates(new Date(`${date}T16:00:00Z`), { fetch })).toBe(false);
 
     expect(await sourcesFor(date)).toEqual({
       USD: "pivot",
@@ -148,19 +140,130 @@ describe("ensureRates", () => {
       RSD: "nbs",
       BTC: "jsdelivr",
     });
+    expect(warn).toHaveBeenCalledWith("fx.load_failed", date, "no rate for RUB");
   });
 
-  it("the ECB batch covers neighbouring days, so nearby dates need no further ECB request, and a weekend carries Friday forward", async () => {
-    const wednesday = "2025-09-24"; // own cluster
-    const thursday = "2025-09-25";
-    const saturday = "2025-09-27";
-    const week = ["2025-09-22", "2025-09-23", "2025-09-24", "2025-09-25", "2025-09-26"];
+  it("files aggregator rows under the payload's own date and reports the requested date uncovered", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const published = "2025-03-10";
+    const requested = "2025-03-11";
+    const fetch = stubFxSources({
+      fail: ["cbr", "ecb", "nbs"],
+      aggregatorDate: () => published,
+    });
+
+    expect(await loadTodayRates(new Date(`${requested}T16:00:00Z`), { fetch })).toBe(false);
+
+    expect(await sourcesFor(published)).toEqual({
+      RUB: "jsdelivr",
+      EUR: "jsdelivr",
+      RSD: "jsdelivr",
+      BTC: "jsdelivr",
+    });
+    expect(await sourcesFor(requested)).toEqual({ USD: "pivot" });
+  });
+});
+
+describe("fillRateGaps — the nightly gap pass", () => {
+  // Window for this instant: 2025-03-30 .. 2025-06-29, server UTC.
+  const now = new Date("2025-06-30T02:00:00Z");
+  const from = "2025-03-30";
+  const to = "2025-06-29";
+
+  it("loads the uncovered entry dates of every space and table inside the window, and nothing else", async () => {
+    const owner = await mkSpaceUser();
+    const member = await mkMember(owner.spaceId);
+    const stranger = await mkSpaceUser();
+    const account = await mkAccount(owner.spaceId, owner.user.id);
+    const usd = await mkAccount(owner.spaceId, owner.user.id, { currency: "USD" });
+
+    await mkExpense(owner.spaceId, owner.user.id, { spentAt: from });
+    await mkExpense(owner.spaceId, member.user.id, { spentAt: "2025-05-05" });
+    await mkTopUp(owner.spaceId, owner.user.id, { accountId: account.id, occurredOn: "2025-05-06" });
+    await mkTransfer(owner.spaceId, owner.user.id, {
+      fromAccountId: account.id,
+      toAccountId: usd.id,
+      enteredOn: to,
+    });
+    await mkExpense(stranger.spaceId, stranger.user.id, { spentAt: "2025-05-07" });
+
+    await mkExpense(owner.spaceId, owner.user.id, { spentAt: "2025-03-29" });
+    await mkTopUp(owner.spaceId, owner.user.id, { accountId: account.id, occurredOn: "2025-06-30" });
+
+    const covered = "2025-05-08";
+    await mkExpense(stranger.spaceId, stranger.user.id, { spentAt: covered });
+    for (const currency of CURRENCY_CODES) {
+      await mkRate({ currency, effectiveDate: covered });
+    }
+
+    const fetch = stubFxSources({ ecbDates: ["2025-03-28"] });
+    await fillRateGaps(now, { fetch });
+
+    const requested = requestedDates(fetch);
+    expect(requested).toEqual(expect.arrayContaining([from, "2025-05-05", "2025-05-06", "2025-05-07", to]));
+    expect(requested.every((d) => d >= from && d <= to)).toBe(true);
+    expect(requested).not.toContain(covered);
+    for (const date of [from, "2025-05-05", "2025-05-06", "2025-05-07", to]) {
+      expect(await rowsFor(date), date).toHaveLength(5);
+    }
+    expect(await rowsFor("2025-03-29")).toEqual([]);
+    expect(await rowsFor("2025-06-30")).toEqual([]);
+    expect(await sourcesFor(covered)).toEqual(
+      Object.fromEntries(CURRENCY_CODES.map((c) => [c, "test"])),
+    );
+  });
+
+  it("fills an entry dated at the form's lower bound the day before the pass, by a client west of UTC", async () => {
+    // 29 June 08:00 UTC, after that night's pass, is still 28 June at UTC−10.
+    const lowerBound = minEntryDate(new Date(2025, 5, 28, 22));
+    expect(lowerBound).toBe("2025-03-30");
+    const u = await mkSpaceUser();
+    await mkExpense(u.spaceId, u.user.id, { spentAt: lowerBound });
+
+    const fetch = stubFxSources({ ecbDates: ["2025-03-28"] });
+    await fillRateGaps(now, { fetch });
+
+    expect(requestedDates(fetch)).toContain(lowerBound);
+    expect(await rowsFor(lowerBound)).toHaveLength(5);
+  });
+
+  it("a date left short is loaded again by the next pass", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const u = await mkSpaceUser();
+    const date = "2025-06-11";
+    await mkExpense(u.spaceId, u.user.id, { spentAt: date });
+
+    const down = stubFxSources({
+      ecbDates: [date],
+      fail: ["cbr"],
+      aggregatorRates: '"usd":1,"eur":0.923,"rsd":107.7,"btc":1.2692964e-05',
+    });
+    await fillRateGaps(now, { fetch: down });
+    expect(await rowsFor(date)).toHaveLength(4);
+
+    const up = stubFxSources({ ecbDates: [date] });
+    await fillRateGaps(now, { fetch: up });
+    expect(requestedDates(up)).toContain(date);
+    expect(await rowsFor(date)).toHaveLength(5);
+  });
+
+  it("the ECB batch covers neighbouring days, so nearby dates share one ECB request, and a weekend carries Friday forward", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const u = await mkSpaceUser();
+    const wednesday = "2025-06-18";
+    const thursday = "2025-06-19";
+    const saturday = "2025-06-21";
+    for (const spentAt of [wednesday, thursday, saturday]) {
+      await mkExpense(u.spaceId, u.user.id, { spentAt });
+    }
+    const week = ["2025-06-16", "2025-06-17", "2025-06-18", "2025-06-19", "2025-06-20"];
     const fetch = stubFxSources({
       ecbDates: week,
       ecbRate: (d) => `1.1${d.slice(-2)}`,
     });
 
-    expect(await ensureRates(wednesday, { fetch })).toBe(true);
+    await fillRateGaps(now, { fetch });
+
     for (const day of week) {
       const [eur] = await db
         .select()
@@ -169,167 +272,16 @@ describe("ensureRates", () => {
       expect(eur, day).toMatchObject({ source: "ecb" });
       expect(Number(eur.rateToUsd)).toBeCloseTo(Number(`1.1${day.slice(-2)}`), 10);
     }
-    expect(callsTo(fetch, "ecb")).toHaveLength(1);
-
-    expect(await ensureRates(thursday, { fetch })).toBe(true);
-    expect(await ensureRates(saturday, { fetch })).toBe(true);
-    expect(callsTo(fetch, "ecb")).toHaveLength(1);
+    // Entry dates other tests leave in the window may add a full-history
+    // download; the 90-day file is what these three dates share.
+    expect(callsTo(fetch, "ecb").filter((url) => url.includes("hist-90d"))).toHaveLength(1);
 
     const [saturdayEur] = await db
       .select()
       .from(fxRates)
       .where(and(eq(fxRates.currency, "EUR"), eq(fxRates.effectiveDate, saturday)));
     expect(saturdayEur.source).toBe("ecb");
-    expect(Number(saturdayEur.rateToUsd)).toBeCloseTo(1.126, 10);
-  });
-});
-
-describe("backfillRates", () => {
-  it("fills every distinct expense date of both members of the space", async () => {
-    const owner = await mkSpaceUser();
-    const member = await mkMember(owner.spaceId);
-    const cat = await createCategory(owner.spaceId, owner.user.id, {
-      name: "Food",
-      color: PALETTE_COLORS[0],
-    });
-    const dates = ["2024-11-01", "2024-11-02", "2024-11-03"]; // Fri, Sat, Sun
-    const authors = [owner, member, member];
-    for (const [i, spentAt] of dates.entries()) {
-      await mkExpense(owner.spaceId, authors[i].user.id, {
-        categoryId: cat.id,
-        amountMinor: 1000,
-        note: "трата",
-        spentAt,
-      });
-    }
-
-    const fetch = stubFxSources({
-      ecbDates: ["2024-10-30", "2024-10-31", "2024-11-01"],
-    });
-    const filled = await backfillRates(owner.spaceId, { fetch });
-    expect(filled).toBe(3);
-
-    for (const date of dates) {
-      expect(await rowsFor(date)).toHaveLength(5);
-    }
-  });
-
-  it("between the floors a fiat-only date counts as covered, so it is filled once and never re-fetched", async () => {
-    const u = await mkSpaceUser();
-    const date = "2024-08-14"; // Wednesday: official sources yes, aggregator not yet
-    await mkExpense(u.spaceId, u.user.id, { spentAt: date });
-
-    const fetch = stubFxSources({ ecbDates: ["2024-08-13", "2024-08-14"] });
-    expect(await backfillRates(u.spaceId, { fetch })).toBe(1);
-    expect(callsTo(fetch, "aggregator")).toEqual([]);
-    expect(await sourcesFor(date)).toEqual({
-      RUB: "cbr",
-      USD: "pivot",
-      EUR: "ecb",
-      RSD: "nbs",
-    });
-
-    // Four rows are all this date can ever have; expecting a fifth would
-    // make every pass re-fetch it.
-    const callsAfterFill = fetch.mock.calls.length;
-    expect(await backfillRates(u.spaceId, { fetch })).toBe(0);
-    expect(fetch.mock.calls.length).toBe(callsAfterFill);
-  });
-
-  it("backfill covers top-up dates of the space at or after the floor", async () => {
-    const u = await mkSpaceUser();
-    const account = await mkAccount(u.spaceId, u.user.id);
-    await mkExpense(u.spaceId, u.user.id, { spentAt: "2024-11-01" });
-    await mkTopUp(u.spaceId, u.user.id, { accountId: account.id, occurredOn: "2024-11-01" });
-    await mkTopUp(u.spaceId, u.user.id, { accountId: account.id, occurredOn: "2024-11-04" });
-    await mkTopUp(u.spaceId, u.user.id, { accountId: account.id, occurredOn: "2002-12-31" });
-    const stranger = await mkSpaceUser();
-    const strangerAccount = await mkAccount(stranger.spaceId, stranger.user.id);
-    await mkTopUp(stranger.spaceId, stranger.user.id, {
-      accountId: strangerAccount.id,
-      occurredOn: "2024-11-05",
-    });
-
-    const fetch = stubFxSources({ ecbDates: ["2024-10-31", "2024-11-01", "2024-11-04"] });
-    expect(await backfillRates(u.spaceId, { fetch })).toBe(2);
-    expect(await rowsFor("2024-11-01")).toHaveLength(5);
-    expect(await rowsFor("2024-11-04")).toHaveLength(5);
-    expect(await rowsFor("2024-11-05")).toHaveLength(0);
-
-    await expectNeverTried("2002-12-31", { fetch });
-  });
-
-  it("backfill covers transfer days", async () => {
-    const u = await mkSpaceUser();
-    const from = await mkAccount(u.spaceId, u.user.id);
-    const to = await mkAccount(u.spaceId, u.user.id, { currency: "USD" });
-    await mkExpense(u.spaceId, u.user.id, { spentAt: "2024-11-01" });
-    for (const enteredOn of ["2024-11-01", "2024-11-04", "2002-12-31"]) {
-      await mkTransfer(u.spaceId, u.user.id, {
-        fromAccountId: from.id,
-        toAccountId: to.id,
-        enteredOn,
-      });
-    }
-    const stranger = await mkSpaceUser();
-    const strangerFrom = await mkAccount(stranger.spaceId, stranger.user.id);
-    const strangerTo = await mkAccount(stranger.spaceId, stranger.user.id);
-    await mkTransfer(stranger.spaceId, stranger.user.id, {
-      fromAccountId: strangerFrom.id,
-      toAccountId: strangerTo.id,
-      enteredOn: "2024-11-05",
-    });
-
-    const fetch = stubFxSources({ ecbDates: ["2024-10-31", "2024-11-01", "2024-11-04"] });
-    expect(await backfillRates(u.spaceId, { fetch })).toBe(2);
-    expect(await rowsFor("2024-11-01")).toHaveLength(5);
-    expect(await rowsFor("2024-11-04")).toHaveLength(5);
-    expect(await rowsFor("2024-11-05")).toHaveLength(0);
-    await expectNeverTried("2002-12-31", { fetch });
-  });
-});
-
-describe("ensureRates — the aggregator's @latest can answer with an earlier day's snapshot", () => {
-  it("files aggregator rows under the payload's date, reports the requested date uncovered, and fills it on the next dated fetch", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-    // Isolated cluster, weeks away from every other date this run seeds — the
-    // shared fx_rates table has no user_id (schema/fx-rates.ts) and the
-    // lookback window is 7 days.
-    const published = "2025-03-10";
-    const requested = "2025-03-11";
-
-    // Every official source down, so all four quotes come from the aggregator
-    // — which, asked for the client's today, answers with the day it last
-    // published (what @latest does one timezone east of the server).
-    const latest = stubFxSources({
-      fail: ["cbr", "ecb", "nbs"],
-      aggregatorDate: () => published,
-    });
-    expect(await ensureRates(requested, { fetch: latest })).toBe(false);
-
-    expect(await sourcesFor(published)).toEqual({
-      RUB: "jsdelivr",
-      EUR: "jsdelivr",
-      RSD: "jsdelivr",
-      BTC: "jsdelivr",
-    });
-    // Only the pivot — a definition, not a quote — sits under the requested
-    // date; nothing dated by a source does.
-    expect(await sourcesFor(requested)).toEqual({ USD: "pivot" });
-
-    // Same date once the provider has published it for real. Only Date is
-    // faked (the pg driver's own timers keep running) to step past the 60s
-    // negative-cache window the miss above opened for `requested`.
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date(Date.now() + 61_000));
-    try {
-      const dated = stubFxSources({ fail: ["cbr", "ecb", "nbs"] });
-      expect(await ensureRates(requested, { fetch: dated })).toBe(true);
-    } finally {
-      vi.useRealTimers();
-    }
-
-    expect(await rowsFor(requested)).toHaveLength(5);
+    expect(Number(saturdayEur.rateToUsd)).toBeCloseTo(1.12, 10);
   });
 });
 

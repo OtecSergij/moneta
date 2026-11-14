@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { cache } from "react";
 import { notFound } from "next/navigation";
-import { after } from "next/server";
 import { requireSpace, userNow } from "@/lib/dal";
 import { isUuid } from "@/lib/actions/types";
 import { getAccount, listAccountOptions } from "@/repositories/accounts";
@@ -10,7 +9,7 @@ import { listExpenses } from "@/repositories/expenses";
 import { listTopUps } from "@/repositories/top-ups";
 import { listAccountTransfers } from "@/repositories/transfers";
 import { getUserSettings } from "@/repositories/user-settings";
-import { ensureRates, loadRateIndex } from "@/repositories/fx-rates";
+import { loadRateIndex } from "@/repositories/fx-rates";
 import { CURRENCY_CODES } from "@/lib/currency";
 import { maxEntryDate } from "@/lib/fx/provider";
 import { rateSnapshot } from "@/lib/fx/convert";
@@ -59,8 +58,6 @@ export default async function AccountPage({ params }: Props) {
     buildAccountDays(expenses, topUps, transfers, displayCurrency, rateIndex),
     now,
   );
-
-  after(() => ensureRates(today));
 
   return (
     <AppScreen tab="accounts">

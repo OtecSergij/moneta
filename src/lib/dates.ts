@@ -12,6 +12,7 @@ import {
   format,
   startOfMonth,
   startOfWeek,
+  subDays,
 } from "date-fns";
 import { ru } from "date-fns/locale";
 import { z } from "zod";
@@ -176,6 +177,16 @@ export function isFutureISO(iso: string, now: Date = new Date()): boolean {
 }
 
 export const FUTURE_DATE_ERROR = "Дата не может быть в будущем";
+
+/** How far back a form lets a new entry date go; the nightly rate gap pass reaches two days further. */
+export const MAX_ENTRY_AGE_DAYS = 90;
+
+/** The earliest entry date a form accepts: today − MAX_ENTRY_AGE_DAYS, in local time. */
+export function minEntryDate(now: Date = new Date()): string {
+  return toISODate(subDays(now, MAX_ENTRY_AGE_DAYS));
+}
+
+export const OLD_DATE_ERROR = `Дата не может быть старше ${MAX_ENTRY_AGE_DAYS} дней`;
 
 /** Day heading for grouped lists: "17 мая" (current year) or "17 мая 2025". */
 export function formatDayHeading(iso: string, now: Date = new Date()): string {

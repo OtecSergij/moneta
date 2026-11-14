@@ -9,7 +9,6 @@ import {
   updateTopUp,
 } from "@/repositories/top-ups";
 import { deleteEntry, entryGone } from "./entry-gone";
-import { fillRatesAfterWrite } from "./entry-rates";
 import { revalidateFor } from "./revalidate";
 import {
   ACCOUNT_NOT_FOUND,
@@ -33,7 +32,6 @@ export async function createTopUpAction(
     return result.reason === "account_not_found" ? ACCOUNT_NOT_FOUND : FUTURE_DATE;
   }
   revalidateFor("topUp");
-  fillRatesAfterWrite(spaceId, parsed.data.occurredOn);
   return { ok: true, data: null };
 }
 
@@ -55,7 +53,6 @@ export async function updateTopUpAction(
       : await entryGone(spaceId, accountId, "topUp", TOP_UP_NOT_FOUND);
   }
   revalidateFor("topUp");
-  fillRatesAfterWrite(spaceId, parsed.data.occurredOn);
   return { ok: true, data: null };
 }
 

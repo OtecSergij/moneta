@@ -1,11 +1,23 @@
 import { z } from "zod";
 import { currencyMeta, type CurrencyCode } from "@/lib/currency";
 import { parseMoney } from "@/lib/money";
-import { FUTURE_DATE_ERROR, isFutureISO } from "@/lib/dates";
+import {
+  FUTURE_DATE_ERROR,
+  OLD_DATE_ERROR,
+  isFutureISO,
+  minEntryDate,
+} from "@/lib/dates";
 
-export const entryDateField = z.iso
-  .date("Укажите дату")
-  .refine((d) => !isFutureISO(d), FUTURE_DATE_ERROR);
+// The lower bound lives in the forms only; the server takes any past date.
+// `stored` is the date an existing entry's card opened with: left as is, it
+// saves even when it is older than the bound, or later than this browser's
+// today because a member ahead in time stored it.
+export function entryDateField(stored?: string) {
+  return z.iso
+    .date("Укажите дату")
+    .refine((d) => d === stored || !isFutureISO(d), FUTURE_DATE_ERROR)
+    .refine((d) => d === stored || d >= minEntryDate(), OLD_DATE_ERROR);
+}
 
 export function fractionDigitsError(
   amount: string,

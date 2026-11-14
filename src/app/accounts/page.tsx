@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import { after } from "next/server";
 import { requireSpace, userNow } from "@/lib/dal";
 import { listAccounts } from "@/repositories/accounts";
 import { getUserSettings } from "@/repositories/user-settings";
-import { ensureRates, loadRatesOn } from "@/repositories/fx-rates";
+import { loadRatesOn } from "@/repositories/fx-rates";
 import { CURRENCY_CODES } from "@/lib/currency";
 import { todayISO } from "@/lib/dates";
 import { summarizeAccounts } from "@/lib/accounts-total";
@@ -36,8 +35,6 @@ export default async function AccountsPage() {
     rateIndex,
     today,
   );
-
-  after(() => ensureRates(today));
 
   return (
     <AppScreen tab="accounts">

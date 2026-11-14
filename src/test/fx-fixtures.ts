@@ -132,6 +132,8 @@ export interface FxSourcesOptions {
   fail?: FxSourceName[];
   cbrValue?: string;
   nbsMiddle?: number;
+  /** The NBS list's `date_from`, given the requested day; that day by default. */
+  nbsDateFrom?: (date: string) => string;
   /** Raw `usd` object body for the aggregator; defaults to all four quotes. */
   aggregatorRates?: string;
   /** The aggregator payload's own `date`, given the tag the URL asked for. */
@@ -170,9 +172,14 @@ export function stubFxSources(opts: FxSourcesOptions = {}) {
         );
       case "nbs": {
         const date = u.slice(-10);
-        return new Response(nbsPayload({ date, middle: opts.nbsMiddle ?? 101.0794 }), {
-          status: 200,
-        });
+        return new Response(
+          nbsPayload({
+            date,
+            dateFrom: opts.nbsDateFrom?.(date),
+            middle: opts.nbsMiddle ?? 101.0794,
+          }),
+          { status: 200 },
+        );
       }
       case "aggregator": {
         const tag = /@(\d{4}-\d{2}-\d{2})/.exec(u)?.[1];

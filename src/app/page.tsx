@@ -1,4 +1,3 @@
-import { after } from "next/server";
 import { addDays } from "date-fns";
 import { requireSpace, userNow } from "@/lib/dal";
 import { listCategoriesWithUsage } from "@/repositories/categories";
@@ -7,11 +6,7 @@ import { listAccountOptions } from "@/repositories/accounts";
 import { defaultAccountSelection } from "@/lib/expense-account";
 import { toExpenseEntry } from "@/lib/expense-entry";
 import { getUserSettings } from "@/repositories/user-settings";
-import {
-  PAGE_SYNC_THROTTLE_MS,
-  loadRateIndex,
-  syncSpaceRates,
-} from "@/repositories/fx-rates";
+import { loadRateIndex } from "@/repositories/fx-rates";
 import { CURRENCY_CODES } from "@/lib/currency";
 import { maxEntryDate } from "@/lib/fx/provider";
 import { sumConverted, sumConvertedByDay } from "@/lib/fx/convert";
@@ -66,15 +61,6 @@ export default async function HomePage() {
     const day = toISODate(addDays(monday, i));
     return { day, totalMinor: byDay.get(day) ?? 0 };
   });
-
-  // The save path schedules its own rate fetch, but that one is
-  // fire-and-forget: if the provider was down, nothing retried it. Opening
-  // the app is the retry. Throttled, because this fires on plain navigation
-  // too and the scan is over the space's whole expense, top-up and transfer
-  // history — the write paths call syncSpaceRates without a throttle, so a
-  // real change still converges immediately. cookies()/headers() aren't
-  // callable inside after(), hence the closure.
-  after(() => syncSpaceRates(spaceId, { throttleMs: PAGE_SYNC_THROTTLE_MS }));
 
   return (
     <AppScreen tab="main">

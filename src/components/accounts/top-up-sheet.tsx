@@ -47,7 +47,7 @@ export function TopUpSheet({
     handleSubmit,
     formState: { errors },
   } = useForm<TopUpFormValues>({
-    resolver: zodResolver(topUpFormSchema),
+    resolver: zodResolver(topUpFormSchema(topUp?.occurredOn)),
     defaultValues: {
       amount: topUp ? minorToInput(topUp.amountMinor, currency) : "",
       currency,

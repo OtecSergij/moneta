@@ -9,7 +9,6 @@ import {
   updateTransferAmount,
 } from "@/repositories/transfers";
 import { deleteEntry, entryGone } from "./entry-gone";
-import { fillRatesAfterWrite } from "./entry-rates";
 import { revalidateFor } from "./revalidate";
 import {
   ACCOUNT_NOT_FOUND,
@@ -43,7 +42,6 @@ export async function createTransferAction(
     }
   }
   revalidateFor("transfer");
-  fillRatesAfterWrite(spaceId, enteredOn);
   return { ok: true, data: null };
 }
 

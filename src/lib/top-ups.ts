@@ -28,15 +28,17 @@ export const TopUpPatch = TopUpFields.partial().refine(
 );
 export type TopUpPatch = z.infer<typeof TopUpPatch>;
 
-export const topUpFormSchema = z
-  .object({
-    amount: z.string(),
-    currency: z.enum(CURRENCY_CODES),
-    note: z.string(),
-    occurredOn: entryDateField,
-  })
-  .superRefine(refinePositiveAmount);
-export type TopUpFormValues = z.infer<typeof topUpFormSchema>;
+export function topUpFormSchema(storedOccurredOn?: string) {
+  return z
+    .object({
+      amount: z.string(),
+      currency: z.enum(CURRENCY_CODES),
+      note: z.string(),
+      occurredOn: entryDateField(storedOccurredOn),
+    })
+    .superRefine(refinePositiveAmount);
+}
+export type TopUpFormValues = z.infer<ReturnType<typeof topUpFormSchema>>;
 
 export function topUpNoteToInput(note: string): string {
   return note === TOP_UP_DEFAULT_NOTE ? "" : note;

@@ -41,7 +41,7 @@ export function QuickAddForm({
   const [categories, setCategories] = useSyncedState(initialCategories);
 
   const methods = useForm<ExpenseFormValues>({
-    resolver: zodResolver(expenseFormSchema),
+    resolver: zodResolver(expenseFormSchema()),
     defaultValues: {
       amount: "",
       currency: initialSelection?.currency ?? displayCurrency,

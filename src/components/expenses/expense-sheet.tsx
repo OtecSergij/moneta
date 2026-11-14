@@ -54,7 +54,7 @@ export function ExpenseSheet({
   const { pending: deleting, run: runDelete } = useSheetTask(onClose);
 
   const methods = useForm<ExpenseFormValues>({
-    resolver: zodResolver(expenseFormSchema),
+    resolver: zodResolver(expenseFormSchema(expense.spentAt)),
     defaultValues: toDefaults(expense),
   });
   const busy = saving || deleting;

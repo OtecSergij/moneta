@@ -1,18 +1,14 @@
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { transfers } from "@/db/schema";
 import { mkAccount, mkSpaceUser, mkTransfer, type SpaceUser } from "@/test/factories";
 import { session } from "@/test/session-mock";
 
 vi.mock("@/lib/dal", () => import("@/test/session-mock"));
-// The real helper calls after(), which throws outside a request scope; its own
-// behaviour is covered by entry-rates.test.ts.
-vi.mock("@/lib/actions/entry-rates", () => ({ fillRatesAfterWrite: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { revalidatePath } from "next/cache";
-import { fillRatesAfterWrite } from "@/lib/actions/entry-rates";
 import { deleteAccount } from "@/repositories/accounts";
 import { deleteTransfer, listAccountTransfers } from "@/repositories/transfers";
 import {
@@ -26,6 +22,13 @@ const NOT_FOUND = { ok: false, error: "Перевод не найден" };
 const ACCOUNT_NOT_FOUND = { ok: false, error: "Счёт не найден", notFound: true };
 const TARGET_NOT_FOUND = { ok: false, error: "Счёт не найден" };
 const ACCOUNT_PAGES = [["/accounts"], ["/accounts/[id]", "page"]];
+
+// Saves touch the database only: no exchange rate is fetched on the way.
+const outbound = vi.fn();
+vi.stubGlobal("fetch", outbound);
+afterAll(() => {
+  vi.unstubAllGlobals();
+});
 
 let me: SpaceUser;
 
@@ -53,7 +56,7 @@ async function pair() {
 }
 
 describe("transfer actions", () => {
-  it("create stores the day of the creator's clock, not the server's, revalidates /accounts and the account page, and schedules rates for that day", async () => {
+  it("create stores the day of the creator's clock, not the server's, revalidates /accounts and the account page, and fetches no rates", async () => {
     const from = await mkAccount(me.spaceId, me.user.id, { currency: "USD" });
     const to = await mkAccount(me.spaceId, me.user.id, { currency: "EUR" });
     session.now = new Date(2024, 10, 1, 23, 30);
@@ -77,10 +80,10 @@ describe("transfer actions", () => {
       }),
     ]);
     expect(vi.mocked(revalidatePath).mock.calls).toEqual(ACCOUNT_PAGES);
-    expect(vi.mocked(fillRatesAfterWrite).mock.calls).toEqual([[me.spaceId, "2024-11-01"]]);
+    expect(outbound).not.toHaveBeenCalled();
   });
 
-  it("update and delete revalidate the same pages and schedule nothing", async () => {
+  it("update and delete revalidate the same pages and fetch no rates", async () => {
     const { from, transfer } = await pair();
 
     expect(await updateTransferAction(from.id, transfer.id, { amountMinor: 700 })).toEqual({
@@ -89,7 +92,7 @@ describe("transfer actions", () => {
     });
     expect((await listAccountTransfers(me.spaceId, from.id))[0].amountMinor).toBe(700);
     expect(vi.mocked(revalidatePath).mock.calls).toEqual(ACCOUNT_PAGES);
-    expect(fillRatesAfterWrite).not.toHaveBeenCalled();
+    expect(outbound).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
     expect(await deleteTransferAction(from.id, transfer.id)).toEqual({
@@ -98,7 +101,7 @@ describe("transfer actions", () => {
     });
     expect(await storedTransfers()).toEqual([]);
     expect(vi.mocked(revalidatePath).mock.calls).toEqual(ACCOUNT_PAGES);
-    expect(fillRatesAfterWrite).not.toHaveBeenCalled();
+    expect(outbound).not.toHaveBeenCalled();
   });
 
   it("create, update and delete work the same with account and transfer ids in upper case", async () => {
@@ -153,7 +156,7 @@ describe("transfer actions", () => {
     ).toEqual(INVALID);
     expect(await storedTransfers()).toEqual([]);
     expect(revalidatePath).not.toHaveBeenCalled();
-    expect(fillRatesAfterWrite).not.toHaveBeenCalled();
+    expect(outbound).not.toHaveBeenCalled();
   });
 
   it("create: invalid input, the same account twice, a missing credit across currencies → INVALID, nothing stored", async () => {
@@ -201,7 +204,7 @@ describe("transfer actions", () => {
 
     expect(await storedTransfers()).toEqual([]);
     expect(revalidatePath).not.toHaveBeenCalled();
-    expect(fillRatesAfterWrite).not.toHaveBeenCalled();
+    expect(outbound).not.toHaveBeenCalled();
   });
 
   it("create from another space's account returns notFound", async () => {
@@ -218,7 +221,7 @@ describe("transfer actions", () => {
     ).toEqual(ACCOUNT_NOT_FOUND);
     expect(await storedTransfers()).toEqual([]);
     expect(revalidatePath).not.toHaveBeenCalled();
-    expect(fillRatesAfterWrite).not.toHaveBeenCalled();
+    expect(outbound).not.toHaveBeenCalled();
   });
 
   it("create to another space's account returns «Счёт не найден» without notFound and revalidates", async () => {
@@ -238,7 +241,7 @@ describe("transfer actions", () => {
       await db.select().from(transfers).where(eq(transfers.spaceId, stranger.spaceId)),
     ).toEqual([]);
     expect(vi.mocked(revalidatePath).mock.calls).toEqual(ACCOUNT_PAGES);
-    expect(fillRatesAfterWrite).not.toHaveBeenCalled();
+    expect(outbound).not.toHaveBeenCalled();
   });
 
   it("update and delete: a non-uuid account id → notFound; a non-uuid transfer id → «Перевод не найден»", async () => {
@@ -300,7 +303,7 @@ describe("transfer actions", () => {
     vi.clearAllMocks();
     expect(await deleteTransferAction(to.id, transfer.id)).toEqual(NOT_FOUND);
     expect(vi.mocked(revalidatePath).mock.calls).toEqual(ACCOUNT_PAGES);
-    expect(fillRatesAfterWrite).not.toHaveBeenCalled();
+    expect(outbound).not.toHaveBeenCalled();
   });
 
   it("a transfer whose page account is gone returns notFound, for update and for delete, while the other account and the transfer stay", async () => {
@@ -331,7 +334,7 @@ describe("transfer actions", () => {
       expect.objectContaining({ id: mirror.transfer.id, side: "out", amountMinor: 10_000 }),
     ]);
     expect(revalidatePath).not.toHaveBeenCalled();
-    expect(fillRatesAfterWrite).not.toHaveBeenCalled();
+    expect(outbound).not.toHaveBeenCalled();
   });
 
   it("update and delete with another space's account id return notFound and touch nothing", async () => {
@@ -352,7 +355,7 @@ describe("transfer actions", () => {
       await db.select().from(transfers).where(eq(transfers.id, foreign.id)),
     ).toEqual([foreign]);
     expect(revalidatePath).not.toHaveBeenCalled();
-    expect(fillRatesAfterWrite).not.toHaveBeenCalled();
+    expect(outbound).not.toHaveBeenCalled();
   });
 
   it("a signed-out caller is redirected before validation and nothing is written", async () => {
@@ -381,6 +384,6 @@ describe("transfer actions", () => {
     );
     expect(await storedTransfers()).toEqual([transfer]);
     expect(revalidatePath).not.toHaveBeenCalled();
-    expect(fillRatesAfterWrite).not.toHaveBeenCalled();
+    expect(outbound).not.toHaveBeenCalled();
   });
 });

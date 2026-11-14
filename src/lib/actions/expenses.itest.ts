@@ -1,19 +1,29 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkAccount, mkExpense, mkSpaceUser, type SpaceUser } from "@/test/factories";
 import { session } from "@/test/session-mock";
 
 vi.mock("@/lib/dal", () => import("@/test/session-mock"));
-vi.mock("@/lib/actions/entry-rates", () => ({ fillRatesAfterWrite: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { revalidatePath } from "next/cache";
 import { deleteAccount } from "@/repositories/accounts";
 import { deleteExpense, getExpense } from "@/repositories/expenses";
-import { deleteExpenseAction, updateExpenseAction } from "@/lib/actions/expenses";
+import {
+  createExpenseAction,
+  deleteExpenseAction,
+  updateExpenseAction,
+} from "@/lib/actions/expenses";
 
 const UPDATE_FAILED = { ok: false, error: "Не удалось обновить трату" };
 const NOT_FOUND = { ok: false, error: "Трата не найдена" };
 const ACCOUNT_NOT_FOUND = { ok: false, error: "Счёт не найден", notFound: true };
+
+// Saves touch the database only: no exchange rate is fetched on the way.
+const outbound = vi.fn();
+vi.stubGlobal("fetch", outbound);
+afterAll(() => {
+  vi.unstubAllGlobals();
+});
 
 let me: SpaceUser;
 
@@ -96,5 +106,29 @@ describe("an unchanged expense save", () => {
 
     expect(await updateExpenseAction(expense.id, {})).toEqual({ ok: true, data: null });
     expect(await getExpense(me.spaceId, expense.id)).toEqual(expense);
+  });
+});
+
+describe("expense saves and rates", () => {
+  it("create and update fetch no rates, whatever the date", async () => {
+    const account = await mkAccount(me.spaceId, me.user.id);
+    const { categoryId } = await mkExpense(me.spaceId, me.user.id, { accountId: account.id });
+
+    const created = await createExpenseAction({
+      categoryId,
+      accountId: account.id,
+      amountMinor: 500,
+      currency: "RUB",
+      note: "Обед",
+      spentAt: "2024-11-01",
+    });
+    expect(created).toEqual({ ok: true, data: null });
+
+    const expense = await mkExpense(me.spaceId, me.user.id, { accountId: account.id });
+    expect(await updateExpenseAction(expense.id, { spentAt: "2024-11-04" })).toEqual({
+      ok: true,
+      data: null,
+    });
+    expect(outbound).not.toHaveBeenCalled();
   });
 });

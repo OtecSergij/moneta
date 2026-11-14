@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { FUTURE_DATE_ERROR, OLD_DATE_ERROR } from "@/lib/dates";
 import {
+  entryDateField,
   fractionDigitsError,
   refinePositiveAmount,
   requirePositiveAmount,
@@ -61,5 +63,43 @@ describe("refinePositiveAmount", () => {
       { path: ["amount"], message: MESSAGE },
     ]);
     expect(schema.safeParse({ amount: "12,50", currency: "RUB" }).success).toBe(true);
+  });
+});
+
+describe("entryDateField — from 90 days back up to today", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 14, 12)); // 14 Nov 2026, local
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const LAST_ALLOWED = "2026-08-16"; // today − 90
+  const TOO_OLD = "2026-08-15"; // today − 91
+
+  function messages(result: ReturnType<ReturnType<typeof entryDateField>["safeParse"]>) {
+    return result.error?.issues.map((i) => i.message);
+  }
+
+  it("a new entry takes today − 90 and refuses today − 91", () => {
+    expect(entryDateField().safeParse(LAST_ALLOWED).success).toBe(true);
+    expect(messages(entryDateField().safeParse(TOO_OLD))).toEqual([OLD_DATE_ERROR]);
+  });
+
+  it("a card keeps its old stored date untouched, but a date changed to before the bound is refused", () => {
+    const stored = "2026-01-10";
+    expect(entryDateField(stored).safeParse(stored).success).toBe(true);
+    expect(messages(entryDateField(stored).safeParse(TOO_OLD))).toEqual([OLD_DATE_ERROR]);
+    expect(entryDateField(stored).safeParse(LAST_ALLOWED).success).toBe(true);
+    expect(entryDateField(stored).safeParse("2026-11-01").success).toBe(true);
+  });
+
+  it("a card keeps a stored date that is tomorrow in this browser, but a date changed to the future is refused", () => {
+    const stored = "2026-11-15"; // saved by a member already in 15 Nov
+    expect(entryDateField(stored).safeParse(stored).success).toBe(true);
+    expect(messages(entryDateField(stored).safeParse("2026-11-16"))).toEqual([FUTURE_DATE_ERROR]);
+    expect(messages(entryDateField().safeParse(stored))).toEqual([FUTURE_DATE_ERROR]);
   });
 });

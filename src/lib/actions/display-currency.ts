@@ -1,12 +1,10 @@
 "use server";
 
-import { after } from "next/server";
 import { requireSpace } from "@/lib/dal";
 import {
   DisplayCurrencyInput,
   setDisplayCurrency,
 } from "@/repositories/user-settings";
-import { syncSpaceRates } from "@/repositories/fx-rates";
 import { revalidateFor } from "./revalidate";
 import type { ActionResult } from "./types";
 
@@ -15,7 +13,7 @@ import type { ActionResult } from "./types";
 export async function setDisplayCurrencyAction(
   input: unknown,
 ): Promise<ActionResult<null>> {
-  const { user, spaceId } = await requireSpace();
+  const { user } = await requireSpace();
   const parsed = DisplayCurrencyInput.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Проверьте выбранную валюту" };
@@ -24,10 +22,6 @@ export async function setDisplayCurrencyAction(
   await setDisplayCurrency(user.id, parsed.data);
 
   revalidateFor("displayCurrency");
-
-  // cookies()/headers() aren't callable inside an after() callback, so the
-  // space id is resolved here and closed over rather than re-derived inside.
-  after(() => syncSpaceRates(spaceId));
 
   return { ok: true, data: null };
 }

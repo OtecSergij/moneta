@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import { subDays } from "date-fns";
 import { Calendar } from "lucide-react";
-import { formatChipDate, toISODate, todayISO } from "@/lib/dates";
+import { formatChipDate, minEntryDate, toISODate, todayISO } from "@/lib/dates";
 import { useMounted } from "@/lib/hooks/use-mounted";
 import { Chip, ChipGroup } from "@/components/kit/chip";
 
@@ -30,6 +30,7 @@ export function DateChips({
   function openPicker() {
     const input = pickerRef.current;
     if (!input) return;
+    input.min = minEntryDate();
     input.max = todayISO();
     try {
       input.showPicker();

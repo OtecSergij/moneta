@@ -9,26 +9,29 @@ import type { ExpenseInput, ExpensePatch } from "@/repositories/expenses";
 // `amount` is free text parsed to minor units; the rest mirror the repo's
 // ExpenseInput. The "not in the future" check here uses the browser's own
 // today; the server allows one day of slack (see isAllowedEntryDate in
-// src/lib/fx/provider.ts).
+// src/lib/fx/provider.ts). The edit form passes the expense's saved date
+// (see entryDateField).
 //
 // Amount validation is currency-dependent (BTC parses to 8 fraction digits,
 // the rest to 2), so it can't live in a per-field `.refine` — those can't see
 // a sibling field — and lives in the object-level `superRefine` below.
-export const expenseFormSchema = z
-  .object({
-    amount: z.string(),
-    currency: z.enum(CURRENCY_CODES),
-    categoryId: z.uuid("Выберите категорию"),
-    note: z
-      .string()
-      .trim()
-      .min(1, "Добавьте описание")
-      .max(EXPENSE_NOTE_MAX, `Не больше ${EXPENSE_NOTE_MAX} символов`),
-    spentAt: entryDateField,
-    accountId: z.uuid("Выберите счёт"),
-  })
-  .superRefine(refinePositiveAmount);
-export type ExpenseFormValues = z.infer<typeof expenseFormSchema>;
+export function expenseFormSchema(storedSpentAt?: string) {
+  return z
+    .object({
+      amount: z.string(),
+      currency: z.enum(CURRENCY_CODES),
+      categoryId: z.uuid("Выберите категорию"),
+      note: z
+        .string()
+        .trim()
+        .min(1, "Добавьте описание")
+        .max(EXPENSE_NOTE_MAX, `Не больше ${EXPENSE_NOTE_MAX} символов`),
+      spentAt: entryDateField(storedSpentAt),
+      accountId: z.uuid("Выберите счёт"),
+    })
+    .superRefine(refinePositiveAmount);
+}
+export type ExpenseFormValues = z.infer<ReturnType<typeof expenseFormSchema>>;
 
 // Build the action/repo input from validated form values (amounts are
 // guaranteed parseable by the schema's superRefine).

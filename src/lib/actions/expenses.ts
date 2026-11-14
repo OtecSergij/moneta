@@ -10,7 +10,6 @@ import {
   updateExpense,
 } from "@/repositories/expenses";
 import { entryGone } from "./entry-gone";
-import { fillRatesAfterWrite } from "./entry-rates";
 import { revalidateFor } from "./revalidate";
 import {
   ACCOUNT_NOT_FOUND,
@@ -43,7 +42,6 @@ export async function createExpenseAction(
     return { ok: false, error: "Не удалось сохранить трату. Проверьте категорию, дату и счёт" };
   }
   revalidateFor("expense");
-  fillRatesAfterWrite(spaceId, parsed.data.spentAt);
   return { ok: true, data: null };
 }
 
@@ -71,7 +69,6 @@ export async function updateExpenseAction(
     );
   }
   revalidateFor("expense");
-  fillRatesAfterWrite(spaceId, parsed.data.spentAt);
   return { ok: true, data: null };
 }
 

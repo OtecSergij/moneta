@@ -3,10 +3,10 @@ import { CURRENCY_CODES, type CurrencyCode } from "@/lib/currency";
 import { setDisplayCurrency } from "@/repositories/user-settings";
 import { clearRates, mkRate, mkUser } from "@/test/factories";
 
-// The session is the only thing standing between this action and two outbound
-// APIs, so it is what the tests drive. @/lib/dal is replaced wholesale rather
-// than stubbed through: the real module is `server-only` and reaches for
-// `headers()`, which has no request context here.
+// The action reads fx_rates and never fetches; the session gate is what the
+// tests drive. @/lib/dal is replaced wholesale rather than stubbed through:
+// the real module is `server-only` and reaches for `headers()`, which has no
+// request context here.
 const session = vi.hoisted(() => ({ userId: null as string | null }));
 
 vi.mock("@/lib/dal", () => ({
@@ -40,10 +40,8 @@ async function seedRates(effectiveDate: string): Promise<void> {
   }
 }
 
-// Counts every outbound request the action could make. All five rates are on
-// file before each quote, so ensureRates short-circuits and this must stay at
-// zero — the action's `defaultDeps` reads globalThis.fetch per call, so the
-// stub is actually reachable.
+// Counts every outbound request the action makes; it must stay at zero, rates
+// on file or not.
 async function withCountedFetch<T>(
   run: (fetch: ReturnType<typeof vi.fn>) => Promise<T>,
 ): Promise<T> {
@@ -94,5 +92,25 @@ describe("quoteConversionAction — plain conversion", () => {
     if (!res.ok) throw new Error(res.error);
     expect(res.data.displayCurrency).toBe("USD");
     expect(res.data.convertedMinor).toBe(104); // 100 ₽ * 0,0104 = $1,04
+  });
+});
+
+describe("quoteConversionAction — no rate on file", () => {
+  it("answers without a conversion and fetches nothing", async () => {
+    const u = await mkUser();
+    await setDisplayCurrency(u.id, "USD");
+    session.userId = u.id;
+
+    const res = await withCountedFetch(async (fetch) => {
+      const result = await quoteConversionAction({
+        amountMinor: 10000,
+        currency: "RUB",
+        spentAt: PLAIN_DATE,
+      });
+      expect(fetch).not.toHaveBeenCalled();
+      return result;
+    });
+
+    expect(res).toEqual({ ok: true, data: { convertedMinor: null, displayCurrency: "USD" } });
   });
 });

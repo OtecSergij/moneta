@@ -7,7 +7,7 @@ import { env, hasResend } from "@/env";
 
 const resend = hasResend ? new Resend(env.RESEND_API_KEY!) : null;
 
-export interface EmailArgs {
+interface EmailArgs {
   to: string;
   subject: string;
   html: string;

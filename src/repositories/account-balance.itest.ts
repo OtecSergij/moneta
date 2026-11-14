@@ -2,7 +2,8 @@ import { subDays } from "date-fns";
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
-import { accounts, expenses } from "@/db/schema";
+import { accounts, expenses, topUps } from "@/db/schema";
+import { toISODate } from "@/lib/dates";
 import type { SpaceId } from "@/lib/space-id";
 import { deleteAccount, getAccount, listAccounts, updateAccount } from "@/repositories/accounts";
 import {
@@ -14,7 +15,16 @@ import {
   lastUsedIds,
   updateExpense,
 } from "@/repositories/expenses";
-import { mkAccount, mkExpense, mkMember, mkSpaceUser } from "@/test/factories";
+import { deleteTopUp, getTopUp, updateTopUp } from "@/repositories/top-ups";
+import { deleteTransfer, updateTransferAmount } from "@/repositories/transfers";
+import {
+  mkAccount,
+  mkExpense,
+  mkMember,
+  mkSpaceUser,
+  mkTopUp,
+  mkTransfer,
+} from "@/test/factories";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -46,6 +56,39 @@ async function expenseAt(
   const expense = await mkExpense(spaceId, userId, { accountId, amountMinor });
   await db.update(expenses).set({ createdAt }).where(eq(expenses.id, expense.id));
   return expense;
+}
+
+async function topUpAt(
+  spaceId: SpaceId,
+  userId: string,
+  accountId: string,
+  amountMinor: number,
+  createdAt: Date,
+  occurredOn: string = toISODate(createdAt),
+) {
+  const topUp = await mkTopUp(spaceId, userId, { accountId, amountMinor, occurredOn });
+  await db.update(topUps).set({ createdAt }).where(eq(topUps.id, topUp.id));
+  return topUp;
+}
+
+async function transferAt(
+  spaceId: SpaceId,
+  userId: string,
+  fromAccountId: string,
+  toAccountId: string,
+  fromAmountMinor: number,
+  toAmountMinor: number,
+  createdAt: Date,
+  enteredOn: string = toISODate(createdAt),
+) {
+  return mkTransfer(spaceId, userId, {
+    fromAccountId,
+    toAccountId,
+    fromAmountMinor,
+    toAmountMinor,
+    createdAt,
+    enteredOn,
+  });
 }
 
 async function balance(spaceId: SpaceId, accountId: string): Promise<number | undefined> {
@@ -135,15 +178,27 @@ describe("account balance", () => {
     expect(await balance(a.spaceId, account.id)).toBe(10000);
   });
 
-  it("6. deleting an account deletes its expenses and nothing else", async () => {
+  it("6. an account with expenses cannot be deleted; its expenses and balance stay", async () => {
+    const a = await mkSpaceUser();
+    const account = await anchoredAccount(a.spaceId, a.user.id, 10000);
+    const expense = await expenseAt(a.spaceId, a.user.id, account.id, 2500, AFTER_ANCHOR);
+
+    expect(await deleteAccount(a.spaceId, account.id)).toEqual({
+      ok: false,
+      reason: "has_expenses",
+    });
+    expect((await getExpense(a.spaceId, expense.id))?.accountId).toBe(account.id);
+    expect(await balance(a.spaceId, account.id)).toBe(7500);
+  });
+
+  it("6a. an account without expenses is deleted", async () => {
     const a = await mkSpaceUser();
     const account = await anchoredAccount(a.spaceId, a.user.id, 10000);
     const other = await anchoredAccount(a.spaceId, a.user.id, 10000);
-    const expense = await expenseAt(a.spaceId, a.user.id, account.id, 2500, AFTER_ANCHOR);
     const kept = await expenseAt(a.spaceId, a.user.id, other.id, 2500, AFTER_ANCHOR);
 
     expect(await deleteAccount(a.spaceId, account.id)).toEqual({ ok: true });
-    expect(await getExpense(a.spaceId, expense.id)).toBeNull();
+    expect(await getAccount(a.spaceId, account.id)).toBeNull();
     expect((await getExpense(a.spaceId, kept.id))?.accountId).toBe(other.id);
   });
 
@@ -254,20 +309,289 @@ describe("account balance", () => {
     expect(await balance(a.spaceId, account.id)).toBe(-2500);
   });
 
-  it("10. the last used account is per member and null once the account is gone", async () => {
+  it("9a. a balance past the exact integer range is an error, not an imprecise number", async () => {
+    const a = await mkSpaceUser();
+    const account = await anchoredAccount(a.spaceId, a.user.id, 2);
+    await topUpAt(a.spaceId, a.user.id, account.id, Number.MAX_SAFE_INTEGER, AFTER_ANCHOR);
+
+    await expect(getAccount(a.spaceId, account.id)).rejects.toThrow(/out of range/);
+    await expect(listAccounts(a.spaceId)).rejects.toThrow(/out of range/);
+  });
+
+  it("9b. sums past the exact range that cancel out still give the exact balance", async () => {
+    const a = await mkSpaceUser();
+    const account = await anchoredAccount(a.spaceId, a.user.id, 2);
+    const other = await anchoredAccount(a.spaceId, a.user.id, 0);
+    await topUpAt(a.spaceId, a.user.id, account.id, Number.MAX_SAFE_INTEGER, AFTER_ANCHOR);
+    await transferAt(
+      a.spaceId,
+      a.user.id,
+      account.id,
+      other.id,
+      Number.MAX_SAFE_INTEGER,
+      1,
+      AFTER_ANCHOR,
+    );
+
+    expect(await balance(a.spaceId, account.id)).toBe(2);
+    expect(await listAccounts(a.spaceId)).toMatchObject([
+      { id: account.id, balanceMinor: 2 },
+      { id: other.id, balanceMinor: 1 },
+    ]);
+  });
+
+  it("10. the last used account is per member and null once the member has no expenses", async () => {
     const a = await mkSpaceUser();
     const b = await mkMember(a.spaceId);
     const mine = await anchoredAccount(a.spaceId, a.user.id, 10000);
     const theirs = await anchoredAccount(a.spaceId, a.user.id, 10000);
     expect(await lastUsedIds(a.spaceId, a.user.id)).toBeNull();
 
-    await mkExpense(a.spaceId, a.user.id, { accountId: mine.id });
+    const spent = await mkExpense(a.spaceId, a.user.id, { accountId: mine.id });
     await mkExpense(b.spaceId, b.user.id, { accountId: theirs.id });
     expect((await lastUsedIds(a.spaceId, a.user.id))?.accountId).toBe(mine.id);
     expect((await lastUsedIds(a.spaceId, b.user.id))?.accountId).toBe(theirs.id);
 
-    await deleteAccount(a.spaceId, mine.id);
+    await deleteExpense(a.spaceId, spent.id);
+    expect(await deleteAccount(a.spaceId, mine.id)).toEqual({ ok: true });
     expect(await lastUsedIds(a.spaceId, a.user.id)).toBeNull();
     expect((await lastUsedIds(a.spaceId, b.user.id))?.accountId).toBe(theirs.id);
+  });
+
+  it("11. a top-up after the anchor raises the balance", async () => {
+    const a = await mkSpaceUser();
+    const account = await anchoredAccount(a.spaceId, a.user.id, 10000);
+    await topUpAt(a.spaceId, a.user.id, account.id, 2500, AFTER_ANCHOR);
+
+    expect(await balance(a.spaceId, account.id)).toBe(12500);
+    const [listed] = await listAccounts(a.spaceId);
+    expect(listed).toMatchObject({ balanceMinor: 12500, expenseCount: 0 });
+  });
+
+  it("11a. a back-dated top-up entered after the anchor still counts", async () => {
+    const a = await mkSpaceUser();
+    const account = await anchoredAccount(a.spaceId, a.user.id, 10000);
+    await topUpAt(
+      a.spaceId,
+      a.user.id,
+      account.id,
+      2500,
+      AFTER_ANCHOR,
+      toISODate(BEFORE_ANCHOR),
+    );
+
+    expect(await balance(a.spaceId, account.id)).toBe(12500);
+  });
+
+  it("12. a top-up before the anchor counts for nothing, edited or deleted", async () => {
+    const a = await mkSpaceUser();
+    const account = await anchoredAccount(a.spaceId, a.user.id, 10000);
+    const topUp = await topUpAt(a.spaceId, a.user.id, account.id, 2500, AFTER_ANCHOR);
+    expect(await balance(a.spaceId, account.id)).toBe(12500);
+
+    const reanchored = await updateAccount(a.spaceId, account.id, {
+      balanceMinor: 20000,
+      loadedBalanceMinor: 12500,
+    });
+    expect(reanchored?.balanceMinor).toBe(20000);
+
+    await updateTopUp(a.spaceId, topUp.id, { amountMinor: 9000 });
+    expect(await balance(a.spaceId, account.id)).toBe(20000);
+
+    await deleteTopUp(a.spaceId, topUp.id);
+    expect(await balance(a.spaceId, account.id)).toBe(20000);
+  });
+
+  it("13. expenses and top-ups together: each sum counted once", async () => {
+    const a = await mkSpaceUser();
+    const first = await anchoredAccount(a.spaceId, a.user.id, 10000);
+    const second = await anchoredAccount(a.spaceId, a.user.id, 5000);
+    await expenseAt(a.spaceId, a.user.id, first.id, 1000, AFTER_ANCHOR);
+    await expenseAt(a.spaceId, a.user.id, first.id, 2000, AFTER_ANCHOR);
+    await topUpAt(a.spaceId, a.user.id, first.id, 300, AFTER_ANCHOR);
+    await topUpAt(a.spaceId, a.user.id, first.id, 400, AFTER_ANCHOR);
+    await topUpAt(a.spaceId, a.user.id, first.id, 500, AFTER_ANCHOR);
+    await topUpAt(a.spaceId, a.user.id, second.id, 700, AFTER_ANCHOR);
+
+    const expectedFirst = { balanceMinor: 10000 - 3000 + 1200, expenseCount: 2 };
+    const expectedSecond = { balanceMinor: 5700, expenseCount: 0 };
+    expect(await getAccount(a.spaceId, first.id)).toMatchObject(expectedFirst);
+    expect(await getAccount(a.spaceId, second.id)).toMatchObject(expectedSecond);
+    expect(await listAccounts(a.spaceId)).toMatchObject([
+      { id: first.id, ...expectedFirst },
+      { id: second.id, ...expectedSecond },
+    ]);
+  });
+
+  it("14. editing a top-up's amount shifts the balance by the difference; deleting restores it", async () => {
+    const a = await mkSpaceUser();
+    const account = await anchoredAccount(a.spaceId, a.user.id, 10000);
+    const topUp = await topUpAt(a.spaceId, a.user.id, account.id, 2500, AFTER_ANCHOR);
+
+    await updateTopUp(a.spaceId, topUp.id, { amountMinor: 4000 });
+    expect(await balance(a.spaceId, account.id)).toBe(14000);
+
+    expect(await deleteTopUp(a.spaceId, topUp.id)).toEqual({ ok: true });
+    expect(await balance(a.spaceId, account.id)).toBe(10000);
+  });
+
+  it("15. deleting an account without expenses deletes its top-ups and nothing else", async () => {
+    const a = await mkSpaceUser();
+    const account = await anchoredAccount(a.spaceId, a.user.id, 10000);
+    const other = await anchoredAccount(a.spaceId, a.user.id, 10000);
+    const gone = await topUpAt(a.spaceId, a.user.id, account.id, 2500, AFTER_ANCHOR);
+    const kept = await topUpAt(a.spaceId, a.user.id, other.id, 2500, AFTER_ANCHOR);
+    const keptExpense = await expenseAt(a.spaceId, a.user.id, other.id, 1000, AFTER_ANCHOR);
+
+    expect(await deleteAccount(a.spaceId, account.id)).toEqual({ ok: true });
+    expect(await getTopUp(a.spaceId, gone.id)).toBeNull();
+    expect(await getTopUp(a.spaceId, kept.id)).not.toBeNull();
+    expect(await getExpense(a.spaceId, keptExpense.id)).not.toBeNull();
+    expect(await balance(a.spaceId, other.id)).toBe(11500);
+  });
+
+  it("16. an account with expenses and top-ups cannot be deleted; nothing is removed", async () => {
+    const a = await mkSpaceUser();
+    const account = await anchoredAccount(a.spaceId, a.user.id, 10000);
+    const expense = await expenseAt(a.spaceId, a.user.id, account.id, 1000, AFTER_ANCHOR);
+    const topUp = await topUpAt(a.spaceId, a.user.id, account.id, 2500, AFTER_ANCHOR);
+
+    expect(await deleteAccount(a.spaceId, account.id)).toEqual({
+      ok: false,
+      reason: "has_expenses",
+    });
+    expect(await getExpense(a.spaceId, expense.id)).not.toBeNull();
+    expect(await getTopUp(a.spaceId, topUp.id)).not.toBeNull();
+    expect(await balance(a.spaceId, account.id)).toBe(11500);
+  });
+
+  it("17. a transfer after both anchors lowers the source by the debit and raises the target by the credit", async () => {
+    const a = await mkSpaceUser();
+    const usd = await anchoredAccount(a.spaceId, a.user.id, 50000, { currency: "USD" });
+    const eur = await anchoredAccount(a.spaceId, a.user.id, 20000, { currency: "EUR" });
+    await transferAt(a.spaceId, a.user.id, usd.id, eur.id, 10000, 9200, AFTER_ANCHOR);
+
+    expect(await balance(a.spaceId, usd.id)).toBe(40000);
+    expect(await balance(a.spaceId, eur.id)).toBe(29200);
+    expect(await listAccounts(a.spaceId)).toMatchObject([
+      { id: usd.id, balanceMinor: 40000 },
+      { id: eur.id, balanceMinor: 29200 },
+    ]);
+  });
+
+  it("18. each account compares a transfer with its own anchor", async () => {
+    const a = await mkSpaceUser();
+    const source = await anchoredAccount(a.spaceId, a.user.id, 10000);
+    const target = await anchoredAccount(a.spaceId, a.user.id, 5000);
+    await transferAt(a.spaceId, a.user.id, source.id, target.id, 1000, 1000, AFTER_ANCHOR);
+    expect(await balance(a.spaceId, source.id)).toBe(9000);
+    expect(await balance(a.spaceId, target.id)).toBe(6000);
+
+    await updateAccount(a.spaceId, target.id, { balanceMinor: 7000, loadedBalanceMinor: 6000 });
+    expect(await balance(a.spaceId, target.id)).toBe(7000);
+    expect(await balance(a.spaceId, source.id)).toBe(9000);
+
+    const source2 = await anchoredAccount(a.spaceId, a.user.id, 10000);
+    const target2 = await anchoredAccount(a.spaceId, a.user.id, 5000);
+    await transferAt(a.spaceId, a.user.id, source2.id, target2.id, 1000, 1000, AFTER_ANCHOR);
+
+    await updateAccount(a.spaceId, source2.id, { balanceMinor: 3000, loadedBalanceMinor: 9000 });
+    expect(await balance(a.spaceId, source2.id)).toBe(3000);
+    expect(await balance(a.spaceId, target2.id)).toBe(6000);
+  });
+
+  it("18a. a transfer entered after the anchor counts by its moment of entry", async () => {
+    const a = await mkSpaceUser();
+    const source = await anchoredAccount(a.spaceId, a.user.id, 10000);
+    const target = await anchoredAccount(a.spaceId, a.user.id, 5000);
+    await transferAt(
+      a.spaceId,
+      a.user.id,
+      source.id,
+      target.id,
+      1000,
+      1000,
+      AFTER_ANCHOR,
+      toISODate(BEFORE_ANCHOR),
+    );
+
+    expect(await balance(a.spaceId, source.id)).toBe(9000);
+    expect(await balance(a.spaceId, target.id)).toBe(6000);
+  });
+
+  it("19. expenses, top-ups and transfers in and out together: each sum counted once", async () => {
+    const a = await mkSpaceUser();
+    const first = await anchoredAccount(a.spaceId, a.user.id, 10000);
+    const second = await anchoredAccount(a.spaceId, a.user.id, 5000, { currency: "USD" });
+    const third = await anchoredAccount(a.spaceId, a.user.id, 3000, { currency: "EUR" });
+    await expenseAt(a.spaceId, a.user.id, first.id, 1000, AFTER_ANCHOR);
+    await expenseAt(a.spaceId, a.user.id, first.id, 2000, AFTER_ANCHOR);
+    await topUpAt(a.spaceId, a.user.id, first.id, 300, AFTER_ANCHOR);
+    await topUpAt(a.spaceId, a.user.id, first.id, 400, AFTER_ANCHOR);
+    await transferAt(a.spaceId, a.user.id, first.id, second.id, 150, 2, AFTER_ANCHOR);
+    await transferAt(a.spaceId, a.user.id, first.id, second.id, 50, 1, AFTER_ANCHOR);
+    await transferAt(a.spaceId, a.user.id, third.id, first.id, 70, 800, AFTER_ANCHOR);
+    await transferAt(a.spaceId, a.user.id, first.id, second.id, 9999, 99, BEFORE_ANCHOR);
+
+    const expectedFirst = {
+      balanceMinor: 10000 - 3000 + 700 - 200 + 800,
+      expenseCount: 2,
+    };
+    const expectedSecond = { balanceMinor: 5003, expenseCount: 0 };
+    const expectedThird = { balanceMinor: 2930, expenseCount: 0 };
+    expect(await getAccount(a.spaceId, first.id)).toMatchObject(expectedFirst);
+    expect(await getAccount(a.spaceId, second.id)).toMatchObject(expectedSecond);
+    expect(await getAccount(a.spaceId, third.id)).toMatchObject(expectedThird);
+    expect(await listAccounts(a.spaceId)).toMatchObject([
+      { id: first.id, ...expectedFirst },
+      { id: second.id, ...expectedSecond },
+      { id: third.id, ...expectedThird },
+    ]);
+  });
+
+  it("20. editing a transfer's amount shifts only its side's balance; same currency shifts both; deleting restores both", async () => {
+    const a = await mkSpaceUser();
+    const usd = await anchoredAccount(a.spaceId, a.user.id, 50000, { currency: "USD" });
+    const eur = await anchoredAccount(a.spaceId, a.user.id, 20000, { currency: "EUR" });
+    const usd2 = await anchoredAccount(a.spaceId, a.user.id, 10000, { currency: "USD" });
+    const mixed = await transferAt(a.spaceId, a.user.id, usd.id, eur.id, 10000, 9200, AFTER_ANCHOR);
+    const same = await transferAt(a.spaceId, a.user.id, usd.id, usd2.id, 1000, 1000, AFTER_ANCHOR);
+    expect(await balance(a.spaceId, usd.id)).toBe(39000);
+    expect(await balance(a.spaceId, eur.id)).toBe(29200);
+    expect(await balance(a.spaceId, usd2.id)).toBe(11000);
+
+    await updateTransferAmount(a.spaceId, mixed.id, usd.id, 12000);
+    expect(await balance(a.spaceId, usd.id)).toBe(37000);
+    expect(await balance(a.spaceId, eur.id)).toBe(29200);
+
+    await updateTransferAmount(a.spaceId, mixed.id, eur.id, 9000);
+    expect(await balance(a.spaceId, usd.id)).toBe(37000);
+    expect(await balance(a.spaceId, eur.id)).toBe(29000);
+
+    await updateTransferAmount(a.spaceId, same.id, usd2.id, 3000);
+    expect(await balance(a.spaceId, usd.id)).toBe(35000);
+    expect(await balance(a.spaceId, usd2.id)).toBe(13000);
+
+    expect(await deleteTransfer(a.spaceId, mixed.id, usd.id)).toEqual({ ok: true });
+    expect(await deleteTransfer(a.spaceId, same.id, usd2.id)).toEqual({ ok: true });
+    expect(await balance(a.spaceId, usd.id)).toBe(50000);
+    expect(await balance(a.spaceId, eur.id)).toBe(20000);
+    expect(await balance(a.spaceId, usd2.id)).toBe(10000);
+  });
+
+  it("21. deleting one account of a transfer leaves the other account's balance unchanged", async () => {
+    const a = await mkSpaceUser();
+    const source = await anchoredAccount(a.spaceId, a.user.id, 10000);
+    const target = await anchoredAccount(a.spaceId, a.user.id, 5000);
+    const back = await anchoredAccount(a.spaceId, a.user.id, 8000);
+    await transferAt(a.spaceId, a.user.id, source.id, target.id, 1000, 1000, AFTER_ANCHOR);
+    await transferAt(a.spaceId, a.user.id, back.id, target.id, 500, 500, AFTER_ANCHOR);
+    expect(await balance(a.spaceId, target.id)).toBe(6500);
+
+    expect(await deleteAccount(a.spaceId, source.id)).toEqual({ ok: true });
+    expect(await balance(a.spaceId, target.id)).toBe(6500);
+
+    expect(await deleteAccount(a.spaceId, target.id)).toEqual({ ok: true });
+    expect(await balance(a.spaceId, back.id)).toBe(7500);
   });
 });

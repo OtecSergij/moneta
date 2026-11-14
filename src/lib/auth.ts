@@ -10,14 +10,15 @@ import {
   beforeUserCreate,
   inviteGuard,
 } from "@/lib/auth-invite-hook";
-import { USER_NAME_MAX } from "@/lib/auth-schemas";
+import { USER_NAME_MAX, isBlankName } from "@/lib/auth-schemas";
 import { sendEmail } from "@/lib/email";
+import { redactEmails } from "@/lib/redact-emails";
 
 // Full spec: docs/auth-decisions.md. Key invariants encoded here:
 //
 //   - Multi-user, open registration; email verification required before login.
-//   - Auto-link OAuth only when provider sends email_verified=true (Google
-//     guarantees this; GitHub does NOT, so we'd add it explicit-only later).
+//   - Google auto-links into an existing account only when that account's
+//     email is verified locally.
 //   - Session: 30-day rolling expiry, refreshed at most once per day.
 //   - Generic responses everywhere (no email enumeration via sign-up / reset).
 //   - Rate limits: BA keys by ip+path (not by email — see auth-decisions.md
@@ -36,6 +37,22 @@ export const auth = betterAuth({
   baseURL: env.BETTER_AUTH_URL,
   secret: env.BETTER_AUTH_SECRET,
 
+  // Better Auth logs typed addresses ("User not found { email }"); the default
+  // format and levels stay, the addresses go.
+  logger: {
+    log: (level, message, ...args) => {
+      const print =
+        level === "error" ? console.error : level === "warn" ? console.warn : console.log;
+      print(
+        `${new Date().toISOString()} ${level.toUpperCase()} [Better Auth]: ${redactEmails(message)}`,
+        ...args.map((arg) => redactEmails(arg)),
+      );
+    },
+  },
+  // Unexpected errors go to the route handler, which logs them without
+  // addresses; otherwise better-call prints them whole ("# SERVER_ERROR").
+  onAPIError: { throw: true },
+
   database: drizzleAdapter(db, {
     provider: "pg",
     schema,
@@ -49,6 +66,15 @@ export const auth = betterAuth({
     minPasswordLength: 8,
     maxPasswordLength: 128,
     revokeSessionsOnPasswordReset: true,
+    onExistingUserSignUp: async ({ user }) => {
+      if (user.emailVerified) return;
+      await auth.api.sendVerificationEmail({ body: { email: user.email } });
+    },
+    onPasswordReset: async ({ user }) => {
+      if (user.emailVerified) return;
+      const ctx = await auth.$context;
+      await ctx.internalAdapter.updateUser(user.id, { emailVerified: true });
+    },
     sendResetPassword: async ({ user, url }) => {
       await sendEmail({
         to: user.email,
@@ -61,6 +87,7 @@ export const auth = betterAuth({
 
   emailVerification: {
     sendOnSignUp: true,
+    sendOnSignIn: true,
     autoSignInAfterVerification: true,
     expiresIn: 60 * 60 * 24, // 24h
     sendVerificationEmail: async ({ user, url }) => {
@@ -84,10 +111,14 @@ export const auth = betterAuth({
       const name = (ctx.body as { name?: unknown } | undefined)?.name;
       if (
         (ctx.path === "/sign-up/email" || ctx.path === "/update-user") &&
-        typeof name === "string" &&
-        name.length > USER_NAME_MAX
+        name !== undefined
       ) {
-        throw new APIError("BAD_REQUEST", { message: "Name too long" });
+        if (typeof name !== "string" || isBlankName(name)) {
+          throw new APIError("BAD_REQUEST", { message: "Name is required" });
+        }
+        if (Array.from(name).length > USER_NAME_MAX) {
+          throw new APIError("BAD_REQUEST", { message: "Name too long" });
+        }
       }
     }),
   },
@@ -119,8 +150,7 @@ export const auth = betterAuth({
   account: {
     accountLinking: {
       enabled: true,
-      // requireLocalEmailVerified defaults to true in 1.6.x — keep explicit
-      // so future BA upgrades don't surprise us.
+      requireLocalEmailVerified: true,
       trustedProviders: ["google"],
     },
   },

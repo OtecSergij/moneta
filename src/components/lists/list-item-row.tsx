@@ -2,10 +2,13 @@
 
 import { useRef, useState, type MouseEvent } from "react";
 import { Check, Trash2 } from "lucide-react";
+import { onEnterKey } from "@/lib/enter-key";
 import { ITEM_TEXT_MAX } from "@/lib/lists";
 import { useLongPress } from "@/lib/hooks/use-long-press";
 import type { ListItem } from "@/repositories/lists";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/kit/button";
+import { TextField } from "@/components/kit/text-field";
 
 export const keepFocus = (e: MouseEvent) => e.preventDefault();
 
@@ -35,48 +38,44 @@ function ItemEditor({
       ref={rowRef}
       className="flex min-h-[60px] items-center gap-1.5 bg-edit-row py-2 pr-2 pl-3"
     >
-      <label htmlFor={`item-edit-${item.id}`} className="sr-only">
-        Название пункта
-      </label>
-      <input
+      <TextField
         id={`item-edit-${item.id}`}
+        label="Название пункта"
+        labelHidden
+        size="sm"
+        tone="card"
         type="text"
         autoFocus
         value={text}
         maxLength={ITEM_TEXT_MAX}
         onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-            e.preventDefault();
-            save();
-          } else if (e.key === "Escape") {
-            e.preventDefault();
-            onCancel();
-          }
-        }}
+        onKeyDown={(e) => onEnterKey(e, save, onCancel)}
         onBlur={(e) => {
           if (!rowRef.current?.contains(e.relatedTarget)) onCancel();
         }}
-        className="h-11 min-w-0 flex-1 rounded-control bg-card px-3 text-base text-ink shadow-[inset_0_0_0_2px_var(--color-primary)] outline-none"
+        className="min-w-0 flex-1"
       />
-      <button
-        type="button"
+      <Button
+        variant="danger"
+        size="sm"
+        iconOnly
         aria-label="Удалить пункт"
         onMouseDown={keepFocus}
         onClick={onRemove}
-        className="flex size-11 flex-none cursor-pointer items-center justify-center rounded-control bg-danger-soft text-danger-ink hover-danger-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        className="flex-none"
       >
         <Trash2 aria-hidden className="size-5" strokeWidth={1.75} />
-      </button>
-      <button
-        type="button"
+      </Button>
+      <Button
+        size="sm"
+        iconOnly
         aria-label="Сохранить"
         onMouseDown={keepFocus}
         onClick={save}
-        className="flex size-11 flex-none cursor-pointer items-center justify-center rounded-control bg-primary text-white hover-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        className="flex-none"
       >
         <Check aria-hidden className="size-5" strokeWidth={1.75} />
-      </button>
+      </Button>
     </div>
   );
 }

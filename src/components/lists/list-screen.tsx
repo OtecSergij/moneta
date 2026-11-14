@@ -7,10 +7,7 @@ import {
   useState,
   useTransition,
 } from "react";
-import Link from "next/link";
-import { unstable_rethrow, useRouter } from "next/navigation";
-import { Check, ChevronLeft, MoreHorizontal, Plus } from "lucide-react";
-import { toast } from "sonner";
+import { Check, MoreHorizontal, Plus } from "lucide-react";
 import {
   addItemAction,
   deleteItemAction,
@@ -27,7 +24,17 @@ import {
   type ListActionResult,
   type ListVisibility,
 } from "@/lib/lists";
+import { onEnterKey } from "@/lib/enter-key";
+import { useActionRunner } from "@/lib/hooks/use-action-runner";
 import type { ListItem, ListWithItems } from "@/repositories/lists";
+import {
+  BackLink,
+  DetailHeader,
+  DetailTitle,
+} from "@/components/kit/detail-header";
+import { Button } from "@/components/kit/button";
+import { RoundIconButton } from "@/components/kit/round-icon-button";
+import { TextField } from "@/components/kit/text-field";
 import { ListItemRow, keepFocus } from "@/components/lists/list-item-row";
 import { ListMenuSheet } from "@/components/lists/list-menu-sheet";
 import { ListProgress } from "@/components/lists/list-rows";
@@ -76,9 +83,11 @@ function applyChange(list: ListWithItems, change: Change): ListWithItems {
 const PENDING_PREFIX = "pending-";
 
 export function ListScreen({ list: serverList }: { list: ListWithItems }) {
-  const router = useRouter();
+  const run = useActionRunner("/lists");
   const [list, addChange] = useOptimistic(serverList, applyChange);
   const [, startTransition] = useTransition();
+  const [savingVisibility, startVisibility] = useTransition();
+  const [deleting, startDelete] = useTransition();
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -95,25 +104,13 @@ export function ListScreen({ list: serverList }: { list: ListWithItems }) {
   }, [renaming]);
 
   function mutate(
-    change: Change | null,
+    change: Change,
     call: () => Promise<ListActionResult<unknown>>,
     onError?: () => void,
   ) {
     startTransition(async () => {
-      if (change) addChange(change);
-      let res: ListActionResult<unknown>;
-      try {
-        res = await call();
-      } catch (error) {
-        unstable_rethrow(error);
-        toast.error("Не удалось сохранить");
-        onError?.();
-        return;
-      }
-      if (res.ok) return;
-      toast.error(res.error);
-      onError?.();
-      if ("notFound" in res) router.replace("/lists");
+      addChange(change);
+      if (!(await run(call, "Не удалось сохранить"))) onError?.();
     });
   }
 
@@ -153,68 +150,53 @@ export function ListScreen({ list: serverList }: { list: ListWithItems }) {
 
   return (
     <>
-      <div className="flex items-center justify-between pt-3 pr-2.5 pl-1.5 lg:pt-8 lg:pr-4">
-        <Link
-          href="/lists"
-          className="flex h-11 items-center gap-0.5 rounded-control pr-2.5 pl-1 text-base font-medium text-primary-ink hover-ghost focus-visible:outline-2 focus-visible:outline-primary"
-        >
-          <ChevronLeft aria-hidden className="size-[22px]" strokeWidth={1.75} />
-          Списки
-        </Link>
-        <button
-          type="button"
-          aria-label="Действия со списком"
+      <DetailHeader>
+        <BackLink href="/lists">Списки</BackLink>
+        <RoundIconButton
+          icon={MoreHorizontal}
+          label="Действия со списком"
           onClick={() => setMenuOpen(true)}
-          className="flex size-11 cursor-pointer items-center justify-center rounded-chip bg-card text-ink hover-outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-        >
-          <MoreHorizontal aria-hidden className="size-[22px]" strokeWidth={1.75} />
-        </button>
-      </div>
+        />
+      </DetailHeader>
 
       <div className="flex flex-col gap-2.5 px-5 pt-2">
         {renaming ? (
           <div className="flex items-center gap-2">
-            <label htmlFor="list-title" className="sr-only">
-              Название списка
-            </label>
-            <input
+            <TextField
               id="list-title"
               ref={titleRef}
+              label="Название списка"
+              labelHidden
+              variant="heading"
+              tone="card"
               type="text"
               value={titleDraft}
               maxLength={LIST_NAME_MAX}
               onChange={(e) => setTitleDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-                  e.preventDefault();
-                  saveTitle();
-                } else if (e.key === "Escape") {
-                  e.preventDefault();
-                  setRenaming(false);
-                }
-              }}
-              className="h-12 min-w-0 flex-1 rounded-field bg-card px-3.5 text-2xl font-bold tracking-[-0.02em] text-ink shadow-[inset_0_0_0_2px_var(--color-primary)] outline-none"
+              onKeyDown={(e) =>
+                onEnterKey(e, saveTitle, () => setRenaming(false))
+              }
+              className="min-w-0 flex-1"
             />
-            <button
-              type="button"
+            <Button
+              size="md"
+              iconOnly
               aria-label="Сохранить"
               onMouseDown={keepFocus}
               onClick={saveTitle}
-              className="flex size-12 flex-none cursor-pointer items-center justify-center rounded-field bg-primary text-white hover-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              className="flex-none"
             >
               <Check aria-hidden className="size-[22px]" strokeWidth={1.75} />
-            </button>
+            </Button>
           </div>
         ) : (
-          <h1 className="text-[28px]/[34px] font-bold tracking-[-0.02em] break-words">
-            {list.name}
-          </h1>
+          <DetailTitle>{list.name}</DetailTitle>
         )}
         {list.items.length > 0 ? (
           <ListProgress
             done={checked.length}
             total={list.items.length}
-            trackClassName="bg-line"
+            track="line"
             okWhenComplete={false}
           />
         ) : null}
@@ -223,24 +205,19 @@ export function ListScreen({ list: serverList }: { list: ListWithItems }) {
       <div className="mx-4 mt-4 overflow-hidden rounded-card bg-card">
         <div className="flex min-h-[52px] items-center gap-3 pr-4 pl-[15px]">
           <Plus aria-hidden className="size-[22px] flex-none text-primary" strokeWidth={1.75} />
-          <label htmlFor="list-add-item" className="sr-only">
-            Новый пункт
-          </label>
-          <input
+          <TextField
             id="list-add-item"
+            label="Новый пункт"
+            labelHidden
+            variant="frameless"
             type="text"
             placeholder="Добавить пункт"
             value={draft}
             maxLength={ITEM_TEXT_MAX}
             enterKeyHint="done"
             onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                addItem();
-              }
-            }}
-            className="h-11 min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-ink-3"
+            onKeyDown={(e) => onEnterKey(e, addItem)}
+            className="min-w-0 flex-1"
           />
         </div>
         {ordered.length > 0 ? (
@@ -285,6 +262,8 @@ export function ListScreen({ list: serverList }: { list: ListWithItems }) {
         name={list.name}
         isMine={list.isMine}
         isPrivate={list.visibility === "private"}
+        deleting={deleting}
+        savingPrivate={savingVisibility}
         onReset={() => {
           setMenuOpen(false);
           mutate({ type: "reset" }, () => resetListAction(list.id));
@@ -295,14 +274,19 @@ export function ListScreen({ list: serverList }: { list: ListWithItems }) {
         }}
         onPrivateChange={(isPrivate) => {
           const visibility = isPrivate ? "private" : "shared";
-          mutate({ type: "visibility", visibility }, () =>
-            setListVisibilityAction(list.id, visibility),
-          );
+          startVisibility(async () => {
+            addChange({ type: "visibility", visibility });
+            await run(
+              () => setListVisibilityAction(list.id, visibility),
+              "Не удалось сохранить",
+            );
+          });
         }}
-        onDelete={() => {
-          setMenuOpen(false);
-          mutate(null, () => deleteListAction(list.id));
-        }}
+        onDelete={() =>
+          startDelete(async () => {
+            await run(() => deleteListAction(list.id), "Не удалось сохранить");
+          })
+        }
       />
     </>
   );

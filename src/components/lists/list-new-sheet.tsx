@@ -1,48 +1,51 @@
 "use client";
 
 import { useState } from "react";
-import { unstable_rethrow, useRouter } from "next/navigation";
-import { Lock } from "lucide-react";
-import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { Lock, Plus } from "lucide-react";
 import { createListAction } from "@/lib/actions/lists";
 import { LIST_NAME_MAX } from "@/lib/lists";
+import { runAction } from "@/lib/hooks/use-action-runner";
+import { useLeaving } from "@/lib/hooks/use-leaving";
+import { useSheetTask } from "@/lib/hooks/use-sheet-task";
 import { BottomSheet } from "@/components/kit/bottom-sheet";
 import { Button } from "@/components/kit/button";
+import { MenuRow } from "@/components/kit/sheet-menu";
 import { Switch } from "@/components/kit/switch";
 import { TextField } from "@/components/kit/text-field";
-import { HeaderAddButton } from "@/components/layout/screen-header";
+import { RoundIconButton } from "@/components/kit/round-icon-button";
 
-function ListNewForm({ onCreated }: { onCreated: (id: string) => void }) {
+function ListNewForm({
+  saving,
+  run,
+  onCreated,
+}: {
+  saving: boolean;
+  run: (task: () => Promise<boolean>) => Promise<void>;
+  onCreated: (id: string) => void;
+}) {
   const [name, setName] = useState("");
   const [isPrivate, setIsPrivate] = useState(true);
   const [error, setError] = useState<string | undefined>();
-  const [saving, setSaving] = useState(false);
 
   async function submit() {
-    if (saving) return;
     const trimmed = name.trim();
     if (trimmed.length === 0) {
       setError("Введите название");
       return;
     }
     setError(undefined);
-    setSaving(true);
-    try {
-      const res = await createListAction({
-        name: trimmed,
-        visibility: isPrivate ? "private" : "shared",
-      });
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      onCreated(res.data.id);
-    } catch (error) {
-      unstable_rethrow(error);
-      toast.error("Не удалось создать список");
-    } finally {
-      setSaving(false);
-    }
+    await run(() =>
+      runAction(
+        () =>
+          createListAction({
+            name: trimmed,
+            visibility: isPrivate ? "private" : "shared",
+          }),
+        "Не удалось создать список",
+        { onSuccess: (list) => onCreated(list.id) },
+      ),
+    );
   }
 
   return (
@@ -63,21 +66,24 @@ function ListNewForm({ onCreated }: { onCreated: (id: string) => void }) {
         maxLength={LIST_NAME_MAX}
         autoFocus
         error={error}
+        disabled={saving}
       />
-      <div className="flex items-center gap-4 rounded-panel bg-page px-4 py-3.5">
-        <span
-          id="list-new-private"
-          className="flex flex-1 items-center gap-1.5 text-[15px] font-semibold"
-        >
-          <Lock aria-hidden className="size-4" strokeWidth={1.75} />
-          Виден только мне
-        </span>
-        <Switch
-          checked={isPrivate}
-          onCheckedChange={setIsPrivate}
-          aria-labelledby="list-new-private"
-        />
-      </div>
+      <MenuRow
+        Icon={Lock}
+        labelId="list-new-private"
+        variant="panel"
+        disabled={saving}
+        trailing={
+          <Switch
+            checked={isPrivate}
+            onCheckedChange={setIsPrivate}
+            aria-labelledby="list-new-private"
+            disabled={saving}
+          />
+        }
+      >
+        Виден только мне
+      </MenuRow>
       <Button type="submit" loading={saving}>
         Создать список
       </Button>
@@ -88,14 +94,27 @@ function ListNewForm({ onCreated }: { onCreated: (id: string) => void }) {
 export function ListNewButton() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const { pending, run } = useSheetTask(() => setOpen(false));
+  const { busy, leave } = useLeaving(pending);
 
   return (
     <>
-      <HeaderAddButton label="Новый список" onClick={() => setOpen(true)} />
-      <BottomSheet open={open} onOpenChange={setOpen} title="Новый список">
+      <RoundIconButton
+        icon={Plus}
+        label="Новый список"
+        onClick={() => setOpen(true)}
+      />
+      <BottomSheet
+        open={open || busy}
+        onOpenChange={setOpen}
+        title="Новый список"
+        busy={busy}
+      >
         <ListNewForm
+          saving={busy}
+          run={run}
           onCreated={(id) => {
-            setOpen(false);
+            leave();
             router.push(`/lists/${id}`);
           }}
         />

@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Check, Copy, Link as LinkIcon, RotateCcw } from "lucide-react";
-import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import { createInviteAction } from "@/lib/actions/invites";
+import { runAction } from "@/lib/hooks/use-action-runner";
 import { displayInviteUrl } from "@/lib/invites";
 import { Button } from "@/components/kit/button";
+import { FIELD_LABEL_CLASS } from "@/components/kit/text-field";
 
 const COPIED_MS = 2000;
 
@@ -24,21 +25,13 @@ export function InviteLink({ initialUrl }: { initialUrl: string | null }) {
 
   function create() {
     startTransition(async () => {
-      let res;
-      try {
-        res = await createInviteAction();
-      } catch (error) {
-        unstable_rethrow(error);
-        toast.error("Не удалось создать ссылку");
-        return;
-      }
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      if (copiedTimer.current) clearTimeout(copiedTimer.current);
-      setCopied(false);
-      setUrl(res.data.url);
+      await runAction(() => createInviteAction(), "Не удалось создать ссылку", {
+        onSuccess: (invite) => {
+          if (copiedTimer.current) clearTimeout(copiedTimer.current);
+          setCopied(false);
+          setUrl(invite.url);
+        },
+      });
     });
   }
 
@@ -57,7 +50,7 @@ export function InviteLink({ initialUrl }: { initialUrl: string | null }) {
 
   if (!url) {
     return (
-      <div className="border-t border-row-line p-4">
+      <div className="p-4">
         <Button onClick={create} loading={pending} className="w-full">
           <LinkIcon className="size-[18px]" strokeWidth={1.75} aria-hidden />
           Создать ссылку-приглашение
@@ -67,18 +60,16 @@ export function InviteLink({ initialUrl }: { initialUrl: string | null }) {
   }
 
   return (
-    <div className="flex flex-col gap-3 border-t border-row-line p-4">
-      <span className="text-[13px] font-medium text-ink-2">
-        Ссылка-приглашение
-      </span>
+    <div className="flex flex-col gap-3 p-4">
+      <span className={FIELD_LABEL_CLASS}>Ссылка-приглашение</span>
       <div className="flex items-center gap-2 rounded-field bg-page py-1.5 pr-1.5 pl-3.5">
         <span className="min-w-0 flex-1 truncate text-sm text-ink">
           {displayInviteUrl(url)}
         </span>
         <Button
-          variant="select"
+          variant={copied ? "success" : "tint"}
           onClick={copy}
-          style={copied ? { background: "var(--color-ok)" } : undefined}
+          disabled={pending}
         >
           {copied ? (
             <Check className="size-4" strokeWidth={1.75} aria-hidden />
@@ -90,15 +81,10 @@ export function InviteLink({ initialUrl }: { initialUrl: string | null }) {
           </span>
         </Button>
       </div>
-      <button
-        type="button"
-        onClick={create}
-        disabled={pending}
-        className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-control bg-page text-[15px] font-medium text-ink hover-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60"
-      >
+      <Button variant="secondary" size="sm" loading={pending} onClick={create}>
         <RotateCcw className="size-4" strokeWidth={1.75} aria-hidden />
         Создать новую ссылку
-      </button>
+      </Button>
     </div>
   );
 }

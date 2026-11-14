@@ -13,7 +13,7 @@ import { formatScaledRate, parseRate } from "@/lib/fx/convert";
 
 // The aggregator — BTC's only source, and the fallback for fiat — has no
 // snapshots before this date; requests below it would just 404 forever, so
-// we skip the network entirely (plan Step 4.1).
+// we skip the network entirely.
 export const PROVIDER_HISTORY_FLOOR = "2024-10-01";
 
 // The official fiat sources reach much further back: ECB to 1999, CBR to the
@@ -33,6 +33,16 @@ export const OFFICIAL_HISTORY_FLOOR = "2003-01-01";
 // `@latest` tag gate and the ECB carry-forward below.
 export function maxEntryDate(now: Date = new Date()): string {
   return todayISO(addDays(now, 1));
+}
+
+// Entry-date rule for expenses and top-ups, enforced in their repositories.
+// The old rationale for leaving this to the UI was that "today" depends on
+// the user's timezone; maxEntryDate() answers that by allowing the client to
+// be one day ahead of this server. Deliberately no lower bound:
+// PROVIDER_HISTORY_FLOOR limits which rates exist, not which entries may be
+// recorded — an older one is simply shown unconverted.
+export function isAllowedEntryDate(iso: string, now: Date = new Date()): boolean {
+  return iso <= maxEntryDate(now);
 }
 
 export function isCurrentDate(iso: string, now: Date = new Date()): boolean {
@@ -58,7 +68,7 @@ export interface FxDeps {
   fetch: typeof globalThis.fetch;
 }
 
-export type RateSource =
+type RateSource =
   | "cbr"
   | "ecb"
   | "nbs"
@@ -66,7 +76,7 @@ export type RateSource =
   | "jsdelivr-latest"
   | "pivot";
 
-export interface FetchedRate {
+interface FetchedRate {
   currency: CurrencyCode;
   effectiveDate: string;
   rateToUsd: string;
@@ -108,7 +118,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 // Never throws, never leaves a hung request: Node's fetch has no default
 // timeout, and a stalled request would block the form's conversion preview
-// and the background fill (plan Step 4.2). Returns null on any failure — callers decide what "no data"
+// and the background fill. Returns null on any failure — callers decide what "no data"
 // means for them.
 async function fetchOk(
   url: string,
@@ -171,7 +181,7 @@ async function fetchWindows1251(
 // boundary, which a floating-point division practically never does — unlike
 // convert.ts's parseRate, which reads exact decimal strings out of Postgres
 // and ties there are reachable, this is a one-way conversion from a ~8
-// significant-digit source (plan Step 4.3).
+// significant-digit source.
 function invertRate(unitsPerUsd: number): string | null {
   if (!Number.isFinite(unitsPerUsd) || unitsPerUsd <= 0) return null;
   const inverted = 1 / unitsPerUsd;
@@ -228,7 +238,7 @@ export async function fetchRubToUsd(
   return null;
 }
 
-export interface EcbPoint {
+interface EcbPoint {
   effectiveDate: string;
   rateToUsd: string;
 }

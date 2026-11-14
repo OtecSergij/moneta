@@ -68,10 +68,9 @@ const QuoteConversionInput = z
     { message: "Дата вне диапазона", path: ["spentAt"] },
   );
 
-// Live preview for the expense form. requireSession comes first, before any
+// Live preview for the expense and top-up forms. requireSession comes first, before any
 // parsing — actions are reachable via direct POST, and this one triggers
-// outbound fetches, so an unauthenticated caller must never reach them
-// (AC-28).
+// outbound fetches, so an unauthenticated caller must never reach them.
 export async function quoteConversionAction(
   input: unknown,
 ): Promise<

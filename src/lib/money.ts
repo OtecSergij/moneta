@@ -16,9 +16,9 @@ import { divRoundHalfEven } from "@/lib/half-even";
 const NBSP = "\u00A0"; // U+00A0 non-breaking space — keeps the number glued to the symbol
 const THIN = "\u202F"; // U+202F narrow no-break space — thousands separator
 
-// "12480" -> "12 480" (THIN space between groups of three from the right).
-function groupThousands(intDigits: string): string {
-  return intDigits.replace(/\B(?=(\d{3})+(?!\d))/g, THIN);
+// "12480" -> "12 480" (`separator` between groups of three from the right).
+function groupThousands(intDigits: string, separator = THIN): string {
+  return intDigits.replace(/\B(?=(\d{3})+(?!\d))/g, separator);
 }
 
 // A no-op whenever scale is 1 (every currency except RSD, whose para never
@@ -66,7 +66,7 @@ export function formatMoneyParts(
 
   const intPart = groupThousands(String(major));
   const body = fracStr === "" ? intPart : `${intPart},${fracStr}`;
-  const sign = negative ? "-" : "";
+  const sign = negative && displayMinor !== 0 ? "-" : "";
 
   return { amount: `${sign}${body}`, symbol: meta.symbol };
 }
@@ -100,9 +100,9 @@ export function parseMoney(input: string, currency: CurrencyCode): number | null
 }
 
 /**
- * Convert minor units back to a plain editable string (comma decimal, no
- * grouping) for prefilling an edit form: `minorToInput(1248050, "RUB")` ->
- * "12480,50". Uses `exponent`, not `displayDigits` — editing an RSD expense
+ * Convert minor units back to an editable string (comma decimal, plain-space
+ * grouping) for prefilling an amount field: `minorToInput(1248050, "RUB")` ->
+ * "12 480,50". Uses `exponent`, not `displayDigits` — editing an RSD expense
  * must round-trip its para, even though they're never shown when formatted.
  */
 export function minorToInput(amountMinor: number, currency: CurrencyCode): string {
@@ -111,7 +111,7 @@ export function minorToInput(amountMinor: number, currency: CurrencyCode): strin
   const sign = truncated < 0 ? "-" : "";
   const abs = Math.abs(truncated);
   const unit = 10 ** meta.exponent;
-  const major = Math.floor(abs / unit);
+  const major = groupThousands(String(Math.floor(abs / unit)), " ");
   const fracValue = abs % unit;
 
   return fracValue === 0

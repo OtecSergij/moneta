@@ -9,15 +9,16 @@ import {
   deleteCategory,
   updateCategory,
   type Category,
+  type ExpenseCategory,
 } from "@/repositories/categories";
 import { revalidateFor } from "./revalidate";
-import { INVALID, isUuid, type ActionResult } from "./types";
-
-type CategoryActionResult<T> =
-  | ActionResult<T>
-  | { ok: false; error: string; notFound: true };
+import { INVALID, isUuid, type ActionResult, type ActionResultWithNotFound } from "./types";
 
 const NOT_FOUND = { ok: false, error: "Категория не найдена", notFound: true } as const;
+
+function toExpenseCategory({ id, name, color }: Category): ExpenseCategory {
+  return { id, name, color };
+}
 
 // Server actions are reachable via direct POST (Next.js docs: "Mutating Data" —
 // always verify auth inside every action), so each one starts with
@@ -25,7 +26,7 @@ const NOT_FOUND = { ok: false, error: "Категория не найдена", 
 
 export async function createCategoryAction(
   input: unknown,
-): Promise<ActionResult<Category>> {
+): Promise<ActionResult<ExpenseCategory>> {
   const { user, spaceId } = await requireSpace();
   const parsed = CategoryInput.safeParse(input);
   if (!parsed.success) return INVALID;
@@ -33,7 +34,7 @@ export async function createCategoryAction(
   try {
     const category = await createCategory(spaceId, user.id, parsed.data);
     revalidateFor("category");
-    return { ok: true, data: category };
+    return { ok: true, data: toExpenseCategory(category) };
   } catch (err) {
     if (isUniqueViolation(err)) {
       return { ok: false, error: "Категория с таким именем уже есть" };
@@ -45,7 +46,7 @@ export async function createCategoryAction(
 export async function updateCategoryAction(
   id: string,
   patch: unknown,
-): Promise<CategoryActionResult<Category>> {
+): Promise<ActionResultWithNotFound<ExpenseCategory>> {
   const { spaceId } = await requireSpace();
   if (!isUuid(id)) return NOT_FOUND;
   const parsed = CategoryPatch.safeParse(patch);
@@ -55,7 +56,7 @@ export async function updateCategoryAction(
     const category = await updateCategory(spaceId, id, parsed.data);
     revalidateFor("category");
     if (!category) return NOT_FOUND;
-    return { ok: true, data: category };
+    return { ok: true, data: toExpenseCategory(category) };
   } catch (err) {
     if (isUniqueViolation(err)) {
       return { ok: false, error: "Категория с таким именем уже есть" };
@@ -66,7 +67,7 @@ export async function updateCategoryAction(
 
 export async function deleteCategoryAction(
   id: string,
-): Promise<CategoryActionResult<{ id: string }>> {
+): Promise<ActionResultWithNotFound<null>> {
   const { spaceId } = await requireSpace();
   if (!isUuid(id)) return NOT_FOUND;
   const result = await deleteCategory(spaceId, id);
@@ -78,5 +79,5 @@ export async function deleteCategoryAction(
     return NOT_FOUND;
   }
   revalidateFor("category");
-  return { ok: true, data: { id } };
+  return { ok: true, data: null };
 }

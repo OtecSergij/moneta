@@ -7,7 +7,9 @@ import {
   convertRow,
   parseRate,
   rateFor,
+  rateSnapshot,
   roundToDisplay,
+  snapshotIndex,
   sumConverted,
   sumConvertedByDay,
 } from "@/lib/fx/convert";
@@ -223,7 +225,7 @@ describe("aggregation over many rows", () => {
     expect(single).not.toBe(perRow);
   });
 
-  it("stays within the AC-29 tolerance against group totals, on two grouping axes, in five display currencies", () => {
+  it("stays within the reconciliation tolerance against group totals, on two grouping axes, in five display currencies", () => {
     for (const display of CURRENCY_CODES) {
       const { totalMinor: periodTotal } = sumConverted(rows, display, bulkIndex);
 
@@ -244,8 +246,7 @@ describe("aggregation over many rows", () => {
 });
 
 describe("sumConvertedByDay — day axis", () => {
-  // 90 days is the plan's own worked example for this axis (AC-29): a
-  // quarter's worth of history, one row per currency per day.
+  // A quarter's worth of history, one row per currency per day.
   const spanDays = 90;
   const start = "2026-06-01";
   const dates = Array.from({ length: spanDays }, (_, i) => addDays(start, i));
@@ -270,7 +271,7 @@ describe("sumConvertedByDay — day axis", () => {
     expect(buckets.every((b) => b.items.length === CURRENCY_CODES.length)).toBe(true);
   });
 
-  it("stays within the AC-29 tolerance against the period total, in all five display currencies (RSD included)", () => {
+  it("stays within the reconciliation tolerance against the period total, in all five display currencies (RSD included)", () => {
     for (const display of CURRENCY_CODES) {
       const { totalMinor: periodTotal } = sumConverted(rows, display, dailyIndex);
 
@@ -283,5 +284,45 @@ describe("sumConvertedByDay — day axis", () => {
 
       expect(Math.abs(periodTotal - bucketTotalSum)).toBeLessThanOrEqual(toleranceMinor);
     }
+  });
+});
+
+describe("rateSnapshot / snapshotIndex", () => {
+  it("rateSnapshot keeps each currency's rate in force on the day and leaves out a currency without one; snapshotIndex converts like the full index", () => {
+    const day = "2026-09-10";
+    const index = buildIndex({
+      USD: [{ date: day, rate: "1" }],
+      EUR: [
+        { date: "2026-09-01", rate: "1.05" },
+        { date: "2026-09-08", rate: "1.1" },
+        { date: "2026-09-11", rate: "1.2" },
+      ],
+      RUB: [{ date: "2026-08-01", rate: "0.01234567890123456789" }],
+      RSD: [{ date: "2026-09-11", rate: "0.0095" }],
+    });
+
+    const snapshot = rateSnapshot(index, day);
+    expect(snapshot).toEqual({
+      USD: "1.00000000000000000000",
+      EUR: "1.10000000000000000000",
+      RUB: "0.01234567890123456789",
+    });
+
+    const fromSnapshot = snapshotIndex(snapshot, day);
+    const rows = [
+      row({ amountMinor: 10_000, currency: "USD", spentAt: day }),
+      row({ amountMinor: 9_200, currency: "EUR", spentAt: day }),
+      row({ amountMinor: 1_234_567, currency: "RUB", spentAt: day }),
+      row({ amountMinor: 300_000, currency: "RSD", spentAt: day }),
+    ];
+    for (const r of rows) {
+      for (const display of CURRENCY_CODES) {
+        expect(convertRow(r, display, fromSnapshot), `${r.currency}->${display}`).toBe(
+          convertRow(r, display, index),
+        );
+      }
+    }
+    expect(convertRow(rows[1], "USD", fromSnapshot)).toBe(10_120);
+    expect(convertRow(rows[3], "USD", fromSnapshot)).toBeNull();
   });
 });

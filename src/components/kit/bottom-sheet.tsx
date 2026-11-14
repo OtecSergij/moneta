@@ -13,16 +13,19 @@ import { shouldDismiss } from "@/lib/sheet-gesture";
 import { cn } from "@/lib/utils";
 
 type BottomSheetProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   variant?: "white" | "gray" | "compact";
   className?: string;
-  onOpenAutoFocus?: (event: Event) => void;
+  focusSheet?: boolean;
+  busy?: boolean;
   children: ReactNode;
 } & (
-  | { title: string; ariaLabel?: undefined }
-  | { ariaLabel: string; title?: undefined }
-);
+  | { open: boolean; onOpenChange: (open: boolean) => void; onClose?: undefined }
+  | { onClose: () => void; open?: boolean; onOpenChange?: undefined }
+) &
+  (
+    | { title: string; ariaLabel?: undefined }
+    | { ariaLabel: string; title?: undefined }
+  );
 
 const TOP_GAP_PX = 24;
 
@@ -68,21 +71,29 @@ function useVisualViewport() {
 type Drag = { startY: number; lastY: number; lastT: number; vy: number };
 
 export function BottomSheet({
-  open,
+  open = true,
   onOpenChange,
+  onClose,
   variant = "white",
   title,
   ariaLabel,
   className,
-  onOpenAutoFocus,
+  focusSheet = false,
+  busy = false,
   children,
 }: BottomSheetProps) {
   const viewport = useVisualViewport();
   const [dragY, setDragY] = useState(0);
   const drag = useRef<Drag | null>(null);
 
+  function changeOpen(next: boolean) {
+    if (!next && busy) return;
+    if (onOpenChange) onOpenChange(next);
+    else if (!next) onClose?.();
+  }
+
   function onPointerDown(e: PointerEvent<HTMLDivElement>) {
-    if (!e.isPrimary || e.button !== 0) return;
+    if (busy || !e.isPrimary || e.button !== 0) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     drag.current = {
       startY: e.clientY,
@@ -107,7 +118,7 @@ export function BottomSheet({
     if (!d) return;
     drag.current = null;
     const recent = e.timeStamp - d.lastT < 100 ? d.vy : 0;
-    if (shouldDismiss(e.clientY - d.startY, recent)) onOpenChange(false);
+    if (shouldDismiss(e.clientY - d.startY, recent)) changeOpen(false);
     setDragY(0);
   }
 
@@ -117,12 +128,19 @@ export function BottomSheet({
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={changeOpen}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-overlay" />
         <Dialog.Content
           aria-describedby={undefined}
-          onOpenAutoFocus={onOpenAutoFocus}
+          onOpenAutoFocus={
+            focusSheet
+              ? (e) => {
+                  e.preventDefault();
+                  (e.currentTarget as HTMLElement).focus();
+                }
+              : undefined
+          }
           className={cn(
             "fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-(--sheet-max-h) w-full max-w-[480px] flex-col rounded-t-sheet text-ink shadow-sheet outline-none",
             DESKTOP_CLASS,
@@ -148,7 +166,12 @@ export function BottomSheet({
             onPointerCancel={onPointerCancel}
             className="flex h-6 flex-none cursor-grab touch-none justify-center pt-2 lg:hidden"
           >
-            <span className="h-[5px] w-9 rounded-chip bg-control-line" />
+            <span
+              className={cn(
+                "h-[5px] w-9 rounded-chip bg-control-line",
+                busy && "opacity-50",
+              )}
+            />
           </div>
           <div
             className={cn(

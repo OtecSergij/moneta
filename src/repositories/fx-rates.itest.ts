@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { fxRates } from "@/db/schema";
-import { isCurrentDate, maxEntryDate } from "@/lib/fx/provider";
+import { type FxDeps, isCurrentDate, maxEntryDate } from "@/lib/fx/provider";
 import { PALETTE_COLORS } from "@/lib/palette";
 import { createCategory } from "@/repositories/categories";
 import { rateFor } from "@/lib/fx/convert";
@@ -15,10 +15,13 @@ import {
 import { callsTo, stubFxSources } from "@/test/fx-fixtures";
 import {
   clearRates,
+  mkAccount,
   mkExpense,
   mkMember,
   mkRate,
   mkSpaceUser,
+  mkTopUp,
+  mkTransfer,
 } from "@/test/factories";
 
 // Every fetch stub here routes by URL to a document of the real source's
@@ -38,6 +41,13 @@ async function rowsFor(date: string) {
 async function sourcesFor(date: string): Promise<Record<string, string>> {
   const rows = await rowsFor(date);
   return Object.fromEntries(rows.map((r) => [r.currency, r.source]));
+}
+
+// A date that was tried and missed is refused for a minute, even once its rate
+// exists: `true` here means the backfill never asked for it.
+async function expectNeverTried(date: string, deps: FxDeps) {
+  await mkRate({ currency: "USD", effectiveDate: date });
+  expect(await ensureRates(date, deps)).toBe(true);
 }
 
 describe("isCurrentDate / maxEntryDate — client can be a day ahead of the server (timezone boundary)", () => {
@@ -63,7 +73,7 @@ describe("isCurrentDate / maxEntryDate — client can be a day ahead of the serv
 });
 
 describe("ensureRates", () => {
-  it("composes the sources into all five currencies for a date, and a second call fetches nothing more (AC-14)", async () => {
+  it("composes the sources into all five currencies for a date, and a second call fetches nothing more", async () => {
     const date = "2024-10-10"; // Thursday
     const fetch = stubFxSources({
       ecbDates: ["2024-10-08", "2024-10-09", "2024-10-10"],
@@ -175,7 +185,7 @@ describe("ensureRates", () => {
 });
 
 describe("backfillRates", () => {
-  it("fills every distinct expense date of both members of the space (AC-25)", async () => {
+  it("fills every distinct expense date of both members of the space", async () => {
     const owner = await mkSpaceUser();
     const member = await mkMember(owner.spaceId);
     const cat = await createCategory(owner.spaceId, owner.user.id, {
@@ -224,6 +234,58 @@ describe("backfillRates", () => {
     const callsAfterFill = fetch.mock.calls.length;
     expect(await backfillRates(u.spaceId, { fetch })).toBe(0);
     expect(fetch.mock.calls.length).toBe(callsAfterFill);
+  });
+
+  it("backfill covers top-up dates of the space at or after the floor", async () => {
+    const u = await mkSpaceUser();
+    const account = await mkAccount(u.spaceId, u.user.id);
+    await mkExpense(u.spaceId, u.user.id, { spentAt: "2024-11-01" });
+    await mkTopUp(u.spaceId, u.user.id, { accountId: account.id, occurredOn: "2024-11-01" });
+    await mkTopUp(u.spaceId, u.user.id, { accountId: account.id, occurredOn: "2024-11-04" });
+    await mkTopUp(u.spaceId, u.user.id, { accountId: account.id, occurredOn: "2002-12-31" });
+    const stranger = await mkSpaceUser();
+    const strangerAccount = await mkAccount(stranger.spaceId, stranger.user.id);
+    await mkTopUp(stranger.spaceId, stranger.user.id, {
+      accountId: strangerAccount.id,
+      occurredOn: "2024-11-05",
+    });
+
+    const fetch = stubFxSources({ ecbDates: ["2024-10-31", "2024-11-01", "2024-11-04"] });
+    expect(await backfillRates(u.spaceId, { fetch })).toBe(2);
+    expect(await rowsFor("2024-11-01")).toHaveLength(5);
+    expect(await rowsFor("2024-11-04")).toHaveLength(5);
+    expect(await rowsFor("2024-11-05")).toHaveLength(0);
+
+    await expectNeverTried("2002-12-31", { fetch });
+  });
+
+  it("backfill covers transfer days", async () => {
+    const u = await mkSpaceUser();
+    const from = await mkAccount(u.spaceId, u.user.id);
+    const to = await mkAccount(u.spaceId, u.user.id, { currency: "USD" });
+    await mkExpense(u.spaceId, u.user.id, { spentAt: "2024-11-01" });
+    for (const enteredOn of ["2024-11-01", "2024-11-04", "2002-12-31"]) {
+      await mkTransfer(u.spaceId, u.user.id, {
+        fromAccountId: from.id,
+        toAccountId: to.id,
+        enteredOn,
+      });
+    }
+    const stranger = await mkSpaceUser();
+    const strangerFrom = await mkAccount(stranger.spaceId, stranger.user.id);
+    const strangerTo = await mkAccount(stranger.spaceId, stranger.user.id);
+    await mkTransfer(stranger.spaceId, stranger.user.id, {
+      fromAccountId: strangerFrom.id,
+      toAccountId: strangerTo.id,
+      enteredOn: "2024-11-05",
+    });
+
+    const fetch = stubFxSources({ ecbDates: ["2024-10-31", "2024-11-01", "2024-11-04"] });
+    expect(await backfillRates(u.spaceId, { fetch })).toBe(2);
+    expect(await rowsFor("2024-11-01")).toHaveLength(5);
+    expect(await rowsFor("2024-11-04")).toHaveLength(5);
+    expect(await rowsFor("2024-11-05")).toHaveLength(0);
+    await expectNeverTried("2002-12-31", { fetch });
   });
 });
 

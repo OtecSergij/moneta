@@ -1,15 +1,15 @@
 import { z } from "zod";
 import { CURRENCY_CODES } from "@/lib/currency";
 import { parseMoney } from "@/lib/money";
-import { isFutureISO } from "@/lib/dates";
 import { EXPENSE_NOTE_MAX } from "@/lib/expense-constants";
-import type { ExpenseInput } from "@/repositories/expenses";
+import { entryDateField, refinePositiveAmount } from "@/lib/entry-form";
+import type { ExpenseInput, ExpensePatch } from "@/repositories/expenses";
 
 // Shared schema for the create (home) and edit (history modal) expense forms.
 // `amount` is free text parsed to minor units; the rest mirror the repo's
 // ExpenseInput. The "not in the future" check here uses the browser's own
-// today; the server allows one day of slack (see spentAtIsValid in
-// src/repositories/expenses.ts).
+// today; the server allows one day of slack (see isAllowedEntryDate in
+// src/lib/fx/provider.ts).
 //
 // Amount validation is currency-dependent (BTC parses to 8 fraction digits,
 // the rest to 2), so it can't live in a per-field `.refine` — those can't see
@@ -24,21 +24,10 @@ export const expenseFormSchema = z
       .trim()
       .min(1, "Добавьте описание")
       .max(EXPENSE_NOTE_MAX, `Не больше ${EXPENSE_NOTE_MAX} символов`),
-    spentAt: z.iso
-      .date("Укажите дату")
-      .refine((d) => !isFutureISO(d), "Дата не может быть в будущем"),
+    spentAt: entryDateField,
     accountId: z.uuid("Выберите счёт"),
   })
-  .superRefine((values, ctx) => {
-    const minor = parseMoney(values.amount, values.currency);
-    if (minor === null || minor <= 0) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Введите сумму больше нуля",
-        path: ["amount"],
-      });
-    }
-  });
+  .superRefine(refinePositiveAmount);
 export type ExpenseFormValues = z.infer<typeof expenseFormSchema>;
 
 // Build the action/repo input from validated form values (amounts are
@@ -52,4 +41,25 @@ export function toExpenseInput(values: ExpenseFormValues): ExpenseInput {
     spentAt: values.spentAt,
     accountId: values.accountId,
   };
+}
+
+// Only the fields that differ from `saved`, so a save keeps another member's
+// edit of the rest. The amount goes with its currency, and a new currency with
+// its account.
+export function expensePatch(
+  values: ExpenseFormValues,
+  saved: ExpenseInput,
+): ExpensePatch {
+  const input = toExpenseInput(values);
+  const currencyChanged = input.currency !== saved.currency;
+  const patch: ExpensePatch = {};
+  if (currencyChanged || input.amountMinor !== saved.amountMinor) {
+    patch.amountMinor = input.amountMinor;
+    patch.currency = input.currency;
+  }
+  if (currencyChanged || input.accountId !== saved.accountId) patch.accountId = input.accountId;
+  if (input.categoryId !== saved.categoryId) patch.categoryId = input.categoryId;
+  if (input.note !== saved.note) patch.note = input.note;
+  if (input.spentAt !== saved.spentAt) patch.spentAt = input.spentAt;
+  return patch;
 }

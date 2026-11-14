@@ -2,19 +2,20 @@
 
 import type { ReactNode } from "react";
 import { Plus } from "lucide-react";
-import type { Category } from "@/repositories/categories";
-import { Chip } from "@/components/kit/chip";
+import type { ExpenseCategory } from "@/repositories/categories";
+import { Chip, ChipGroup } from "@/components/kit/chip";
 import { useLongPress } from "@/lib/hooks/use-long-press";
-import { cn } from "@/lib/utils";
 
 function EditableChip({
   category,
   pressed,
+  disabled,
   onSelect,
   onEdit,
 }: {
-  category: Category;
+  category: ExpenseCategory;
   pressed: boolean;
+  disabled: boolean;
   onSelect: () => void;
   onEdit: () => void;
 }) {
@@ -23,6 +24,7 @@ function EditableChip({
     <Chip
       pressed={pressed}
       dotColor={category.color}
+      disabled={disabled}
       onClick={onSelect}
       {...longPress}
     >
@@ -36,6 +38,7 @@ type EditProps =
       editable: true;
       onEdit: (id: string) => void;
       newOpen: boolean;
+      newDisabled: boolean;
       onNewToggle: () => void;
     }
   | { editable?: false };
@@ -45,18 +48,19 @@ export function CategoryChips({
   value,
   onChange,
   error,
+  disabled = false,
   children,
   ...edit
 }: {
-  categories: Category[];
+  categories: ExpenseCategory[];
   value: string;
   onChange: (id: string) => void;
   error?: string;
+  disabled?: boolean;
   children?: ReactNode;
 } & EditProps) {
   return (
-    <fieldset className="m-0 min-w-0 border-0 p-0">
-      <legend className="sr-only">Категория</legend>
+    <ChipGroup legend="Категория" error={error}>
       <div className="flex flex-wrap gap-2">
         {categories.map((c) =>
           edit.editable ? (
@@ -64,6 +68,7 @@ export function CategoryChips({
               key={c.id}
               category={c}
               pressed={c.id === value}
+              disabled={disabled}
               onSelect={() => onChange(c.id)}
               onEdit={() => edit.onEdit(c.id)}
             />
@@ -72,6 +77,7 @@ export function CategoryChips({
               key={c.id}
               pressed={c.id === value}
               dotColor={c.color}
+              disabled={disabled}
               onClick={() => onChange(c.id)}
             >
               {c.name}
@@ -79,29 +85,18 @@ export function CategoryChips({
           ),
         )}
         {edit.editable ? (
-          <button
-            type="button"
+          <Chip
+            variant="dashed"
+            icon={<Plus className="size-4" strokeWidth={1.75} />}
             aria-expanded={edit.newOpen}
+            disabled={disabled || edit.newDisabled}
             onClick={edit.onNewToggle}
-            className={cn(
-              "inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-chip border border-dashed bg-card pr-3.5 pl-2.5 text-sm font-medium hover-white",
-              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
-              edit.newOpen
-                ? "border-primary text-primary-ink"
-                : "border-bar-past text-ink",
-            )}
           >
-            <Plus className="size-4" strokeWidth={1.75} aria-hidden />
             Новая
-          </button>
+          </Chip>
         ) : null}
       </div>
       {children}
-      {error ? (
-        <p className="mt-1.5 text-[13px] text-error" role="alert">
-          {error}
-        </p>
-      ) : null}
-    </fieldset>
+    </ChipGroup>
   );
 }

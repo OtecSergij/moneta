@@ -1,25 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { SpaceId } from "@/lib/space-id";
-import { mkAccount, mkSpaceUser, type SpaceUser } from "@/test/factories";
+import { mkAccount, mkExpense, mkSpaceUser, type SpaceUser } from "@/test/factories";
+import { session } from "@/test/session-mock";
 
-const session = vi.hoisted(() => ({
-  current: null as { userId: string; spaceId: SpaceId } | null,
-}));
-
-vi.mock("@/lib/dal", () => ({
-  requireSpace: async () => {
-    if (session.current === null) throw new Error("NEXT_REDIRECT;/login");
-    return {
-      user: { id: session.current.userId },
-      spaceId: session.current.spaceId,
-      role: "owner",
-    };
-  },
-}));
+vi.mock("@/lib/dal", () => import("@/test/session-mock"));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/navigation", () => ({
+  RedirectType: { push: "push", replace: "replace" },
+  redirect: vi.fn((url: string) => {
+    throw new Error(`NEXT_REDIRECT;${url}`);
+  }),
+}));
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { getAccount, listAccounts } from "@/repositories/accounts";
 import {
   createAccountAction,
@@ -28,7 +22,7 @@ import {
 } from "@/lib/actions/accounts";
 
 const DUPLICATE = { ok: false, error: "Счёт с таким названием уже есть" };
-const NOT_FOUND = { ok: false, error: "Счёт не найден" };
+const NOT_FOUND = { ok: false, error: "Счёт не найден", notFound: true };
 const INVALID = { ok: false, error: "Проверьте поля формы" };
 
 let me: SpaceUser;
@@ -111,7 +105,7 @@ describe("accounts actions", () => {
 
     const result = await updateAccountAction(account.id, { color: "#EC4899" });
 
-    expect(result.ok).toBe(true);
+    expect(result).toEqual({ ok: true, data: null });
     const stored = await getAccount(me.spaceId, account.id);
     expect(stored).toMatchObject({
       name: account.name,
@@ -131,10 +125,33 @@ describe("accounts actions", () => {
       balanceMinor: 124050,
     });
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.data).toMatchObject({ spaceId: me.spaceId, color: "#EC4899" });
-    expect((await getAccount(me.spaceId, result.data.id))?.color).toBe("#EC4899");
+    expect(result).toEqual({ ok: true, data: null });
+    expect(await listAccounts(me.spaceId)).toEqual([
+      expect.objectContaining({ name: "Карта USD", color: "#EC4899", balanceMinor: 124050 }),
+    ]);
     expect(revalidatePath).toHaveBeenCalledWith("/accounts");
+  });
+
+  it("deleteAccountAction refuses an account with expenses with a readable error and leaves it", async () => {
+    const account = await mkAccount(me.spaceId, me.user.id);
+    await mkExpense(me.spaceId, me.user.id, { accountId: account.id });
+
+    expect(await deleteAccountAction(account.id)).toEqual({
+      ok: false,
+      error: "Сначала удалите или перенесите траты этого счёта",
+    });
+    expect(await getAccount(me.spaceId, account.id)).not.toBeNull();
+    expect(revalidatePath).toHaveBeenCalledWith("/accounts");
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("deleteAccountAction deletes an empty account, revalidates /accounts and the account page, and redirects to /accounts", async () => {
+    const account = await mkAccount(me.spaceId, me.user.id);
+
+    await expect(deleteAccountAction(account.id)).rejects.toThrow("NEXT_REDIRECT;/accounts");
+    expect(redirect).toHaveBeenCalledWith("/accounts", "replace");
+    expect(await getAccount(me.spaceId, account.id)).toBeNull();
+    expect(revalidatePath).toHaveBeenCalledWith("/accounts");
+    expect(revalidatePath).toHaveBeenCalledWith("/accounts/[id]", "page");
   });
 });

@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { buttonClass } from "@/components/kit/button";
+import { AUTH_SUBTITLE_CLASS, AUTH_TITLE_CLASS } from "@/components/ui/auth-card";
 
 const TONES = {
   accent: "bg-primary-soft text-primary-ink",
@@ -10,14 +12,12 @@ const TONES = {
 } as const;
 
 export function StatusCard({
-  as: Root = "div",
   icon: Icon,
   tone = "accent",
   title,
   children,
   action,
 }: {
-  as?: "div" | "main";
   icon?: LucideIcon;
   tone?: keyof typeof TONES;
   title: string;
@@ -25,7 +25,7 @@ export function StatusCard({
   action?: { href: string; label: string };
 }) {
   return (
-    <Root className="mt-24 flex flex-col items-center gap-3.5 rounded-sheet bg-card px-6 py-8 text-center">
+    <div className="mt-24 flex flex-col items-center gap-3.5 rounded-sheet bg-card px-6 py-8 text-center">
       {Icon ? (
         <span
           aria-hidden
@@ -37,25 +37,19 @@ export function StatusCard({
           <Icon className="size-[30px]" strokeWidth={1.75} />
         </span>
       ) : null}
-      <h1
-        className={cn(
-          "text-2xl leading-[30px] font-bold tracking-[-0.02em]",
-          Icon && "mt-1",
-        )}
-      >
-        {title}
-      </h1>
-      {children ? (
-        <p className="text-[15px] leading-[22px] text-ink-2">{children}</p>
-      ) : null}
+      <h1 className={cn(AUTH_TITLE_CLASS, Icon && "mt-1")}>{title}</h1>
+      {children ? <p className={AUTH_SUBTITLE_CLASS}>{children}</p> : null}
       {action ? (
         <Link
           href={action.href}
-          className="mt-2.5 flex h-13 items-center justify-center self-stretch rounded-field bg-page text-base font-semibold text-ink hover-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          className={cn(
+            buttonClass({ variant: "secondary", size: "lg" }),
+            "mt-2.5 self-stretch",
+          )}
         >
           {action.label}
         </Link>
       ) : null}
-    </Root>
+    </div>
   );
 }

@@ -1,9 +1,8 @@
 "use client";
 
 import type { MouseEvent } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { BackLink } from "@/components/kit/detail-header";
 
 function previousEntryInApp() {
   const { navigation } = window as Window & { navigation?: { canGoBack: boolean } };
@@ -23,13 +22,8 @@ export function BackButton() {
   }
 
   return (
-    <Link
-      href="/"
-      onClick={onClick}
-      className="inline-flex h-11 items-center gap-0.5 rounded-control pr-2.5 pl-1 text-base font-medium text-primary-ink hover-ghost focus-visible:outline-2 focus-visible:outline-primary"
-    >
-      <ChevronLeft className="size-[22px]" strokeWidth={1.75} aria-hidden />
+    <BackLink href="/" onClick={onClick}>
       Назад
-    </Link>
+    </BackLink>
   );
 }

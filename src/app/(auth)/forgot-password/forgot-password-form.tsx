@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { MailCheck } from "lucide-react";
@@ -11,6 +10,7 @@ import {
 } from "@/lib/auth-schemas";
 import { authClient } from "@/lib/auth-client";
 import { AuthCard } from "@/components/ui/auth-card";
+import { AuthLink } from "@/components/ui/auth-link";
 import { StatusCard } from "@/components/ui/status-card";
 import { Button } from "@/components/kit/button";
 import { TextField } from "@/components/kit/text-field";
@@ -62,6 +62,7 @@ export function ForgotPasswordForm() {
           placeholder="you@example.com"
           error={errors.email?.message}
           {...register("email")}
+          disabled={isSubmitting}
         />
 
         <Button type="submit" loading={isSubmitting} className="mt-1.5">
@@ -70,12 +71,9 @@ export function ForgotPasswordForm() {
       </form>
 
       <p className="text-center text-[15px]">
-        <Link
-          href="/login"
-          className="font-medium text-primary-ink hover:text-primary"
-        >
+        <AuthLink href="/login" disabled={isSubmitting}>
           Вернуться ко входу
-        </Link>
+        </AuthLink>
       </p>
     </AuthCard>
   );

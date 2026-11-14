@@ -4,6 +4,7 @@ import { hasGoogleOAuth } from "@/env";
 import { getSession } from "@/lib/dal";
 import { InviteToken, decideInvitePage } from "@/lib/invites";
 import { findActiveInviteByToken } from "@/repositories/invites";
+import { AuthShell } from "@/components/layout/auth-shell";
 import { InviteForm } from "./invite-form";
 import { InviteInvalid } from "./invite-invalid";
 
@@ -37,22 +38,17 @@ export default async function InvitePage({
   if (decision === "redirect") redirect("/");
 
   return (
-    <div className="flex-1 bg-page">
-      <div className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col gap-5 px-4 pt-5 pb-8 text-ink">
-        <span className="px-1 text-[22px] leading-[normal] font-bold tracking-[-0.03em]">
-          moneta
-        </span>
-        {decision === "form" && invite ? (
-          <InviteForm
-            token={token}
-            ownerName={invite.ownerName}
-            hasGoogle={hasGoogleOAuth}
-            error={Boolean(query.error)}
-          />
-        ) : (
-          <InviteInvalid />
-        )}
-      </div>
-    </div>
+    <AuthShell>
+      {decision === "form" && invite ? (
+        <InviteForm
+          token={token}
+          ownerName={invite.ownerName}
+          hasGoogle={hasGoogleOAuth}
+          googleError={typeof query.error === "string" ? query.error : undefined}
+        />
+      ) : (
+        <InviteInvalid />
+      )}
+    </AuthShell>
   );
 }

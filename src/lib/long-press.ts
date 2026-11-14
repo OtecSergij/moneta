@@ -3,14 +3,14 @@ export const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
 export const CLICK_SWALLOW_WINDOW_MS = 400;
 
 export type LongPressController = {
-  pointerDown(x: number, y: number, isPrimary?: boolean): void;
+  pointerDown(x: number, y: number, eligible?: boolean): void;
   pointerMove(x: number, y: number): void;
   pointerUp(): void;
   pointerLeave(): void;
   pointerCancel(): void;
   consumeClick(): boolean;
   keyDown(): void;
-  contextMenu(): void;
+  contextMenu(eligible?: boolean): void;
   dispose(): void;
 };
 
@@ -55,11 +55,11 @@ export function createLongPress(onLongPress: () => void): LongPressController {
   }
 
   return {
-    pointerDown(x, y, isPrimary = true) {
+    pointerDown(x, y, eligible = true) {
       cancel();
       disarm();
       fired = false;
-      if (!isPrimary) return;
+      if (!eligible) return;
       startX = x;
       startY = y;
       timer = setTimeout(fire, LONG_PRESS_DELAY_MS);
@@ -79,9 +79,9 @@ export function createLongPress(onLongPress: () => void): LongPressController {
       return swallow;
     },
     keyDown: disarm,
-    contextMenu() {
+    contextMenu(eligible = true) {
       cancel();
-      if (!fired) onLongPress();
+      if (eligible && !fired) onLongPress();
     },
     dispose() {
       cancel();

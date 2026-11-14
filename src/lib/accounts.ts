@@ -1,10 +1,11 @@
 import { z } from "zod";
-import { CURRENCY_CODES } from "@/lib/currency";
+import { CURRENCY_CODES, type CurrencyCode } from "@/lib/currency";
+import { minorToInput, parseMoney } from "@/lib/money";
 import { PALETTE_COLORS } from "@/lib/palette";
 
 export const ACCOUNT_NAME_MAX = 40;
 
-export const AccountName = z.string().trim().min(1).max(ACCOUNT_NAME_MAX);
+const AccountName = z.string().trim().min(1).max(ACCOUNT_NAME_MAX);
 
 export const AccountInput = z.object({
   name: AccountName,
@@ -29,3 +30,26 @@ export const AccountPatch = z
     (p) => p.name !== undefined || p.color !== undefined || p.balanceMinor !== undefined,
   );
 export type AccountPatch = z.infer<typeof AccountPatch>;
+
+type BalanceEntry =
+  | { kind: "invalid" }
+  | { kind: "unchanged" }
+  | { kind: "patch"; patch: { balanceMinor: number; loadedBalanceMinor: number } };
+
+export function balanceEntry(
+  input: string,
+  loadedBalanceMinor: number,
+  currency: CurrencyCode,
+): BalanceEntry {
+  const balanceMinor =
+    input === minorToInput(loadedBalanceMinor, currency)
+      ? loadedBalanceMinor
+      : parseMoney(input, currency);
+  if (balanceMinor === null) return { kind: "invalid" };
+  if (balanceMinor === loadedBalanceMinor) return { kind: "unchanged" };
+  return { kind: "patch", patch: { balanceMinor, loadedBalanceMinor } };
+}
+
+export function canDeleteAccount(account: { expenseCount: number }): boolean {
+  return account.expenseCount === 0;
+}

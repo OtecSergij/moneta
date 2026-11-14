@@ -1,4 +1,4 @@
-export type PluralForms = readonly [one: string, few: string, many: string];
+type PluralForms = readonly [one: string, few: string, many: string];
 
 export const EXPENSE_FORMS: PluralForms = ["трата", "траты", "трат"];
 

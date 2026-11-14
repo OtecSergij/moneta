@@ -26,6 +26,7 @@ describe("accounts repository — isolation", () => {
     const a = await mkSpaceUser();
     const b = await mkSpaceUser();
     const account = await mkAccount(a.spaceId, a.user.id, { anchorAmountMinor: 500 });
+    await mkExpense(a.spaceId, a.user.id, { accountId: account.id });
     const before = await row(account.id);
 
     expect(await listAccounts(b.spaceId)).toEqual([]);
@@ -37,7 +38,10 @@ describe("accounts repository — isolation", () => {
         loadedBalanceMinor: 500,
       }),
     ).toBeNull();
-    expect(await deleteAccount(b.spaceId, account.id)).toEqual({ ok: false });
+    expect(await deleteAccount(b.spaceId, account.id)).toEqual({
+      ok: false,
+      reason: "not_found",
+    });
 
     expect(await row(account.id)).toEqual(before);
     expect((await listAccounts(a.spaceId)).map((x) => x.id)).toEqual([account.id]);
@@ -201,6 +205,61 @@ describe("accounts repository — anchor", () => {
       accountId: account.id,
       spaceId: a.spaceId,
     });
+  });
+});
+
+describe("accounts repository — delete", () => {
+  it("deleteAccount reports has_expenses for an account with expenses", async () => {
+    const a = await mkSpaceUser();
+    const account = await mkAccount(a.spaceId, a.user.id);
+    await mkExpense(a.spaceId, a.user.id, { accountId: account.id });
+
+    expect(await deleteAccount(a.spaceId, account.id)).toEqual({
+      ok: false,
+      reason: "has_expenses",
+    });
+    expect(await getAccount(a.spaceId, account.id)).not.toBeNull();
+  });
+
+  it("a raw DELETE of an account with expenses fails with 23001", async () => {
+    const a = await mkSpaceUser();
+    const account = await mkAccount(a.spaceId, a.user.id);
+    await mkExpense(a.spaceId, a.user.id, { accountId: account.id });
+
+    await expect(
+      db.delete(accounts).where(eq(accounts.id, account.id)),
+    ).rejects.toMatchObject({ cause: { code: "23001" } });
+    expect(await row(account.id)).toBeTruthy();
+  });
+
+  it("an expense inserted between the check and the delete → has_expenses", async () => {
+    const owner = await mkSpaceUser();
+    const member = await mkMember(owner.spaceId);
+    const account = await mkAccount(owner.spaceId, owner.user.id);
+
+    const realDelete = db.delete.bind(db);
+    const spy = vi.spyOn(db, "delete").mockImplementationOnce(((
+      table: Parameters<typeof db.delete>[0],
+    ) => {
+      const builder = realDelete(table);
+      const realReturning = builder.returning.bind(builder);
+      return Object.assign(builder, {
+        returning: (fields: Parameters<typeof realReturning>[0]) =>
+          mkExpense(owner.spaceId, member.user.id, { accountId: account.id }).then(() =>
+            realReturning(fields!),
+          ),
+      });
+    }) as unknown as typeof db.delete);
+
+    try {
+      expect(await deleteAccount(owner.spaceId, account.id)).toEqual({
+        ok: false,
+        reason: "has_expenses",
+      });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await getAccount(owner.spaceId, account.id)).not.toBeNull();
   });
 });
 

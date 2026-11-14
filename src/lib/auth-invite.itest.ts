@@ -1,12 +1,17 @@
-import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { isAPIError } from "better-auth/api";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
-import { pendingSpaceJoins, spaceInvites, user } from "@/db/schema";
+import { pendingSpaceJoins, spaceInvites } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { claimInvite, findActiveInviteByToken } from "@/repositories/invites";
 import { resolveSpace } from "@/repositories/spaces";
+import {
+  finishGoogleSignIn,
+  newEmail,
+  signUpWith,
+  startGoogleSignIn,
+  userByEmail,
+} from "@/test/auth-api";
 import { mkInvite, mkSpaceUser, mkUser } from "@/test/factories";
 
 vi.hoisted(() => {
@@ -24,37 +29,8 @@ const MINUTE = 60 * 1000;
 const DAY = 24 * 60 * MINUTE;
 const UNKNOWN_TOKEN = "AAAAAAAAAAAAAAAAAAAAAA";
 
-function newEmail(): string {
-  return `${randomUUID()}@test.local`;
-}
-
-// A before-hook APIError is thrown even with asResponse; the HTTP router turns
-// it into a response with the same status and body.
 async function signUp(email: string, inviteToken: unknown) {
   return signUpWith(email, { inviteToken });
-}
-
-async function signUpWith(email: string, extra: Record<string, unknown>) {
-  try {
-    const res = await auth.api.signUpEmail({
-      body: {
-        email,
-        password: "correct-horse-battery",
-        name: email.split("@")[0],
-        ...extra,
-      } as { email: string; password: string; name: string },
-      asResponse: true,
-    });
-    return { status: res.status, body: await res.json() };
-  } catch (err) {
-    if (!isAPIError(err)) throw err;
-    return { status: err.statusCode, body: err.body };
-  }
-}
-
-async function userByEmail(email: string) {
-  const [row] = await db.select().from(user).where(eq(user.email, email));
-  return row;
 }
 
 async function inviteRow(token: string) {
@@ -70,53 +46,6 @@ async function pendingFor(userId: string) {
     .select()
     .from(pendingSpaceJoins)
     .where(eq(pendingSpaceJoins.userId, userId));
-}
-
-// Real Google flow: sign-in stores the OAuth state and the callback reads it
-// back; only the token endpoint is faked.
-async function startGoogleSignIn(additionalData?: Record<string, unknown>) {
-  const { headers, response } = await auth.api.signInSocial({
-    body: { provider: "google", callbackURL: "/", additionalData },
-    returnHeaders: true,
-  });
-  return {
-    state: new URL(response.url!).searchParams.get("state")!,
-    cookie: headers
-      .getSetCookie()
-      .map((c) => c.split(";")[0])
-      .join("; "),
-  };
-}
-
-function fakeIdToken(claims: Record<string, unknown>): string {
-  const part = (value: object) =>
-    Buffer.from(JSON.stringify(value)).toString("base64url");
-  return `${part({ alg: "none" })}.${part(claims)}.`;
-}
-
-async function finishGoogleSignIn(
-  started: { state: string; cookie: string },
-  profile: { email: string; name: string },
-) {
-  vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
-    Response.json({
-      access_token: "access-token",
-      token_type: "Bearer",
-      expires_in: 3600,
-      id_token: fakeIdToken({
-        sub: randomUUID(),
-        email_verified: true,
-        ...profile,
-      }),
-    }),
-  );
-  const res = await auth.api.callbackOAuth({
-    params: { id: "google" },
-    query: { code: "code", state: started.state },
-    headers: new Headers({ cookie: started.cookie }),
-    asResponse: true,
-  });
-  return res.headers.get("location") ?? "";
 }
 
 afterEach(() => {
@@ -278,6 +207,17 @@ describe("display name length", () => {
     const fits = newEmail();
     expect((await signUpWith(fits, { name: "я".repeat(60) })).status).toBe(200);
     expect((await userByEmail(fits))?.name).toBe("я".repeat(60));
+  });
+
+  it("counts a sign-up name in code points: 60 emoji fit, 61 do not", async () => {
+    const tooLong = newEmail();
+    const res = await signUpWith(tooLong, { name: "😀".repeat(61) });
+    expect(res.status).toBe(400);
+    expect(await userByEmail(tooLong)).toBeUndefined();
+
+    const fits = newEmail();
+    expect((await signUpWith(fits, { name: "😀".repeat(60) })).status).toBe(200);
+    expect((await userByEmail(fits))?.name).toBe("😀".repeat(60));
   });
 
   it("trims a long Google profile name by code points, keeping an emoji at the boundary whole", async () => {

@@ -5,16 +5,18 @@ import { subDays } from "date-fns";
 import { Calendar } from "lucide-react";
 import { formatChipDate, toISODate, todayISO } from "@/lib/dates";
 import { useMounted } from "@/lib/hooks/use-mounted";
-import { Chip } from "@/components/kit/chip";
+import { Chip, ChipGroup } from "@/components/kit/chip";
 
 export function DateChips({
   value,
   onChange,
   error,
+  disabled = false,
 }: {
   value: string;
   onChange: (iso: string) => void;
   error?: string;
+  disabled?: boolean;
 }) {
   const pickerRef = useRef<HTMLInputElement | null>(null);
   // "Today" is the user's local date; the server clock may sit in another
@@ -38,18 +40,26 @@ export function DateChips({
   }
 
   return (
-    <fieldset className="relative m-0 min-w-0 border-0 p-0">
-      <legend className="sr-only">Дата</legend>
+    <ChipGroup legend="Дата" error={error} className="relative">
       <div className="flex flex-wrap items-center gap-2">
-        <Chip pressed={mounted && value === today} onClick={() => onChange(today)}>
+        <Chip
+          pressed={mounted && value === today}
+          disabled={disabled}
+          onClick={() => onChange(today)}
+        >
           Сегодня
         </Chip>
-        <Chip pressed={mounted && value === yesterday} onClick={() => onChange(yesterday)}>
+        <Chip
+          pressed={mounted && value === yesterday}
+          disabled={disabled}
+          onClick={() => onChange(yesterday)}
+        >
           Вчера
         </Chip>
         <Chip
           pressed={custom}
           icon={<Calendar className="size-4" strokeWidth={1.75} />}
+          disabled={disabled}
           onClick={openPicker}
         >
           {custom ? formatChipDate(value) : "Другая"}
@@ -60,17 +70,13 @@ export function DateChips({
         type="date"
         tabIndex={-1}
         aria-hidden
+        disabled={disabled}
         value={value}
         onChange={(e) => {
           if (e.target.value) onChange(e.target.value);
         }}
         className="pointer-events-none absolute bottom-0 left-0 size-px opacity-0"
       />
-      {error ? (
-        <p className="mt-1.5 text-[13px] text-error" role="alert">
-          {error}
-        </p>
-      ) : null}
-    </fieldset>
+    </ChipGroup>
   );
 }

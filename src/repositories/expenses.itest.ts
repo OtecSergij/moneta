@@ -1,12 +1,16 @@
+import { addDays } from "date-fns";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { expenses } from "@/db/schema";
 import { CURRENCY_CODES, currencyMeta } from "@/lib/currency";
+import { todayISO } from "@/lib/dates";
+import { expensePatch, type ExpenseFormValues } from "@/lib/expense-form";
 import { PALETTE_COLORS } from "@/lib/palette";
 import { createCategory } from "@/repositories/categories";
 import {
   ExpenseInput,
+  ExpensePatch,
   createExpense,
   deleteExpense,
   getExpense,
@@ -25,7 +29,8 @@ import {
   mkSpaceUser,
 } from "@/test/factories";
 
-const today = new Date().toISOString().slice(0, 10);
+const today = todayISO();
+const farFuture = todayISO(addDays(new Date(), 30));
 
 async function rubAccount(owner: SpaceUser): Promise<string> {
   return (await mkAccount(owner.spaceId, owner.user.id)).id;
@@ -173,7 +178,7 @@ describe("expenses repository — isolation", () => {
     });
 
     // RUB shown in RUB needs no fx_rates at all (beforeEach clears them), and
-    // must never be marked approximate (AC-16).
+    // must never be marked approximate.
     const aSummary = await summary(a.spaceId, "RUB", { from: today, to: today });
     expect(aSummary).toMatchObject({ totalMinor: 42000, unconverted: 0 });
     expect(aSummary.byCategory).toHaveLength(1);
@@ -205,6 +210,29 @@ describe("expenses repository — isolation", () => {
 
     const updated = await updateExpense(u.spaceId, exp!.id, { note: "ужин" });
     expect(updated!.note).toBe("ужин");
+  });
+});
+
+describe("listExpenses — account filter", () => {
+  it("listExpenses filters by accountId", async () => {
+    const u = await mkSpaceUser();
+    const cash = await mkAccount(u.spaceId, u.user.id);
+    const card = await mkAccount(u.spaceId, u.user.id);
+    const onCash = await mkExpense(u.spaceId, u.user.id, { accountId: cash.id });
+    await mkExpense(u.spaceId, u.user.id, { accountId: card.id });
+
+    const rows = await listExpenses(u.spaceId, "RUB", { accountId: cash.id });
+    expect(rows.map((e) => e.id)).toEqual([onCash.id]);
+  });
+
+  it("listExpenses with another space's accountId returns nothing", async () => {
+    const a = await mkSpaceUser();
+    const b = await mkSpaceUser();
+    const foreign = await mkAccount(a.spaceId, a.user.id);
+    await mkExpense(a.spaceId, a.user.id, { accountId: foreign.id });
+    await mkExpense(b.spaceId, b.user.id);
+
+    expect(await listExpenses(b.spaceId, "RUB", { accountId: foreign.id })).toEqual([]);
   });
 });
 
@@ -282,8 +310,7 @@ describe("ExpenseInput.note", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Multi-currency acceptance criteria (plan Step 8,
-// .omc/plans/multi-currency-expenses.md).
+// Multi-currency behaviour.
 //
 // fx_rates is a GLOBAL table (no user_id, see db/schema/fx-rates.ts) shared by
 // every itest in the run; the beforeEach at the top of this file clears it, so
@@ -291,7 +318,7 @@ describe("ExpenseInput.note", () => {
 // nearest-earlier lookup can't reach into another test's data.
 // ---------------------------------------------------------------------------
 
-describe("summary — rate selection uses the row's own date (AC-9)", () => {
+describe("summary — rate selection uses the row's own date", () => {
   it("converts using the rate on file for the row's own spentAt, not a later rate for the same currency", async () => {
     const u = await mkSpaceUser();
     const earlyDate = "2025-04-10";
@@ -338,7 +365,7 @@ describe("summary — rate selection uses the row's own date (AC-9)", () => {
   });
 });
 
-describe("BTC amounts beyond INTEGER range (AC-17)", () => {
+describe("BTC amounts beyond INTEGER range", () => {
   it("stores, reads back, and sums 25 BTC exactly without overflow", async () => {
     const u = await mkSpaceUser();
     const date = "2025-10-20";
@@ -360,7 +387,7 @@ describe("BTC amounts beyond INTEGER range (AC-17)", () => {
   });
 });
 
-describe("read paths never touch the network (AC-23)", () => {
+describe("read paths never touch the network", () => {
   it("summary() and listExpenses() do not throw when fetch is broken, over mixed-currency data", async () => {
     const u = await mkSpaceUser();
     const date = "2026-01-25";
@@ -395,7 +422,7 @@ describe("read paths never touch the network (AC-23)", () => {
   });
 });
 
-describe("summary — category totals reconcile with the period total (AC-29)", () => {
+describe("summary — category totals reconcile with the period total", () => {
   it("keeps |period total - sum of category totals| within ceil(N/2) display units, across all five display currencies", async () => {
     const u = await mkSpaceUser();
     const date = "2026-05-01";
@@ -469,21 +496,17 @@ describe("createExpense — entry date bound", () => {
       note: "из будущего",
     };
 
-    const farFuture = new Date();
-    farFuture.setUTCDate(farFuture.getUTCDate() + 30);
     const rejected = await createExpense(u.spaceId, u.user.id, {
       ...base,
-      spentAt: farFuture.toISOString().slice(0, 10),
+      spentAt: farFuture,
     });
     expect(rejected).toBeNull();
 
     // One day ahead is allowed: a client east of the server legitimately
     // reports tomorrow's date as its today.
-    const tomorrow = new Date();
-    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
     const accepted = await createExpense(u.spaceId, u.user.id, {
       ...base,
-      spentAt: tomorrow.toISOString().slice(0, 10),
+      spentAt: todayISO(addDays(new Date(), 1)),
     });
     expect(accepted).not.toBeNull();
   });
@@ -492,10 +515,8 @@ describe("createExpense — entry date bound", () => {
     const u = await mkSpaceUser();
     const created = await mkExpense(u.spaceId, u.user.id, { spentAt: today });
 
-    const farFuture = new Date();
-    farFuture.setUTCDate(farFuture.getUTCDate() + 30);
     const rejected = await updateExpense(u.spaceId, created.id, {
-      spentAt: farFuture.toISOString().slice(0, 10),
+      spentAt: farFuture,
     });
     expect(rejected).toBeNull();
 
@@ -589,5 +610,75 @@ describe("expenses repository — shared space", () => {
 
     const newcomer = await mkMember(owner.spaceId);
     expect(await lastUsedIds(newcomer.spaceId, newcomer.user.id)).toBeNull();
+  });
+});
+
+describe("expenses repository — two members edit one card", () => {
+  async function openedByBoth() {
+    const owner = await mkSpaceUser();
+    const member = await mkMember(owner.spaceId);
+    const exp = await mkExpense(owner.spaceId, owner.user.id, {
+      amountMinor: 50000,
+      note: "Обед",
+    });
+    const opened: ExpenseFormValues = {
+      amount: "500",
+      currency: "RUB",
+      accountId: exp.accountId,
+      categoryId: exp.categoryId,
+      note: "Обед",
+      spentAt: exp.spentAt,
+    };
+    return { owner, member, exp, opened };
+  }
+
+  it("one changes the amount, the other the note: both changes survive", async () => {
+    const { owner, member, exp, opened } = await openedByBoth();
+
+    const amountSaved = await updateExpense(
+      owner.spaceId,
+      exp.id,
+      expensePatch({ ...opened, amount: "700" }, exp),
+    );
+    expect(amountSaved).toMatchObject({ amountMinor: 70000, note: "Обед" });
+    await updateExpense(member.spaceId, exp.id, expensePatch({ ...opened, note: "Ужин" }, exp));
+
+    expect(await getExpense(owner.spaceId, exp.id)).toMatchObject({
+      amountMinor: 70000,
+      currency: "RUB",
+      note: "Ужин",
+    });
+  });
+
+  it("an amount saved over the other's move to a USD account is rejected, not stored as dollars", async () => {
+    const { owner, member, exp, opened } = await openedByBoth();
+    const usd = await mkAccount(owner.spaceId, owner.user.id, { currency: "USD" });
+
+    await updateExpense(
+      owner.spaceId,
+      exp.id,
+      expensePatch({ ...opened, accountId: usd.id, currency: "USD" }, exp),
+    );
+    expect(
+      await updateExpense(member.spaceId, exp.id, expensePatch({ ...opened, amount: "700" }, exp)),
+    ).toBeNull();
+
+    expect(await getExpense(owner.spaceId, exp.id)).toMatchObject({
+      accountId: usd.id,
+      amountMinor: 50000,
+      currency: "USD",
+    });
+  });
+});
+
+describe("updateExpense — a patch of only undefined keys", () => {
+  it("changes nothing and returns the row", async () => {
+    const u = await mkSpaceUser();
+    const exp = await mkExpense(u.spaceId, u.user.id, { note: "обед" });
+    const patch = ExpensePatch.parse({ amountMinor: undefined, note: undefined });
+    expect(Object.keys(patch)).toEqual(["amountMinor", "note"]);
+
+    expect(await updateExpense(u.spaceId, exp.id, patch)).toEqual(exp);
+    expect(await getExpense(u.spaceId, exp.id)).toEqual(exp);
   });
 });

@@ -39,8 +39,15 @@ export const PALETTE_COLOR_NAMES: Record<PaletteColor, string> = {
 
 export const DEFAULT_PALETTE_COLOR: PaletteColor = "#3B82F6";
 
-export function isPaletteColor(value: string): value is PaletteColor {
+function isPaletteColor(value: string): value is PaletteColor {
   return (PALETTE_COLORS as readonly string[]).includes(value);
+}
+
+export function toPaletteColor(
+  color: string,
+  fallback: PaletteColor = DEFAULT_PALETTE_COLOR,
+): PaletteColor {
+  return isPaletteColor(color) ? color : fallback;
 }
 
 export function firstFreeColor(usedColors: string[]): PaletteColor {

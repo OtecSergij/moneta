@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import type { Category } from "@/repositories/categories";
-import type { ExpenseWithConversion, SummaryRow } from "@/repositories/expenses";
+import type { ExpenseCategory } from "@/repositories/categories";
+import type { SummaryRow } from "@/repositories/expenses";
+import type { ExpenseEntry } from "@/lib/expense-entry";
 import type { CurrencyCode } from "@/lib/currency";
 import { EXPENSE_FORMS, formatCount } from "@/lib/plural";
 import { TotalMoney } from "@/components/ui/total-money";
 import { Segment } from "@/components/kit/segment";
+import { SummaryCard } from "@/components/kit/summary-card";
 import { SummaryBars } from "@/components/history/summary-bars";
 import { HistoryList, type DayGroup } from "@/components/history/history-list";
 import { useExpenseEditor } from "@/components/expenses/use-expense-editor";
@@ -34,22 +36,21 @@ export function PeriodTabs({
   unconverted: number;
   count: number;
   byCategory: SummaryRow[];
-  expensesByCategory: Record<string, ExpenseWithConversion[]>;
+  expensesByCategory: Record<string, ExpenseEntry[]>;
   days: DayGroup[];
-  categories: Category[];
+  categories: ExpenseCategory[];
   accounts: ExpenseAccount[];
   displayCurrency: CurrencyCode;
 }) {
   const [tab, setTab] = useState<Tab>("categories");
-  const { openEditor, editor } = useExpenseEditor(categories, accounts);
+  const { openEditor, editor } = useExpenseEditor(categories, accounts, {
+    isListed: (id) =>
+      Object.values(expensesByCategory).some((rows) => rows.some((e) => e.id === id)),
+  });
 
   return (
-    <div className="flex flex-col pb-6">
-      <section
-        aria-label="Итог за период"
-        className="mx-4 mt-3 flex flex-col gap-1 rounded-card bg-card p-5"
-      >
-        <span className="text-sm text-ink-2">Итого</span>
+    <div className="flex flex-col">
+      <SummaryCard ariaLabel="Итог за период" label="Итого" className="mx-4 mt-3">
         <TotalMoney
           minor={totalMinor}
           currency={displayCurrency}
@@ -59,7 +60,7 @@ export function PeriodTabs({
         <span className="text-sm text-ink-2">
           {formatCount(count, EXPENSE_FORMS)}
         </span>
-      </section>
+      </SummaryCard>
 
       {count > 0 ? (
         <>
@@ -68,7 +69,8 @@ export function PeriodTabs({
             value={tab}
             onChange={setTab}
             ariaLabel="Вид сводки"
-            className="mx-4 mt-4 bg-line!"
+            surface="line"
+            className="mx-4 mt-4"
           />
           {tab === "categories" ? (
             <SummaryBars

@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
-import type { Category } from "@/repositories/categories";
-import type { ExpenseWithConversion } from "@/repositories/expenses";
+import type { ExpenseCategory } from "@/repositories/categories";
+import type { ExpenseEntry } from "@/lib/expense-entry";
 import { formatDayHeading, formatRelativeDay } from "@/lib/dates";
+import { useCategoryById } from "@/lib/hooks/use-category-by-id";
 import { useMounted } from "@/lib/hooks/use-mounted";
+import { CardSection } from "@/components/kit/card-section";
 import { ExpenseListRow } from "@/components/expenses/expense-list-row";
 import { useExpenseEditor } from "@/components/expenses/use-expense-editor";
 import type { ExpenseAccount } from "@/components/expenses/account-chips";
@@ -14,47 +15,42 @@ export function RecentList({
   categories,
   accounts,
 }: {
-  expenses: ExpenseWithConversion[];
-  categories: Category[];
+  expenses: ExpenseEntry[];
+  categories: ExpenseCategory[];
   accounts: ExpenseAccount[];
 }) {
-  const { openEditor, editor } = useExpenseEditor(categories, accounts);
+  const { openEditor, editor } = useExpenseEditor(categories, accounts, {
+    isListed: (id) => expenses.some((e) => e.id === id),
+  });
   const mounted = useMounted();
-  const categoryById = useMemo(
-    () => new Map(categories.map((c) => [c.id, c])),
-    [categories],
-  );
+  const categoryById = useCategoryById(categories);
 
   return (
-    <section aria-labelledby="recent-title" className="mx-4 mt-7">
-      <h2
+    <>
+      <CardSection
         id="recent-title"
-        className="px-1 pb-2.5 text-[17px] font-semibold"
+        title="Последние"
+        titleGap="wide"
+        className="mx-4 mt-7"
       >
-        Последние
-      </h2>
-      <ul className="overflow-hidden rounded-card bg-card">
         {expenses
           .flatMap((e) => {
             const category = categoryById.get(e.categoryId);
             return category ? [{ e, category }] : [];
           })
-          .map(({ e, category }, i) => (
+          .map(({ e, category }) => (
             <ExpenseListRow
               key={e.id}
               expense={e}
-              color={category.color}
-              title={e.note}
+              category={category}
               when={
                 mounted ? formatRelativeDay(e.spentAt) : formatDayHeading(e.spentAt)
               }
-              subtitle={category.name}
-              index={i}
               onClick={openEditor}
             />
           ))}
-      </ul>
+      </CardSection>
       {editor}
-    </section>
+    </>
   );
 }

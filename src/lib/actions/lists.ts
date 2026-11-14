@@ -17,7 +17,6 @@ import {
   setItemChecked,
   setItemText,
   setListVisibility,
-  type ListItem,
   type ListOpResult,
 } from "@/repositories/lists";
 import { revalidateFor } from "./revalidate";
@@ -123,7 +122,7 @@ export async function deleteListAction(
 export async function addItemAction(
   listId: string,
   text: unknown,
-): Promise<ListActionResult<ListItem>> {
+): Promise<ListActionResult<null>> {
   const { user, spaceId } = await requireSpace();
   if (!isUuid(listId)) return LIST_NOT_FOUND;
   const parsed = ItemText.safeParse(text);
@@ -131,7 +130,7 @@ export async function addItemAction(
   const result = await addItem(spaceId, user.id, listId, parsed.data);
   if (!result.ok) return LIST_NOT_FOUND;
   revalidateFor("list");
-  return { ok: true, data: result.item };
+  return { ok: true, data: null };
 }
 
 export async function setItemTextAction(

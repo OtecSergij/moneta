@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
+import { MenuItem } from "@/components/kit/sheet-menu";
 
 export function LogoutButton() {
   const router = useRouter();
@@ -26,19 +27,14 @@ export function LogoutButton() {
   }
 
   return (
-    <button
-      type="button"
+    <MenuItem
+      Icon={LogOut}
+      tone="danger"
+      tile={false}
+      loading={loading}
       onClick={onLogout}
-      disabled={loading}
-      aria-busy={loading || undefined}
-      className="flex min-h-14 w-full cursor-pointer items-center gap-2.5 border-t border-row-line bg-transparent px-4 text-left text-base font-medium text-danger-ink hover-row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60"
     >
-      {loading ? (
-        <Loader2 className="size-5 animate-spin" strokeWidth={1.75} aria-hidden />
-      ) : (
-        <LogOut className="size-5" strokeWidth={1.75} aria-hidden />
-      )}
       Выйти
-    </button>
+    </MenuItem>
   );
 }

@@ -118,6 +118,12 @@ describe("createLongPress", () => {
     expect(lp.consumeClick()).toBe(false);
   });
 
+  it("ignores contextmenu on a disabled control", () => {
+    const { onLongPress, lp } = setup();
+    lp.contextMenu(false);
+    expect(onLongPress).not.toHaveBeenCalled();
+  });
+
   it("opens on contextmenu without a timer", () => {
     const { onLongPress, lp } = setup();
     lp.contextMenu();

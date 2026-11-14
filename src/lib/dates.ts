@@ -84,7 +84,7 @@ export function todayRange(now: Date = new Date()): DateRange {
 
 /**
  * Current week from Monday through today — the home screen's default summary
- * window (business-spec §5.1). Monday-start regardless of system locale.
+ * window. Monday-start regardless of system locale.
  */
 export function currentWeekFromMonday(now: Date = new Date()): DateRange {
   return {
@@ -138,7 +138,7 @@ export function formatDayTitle(iso: string, now: Date = new Date()): string {
   return `${weekday(iso, "EEEE")}, ${formatDayHeading(iso, now)}`;
 }
 
-/** Quick range presets for the history screen (business-spec §5.2). */
+/** Quick range presets for the history screen. */
 export const RANGE_PRESETS = [
   { key: "today", label: "Сегодня", range: (now?: Date) => todayRange(now) },
   {
@@ -169,13 +169,13 @@ export function resolveHistoryRange(
   return currentWeekFromMonday(now);
 }
 
-export type RangePresetKey = (typeof RANGE_PRESETS)[number]["key"];
-
 /** True if `iso` is strictly after today (used to reject future expense dates). */
 export function isFutureISO(iso: string, now: Date = new Date()): boolean {
   // Lexicographic comparison is chronological for zero-padded "YYYY-MM-DD".
   return iso > todayISO(now);
 }
+
+export const FUTURE_DATE_ERROR = "Дата не может быть в будущем";
 
 /** Day heading for grouped lists: "17 мая" (current year) or "17 мая 2025". */
 export function formatDayHeading(iso: string, now: Date = new Date()): string {

@@ -1,11 +1,11 @@
 // Currency metadata — single source of truth for symbols, storage/display
-// precision, and fx rate lookup windows (see .omc/plans/multi-currency-expenses.md).
+// precision, and fx rate lookup windows.
 
 export const CURRENCY_CODES = ["RUB", "USD", "EUR", "RSD", "BTC"] as const;
 
 export type CurrencyCode = (typeof CURRENCY_CODES)[number];
 
-export interface CurrencyMeta {
+interface CurrencyMeta {
   code: CurrencyCode;
   symbol: string;
   // Russian display name, shown where the symbol alone would be
@@ -19,7 +19,7 @@ export interface CurrencyMeta {
   trimFraction: boolean;
 }
 
-export const CURRENCIES: Record<CurrencyCode, CurrencyMeta> = {
+const CURRENCIES: Record<CurrencyCode, CurrencyMeta> = {
   RUB: {
     code: "RUB",
     symbol: "₽",

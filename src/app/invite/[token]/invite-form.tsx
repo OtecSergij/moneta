@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { MailCheck } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { rateLimitProbe } from "@/lib/auth-rate-limit";
 import { USER_NAME_MAX, signUpSchema } from "@/lib/auth-schemas";
+import { useLeaving } from "@/lib/hooks/use-leaving";
 import { AvatarInitial } from "@/components/kit/avatar-initial";
 import { Button } from "@/components/kit/button";
-import { GoogleContinueButton } from "@/components/kit/google-continue-button";
 import { TextField } from "@/components/kit/text-field";
+import { GoogleSignIn, useGoogleErrorToast } from "@/components/google-sign-in";
+import { AuthCard } from "@/components/ui/auth-card";
 import { StatusCard } from "@/components/ui/status-card";
 
 const inviteSignUpSchema = signUpSchema.pick({ email: true, password: true });
@@ -23,12 +26,12 @@ export function InviteForm({
   token,
   ownerName,
   hasGoogle,
-  error,
+  googleError,
 }: {
   token: string;
   ownerName: string;
   hasGoogle: boolean;
-  error: boolean;
+  googleError?: string;
 }) {
   const router = useRouter();
   const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
@@ -40,18 +43,8 @@ export function InviteForm({
   } = useForm<InviteSignUpValues>({
     resolver: zodResolver(inviteSignUpSchema),
   });
-
-  useEffect(() => {
-    if (!error) return;
-    // The Toaster subscribes in its own effect, which runs after this one on
-    // first mount; a toast published earlier is dropped.
-    const timer = setTimeout(() =>
-      toast.error("Не удалось войти через Google", {
-        id: "invite-google-error",
-      }),
-    );
-    return () => clearTimeout(timer);
-  }, [error]);
+  const { busy, leave } = useLeaving(isSubmitting);
+  useGoogleErrorToast(googleError);
 
   async function onSubmit(values: InviteSignUpValues) {
     // Better Auth's client types omit unknown fields, but it forwards every
@@ -63,10 +56,17 @@ export function InviteForm({
       inviteToken: token,
       callbackURL: "/",
     };
-    const { error } = await authClient.signUp.email(payload);
+    const limit = rateLimitProbe();
+    const { error } = await authClient.signUp.email(payload, limit.fetchOptions);
     if (error) {
       if (error.code === INVITE_INVALID) {
+        leave();
         router.refresh();
+        return;
+      }
+      const tooMany = limit.message(error.status);
+      if (tooMany) {
+        toast.error(tooMany);
         return;
       }
       toast.error("Не удалось создать аккаунт", {
@@ -78,28 +78,9 @@ export function InviteForm({
     setSubmittedEmail(values.email);
   }
 
-  async function onGoogle() {
-    setGoogleBusy(true);
-    const { error } = await authClient.signIn.social({
-      provider: "google",
-      callbackURL: "/",
-      errorCallbackURL: `/invite/${token}`,
-      additionalData: { inviteToken: token },
-    });
-    if (error) {
-      setGoogleBusy(false);
-      if (error.code === INVITE_INVALID) {
-        router.refresh();
-        return;
-      }
-      toast.error("Не удалось войти через Google");
-    }
-  }
-
   if (submittedEmail) {
     return (
       <StatusCard
-        as="main"
         icon={MailCheck}
         title="Проверьте почту"
         action={{ href: "/login", label: "Вернуться ко входу" }}
@@ -112,31 +93,25 @@ export function InviteForm({
   }
 
   return (
-    <main className="flex flex-col gap-5 rounded-sheet bg-card px-5 py-6">
-      <div className="flex flex-col gap-3">
-        <AvatarInitial name={ownerName} toneIndex={0} size="lg" />
-        <h1 className="text-2xl leading-[30px] font-bold tracking-[-0.02em]">
-          {ownerName} приглашает вас вести траты вместе
-        </h1>
-      </div>
-
-      {hasGoogle ? (
-        <>
-          <GoogleContinueButton
-            onClick={onGoogle}
-            loading={googleBusy}
-            disabled={isSubmitting}
-          />
-          <div
-            aria-hidden
-            className="flex items-center gap-3 text-[13px] text-ink-3"
-          >
-            <span className="h-px flex-1 bg-line" />
-            или
-            <span className="h-px flex-1 bg-line" />
-          </div>
-        </>
-      ) : null}
+    <AuthCard
+      title={`${ownerName} приглашает вас вести траты вместе`}
+      leading={<AvatarInitial name={ownerName} toneIndex={0} size="lg" />}
+    >
+      <GoogleSignIn
+        hasGoogle={hasGoogle}
+        label="Продолжить с Google"
+        socialOptions={{
+          errorCallbackURL: `/invite/${token}`,
+          additionalData: { inviteToken: token },
+        }}
+        onBusyChange={setGoogleBusy}
+        onError={(error) => {
+          if (error.code !== INVITE_INVALID) return false;
+          router.refresh();
+          return true;
+        }}
+        disabled={busy}
+      />
 
       <form
         onSubmit={handleSubmit(onSubmit)}
@@ -151,6 +126,7 @@ export function InviteForm({
           placeholder="you@example.com"
           error={errors.email?.message}
           {...register("email")}
+          disabled={busy || googleBusy}
         />
         <TextField
           label="Пароль"
@@ -158,16 +134,17 @@ export function InviteForm({
           autoComplete="new-password"
           error={errors.password?.message}
           {...register("password")}
+          disabled={busy || googleBusy}
         />
         <Button
           type="submit"
-          loading={isSubmitting}
+          loading={busy}
           disabled={googleBusy}
           className="mt-1.5"
         >
           Зарегистрироваться
         </Button>
       </form>
-    </main>
+    </AuthCard>
   );
 }

@@ -1,10 +1,16 @@
 import type { ComponentProps } from "react";
 import { currencyMeta, type CurrencyCode } from "@/lib/currency";
 import { cn } from "@/lib/utils";
+import {
+  FIELD_LABEL_CLASS,
+  FieldError,
+  FieldFrame,
+} from "@/components/kit/text-field";
 
 type AmountFieldProps = Omit<ComponentProps<"input">, "size"> & {
   size: "main" | "sheet";
   currency: CurrencyCode;
+  label?: string;
   preview?: string | null;
   error?: string;
 };
@@ -12,9 +18,11 @@ type AmountFieldProps = Omit<ComponentProps<"input">, "size"> & {
 export function AmountField({
   size,
   currency,
+  label,
   preview,
   error,
   id = "amount",
+  className,
   ...props
 }: AmountFieldProps) {
   const symbol = currencyMeta(currency).symbol;
@@ -29,18 +37,21 @@ export function AmountField({
   return (
     <div
       className={cn(
-        "flex flex-col has-disabled:opacity-60 has-disabled:[&_*]:cursor-not-allowed",
+        "flex flex-col has-disabled:opacity-50 has-disabled:[&_*]:cursor-not-allowed",
         size === "main" ? "gap-2" : "gap-1.5",
+        className,
       )}
     >
-      <label
-        className={cn(
-          "flex cursor-text items-center gap-2.5 rounded-field bg-page",
-          size === "main" ? "h-[72px] px-[18px]" : "h-[60px] px-4",
-          error
-            ? "shadow-[inset_0_0_0_2px_var(--color-error)]"
-            : "focus-within:shadow-[inset_0_0_0_2px_var(--color-primary)]",
-        )}
+      {label ? (
+        <label htmlFor={id} className={FIELD_LABEL_CLASS}>
+          {label}
+        </label>
+      ) : null}
+      <FieldFrame
+        as="label"
+        size={size === "main" ? "2xl" : "xl"}
+        pad={size === "main" ? 18 : 16}
+        error={Boolean(error)}
       >
         <input
           id={id}
@@ -48,7 +59,7 @@ export function AmountField({
           inputMode="decimal"
           autoComplete="off"
           placeholder="0"
-          aria-label="Сумма"
+          aria-label={label ?? "Сумма"}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
           className={cn(
@@ -71,17 +82,13 @@ export function AmountField({
         >
           {symbol}
         </span>
-      </label>
+      </FieldFrame>
       {preview ? (
         <span id={previewId} className="text-sm text-ink-2 tabular-nums">
           {preview}
         </span>
       ) : null}
-      {error ? (
-        <p id={errorId} className="text-[13px] text-error">
-          {error}
-        </p>
-      ) : null}
+      {error ? <FieldError id={errorId}>{error}</FieldError> : null}
     </div>
   );
 }

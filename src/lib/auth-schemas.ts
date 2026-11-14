@@ -27,15 +27,22 @@ export type LoginValues = z.infer<typeof loginSchema>;
 
 export const USER_NAME_MAX = 60;
 
+export function isBlankName(name: string): boolean {
+  return name.replace(/[\s\p{Cf}]/gu, "") === "";
+}
+
 export const signUpSchema = z.object({
   email: emailField,
   password: newPasswordField,
-  // Optional in the form. Better Auth requires a non-empty `name` on the API,
-  // so when this is blank the form derives one from the email local-part.
+  // Optional in the form. Our auth before-hook (src/lib/auth.ts) rejects an
+  // empty or blank `name`, so when this is blank the form derives one from the
+  // email local-part.
   name: z
     .string()
     .trim()
-    .max(USER_NAME_MAX, "Слишком длинное имя")
+    .refine((v) => Array.from(v).length <= USER_NAME_MAX, {
+      error: "Слишком длинное имя",
+    })
     .optional(),
 });
 export type SignUpValues = z.infer<typeof signUpSchema>;

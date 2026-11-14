@@ -4,7 +4,6 @@ import { StatusCard } from "@/components/ui/status-card";
 export function InviteInvalid() {
   return (
     <StatusCard
-      as="main"
       icon={Link2Off}
       tone="warn"
       title="Ссылка больше не работает"

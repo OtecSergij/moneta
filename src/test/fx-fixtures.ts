@@ -99,9 +99,9 @@ export function nbsPayload(opts: NbsPayloadOptions): string {
   });
 }
 
-// The literal scientific-notation example from the plan (Step 4.3): a raw
-// JSON string, not `JSON.stringify`'d from a JS number, so the "e-05" form
-// survives into the parser exactly as jsDelivr would send it.
+// A literal scientific-notation example: a raw JSON string, not
+// `JSON.stringify`'d from a JS number, so the "e-05" form survives into the
+// parser exactly as jsDelivr would send it.
 export const AGGREGATOR_RATES =
   '"usd":1,"rub":96.5,"eur":0.923,"rsd":107.7,"btc":1.2692964e-05';
 

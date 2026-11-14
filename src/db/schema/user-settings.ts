@@ -9,7 +9,7 @@ export const userSettings = pgTable(
     userId: uuid("user_id")
       .primaryKey()
       .references(() => user.id, { onDelete: "cascade" }),
-    // Currency all aggregates and lists render in (business-spec §7);
+    // Currency all aggregates and lists render in;
     // switching it doesn't touch any expenses row, only how it's summed.
     displayCurrency: currencyEnum("display_currency")
       .notNull()

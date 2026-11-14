@@ -1,10 +1,11 @@
 import { after } from "next/server";
 import { addDays } from "date-fns";
 import { requireSpace, userNow } from "@/lib/dal";
-import { listCategories } from "@/repositories/categories";
+import { listCategoriesWithUsage } from "@/repositories/categories";
 import { lastUsedIds, listExpenses } from "@/repositories/expenses";
 import { listAccountOptions } from "@/repositories/accounts";
 import { defaultAccountSelection } from "@/lib/expense-account";
+import { toExpenseEntry } from "@/lib/expense-entry";
 import { getUserSettings } from "@/repositories/user-settings";
 import {
   PAGE_SYNC_THROTTLE_MS,
@@ -42,7 +43,7 @@ export default async function HomePage() {
   const displayCurrency = settings.displayCurrency;
 
   const [categories, accounts, weekRows, recent, lastUsed] = await Promise.all([
-    listCategories(spaceId),
+    listCategoriesWithUsage(spaceId),
     listAccountOptions(spaceId),
     listExpenses(spaceId, displayCurrency, elapsed, rateIndex),
     listExpenses(spaceId, displayCurrency, { limit: 10 }, rateIndex),
@@ -69,10 +70,10 @@ export default async function HomePage() {
   // The save path schedules its own rate fetch, but that one is
   // fire-and-forget: if the provider was down, nothing retried it. Opening
   // the app is the retry. Throttled, because this fires on plain navigation
-  // too and the scan is over the space's whole expense history — the write
-  // paths call syncSpaceRates without a throttle, so a real change still
-  // converges immediately. cookies()/headers() aren't callable inside
-  // after(), hence the closure.
+  // too and the scan is over the space's whole expense, top-up and transfer
+  // history — the write paths call syncSpaceRates without a throttle, so a
+  // real change still converges immediately. cookies()/headers() aren't
+  // callable inside after(), hence the closure.
   after(() => syncSpaceRates(spaceId, { throttleMs: PAGE_SYNC_THROTTLE_MS }));
 
   return (
@@ -95,7 +96,7 @@ export default async function HomePage() {
       />
       {recent.length > 0 ? (
         <RecentList
-          expenses={recent}
+          expenses={recent.map(toExpenseEntry)}
           categories={categories}
           accounts={accounts}
         />

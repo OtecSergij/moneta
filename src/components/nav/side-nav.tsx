@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Settings, type LucideIcon } from "lucide-react";
 import { TABS, type Section } from "@/components/nav/tab-bar";
+import { Logo } from "@/components/layout/logo";
 import { cn } from "@/lib/utils";
 
 function SideLink({
@@ -37,9 +38,7 @@ export function SideNav({ active }: { active: Section }) {
       aria-label="Разделы"
       className="fixed inset-y-0 left-0 z-40 hidden w-[248px] flex-col gap-1 border-r border-line bg-card px-4 pt-7 pb-6 lg:flex"
     >
-      <span className="px-3 pb-5 text-[22px] leading-[normal] font-bold tracking-[-0.03em]">
-        moneta
-      </span>
+      <Logo className="px-3 pb-5" />
       {TABS.map(({ key, href, label, Icon }) => (
         <SideLink
           key={key}

@@ -1,8 +1,9 @@
 // Half-even ("banker's") rounding, shared by the display formatter
 // (@/lib/money) and the FX arithmetic (@/lib/fx/convert). One implementation
-// rather than two: AC-29's reconciliation only holds while a value rounded on
-// the display path and the same value rounded on the conversion path agree,
-// and two copies of a tie-breaking rule drift apart silently.
+// rather than two: category totals only reconcile with the period total while
+// a value rounded on the display path and the same value rounded on the
+// conversion path agree, and two copies of a tie-breaking rule drift apart
+// silently.
 //
 // bigint rather than number: rates are carried at 1e20 scale, well past what a
 // double represents exactly.

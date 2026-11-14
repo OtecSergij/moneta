@@ -2,16 +2,14 @@ import type { Metadata } from "next";
 import { requireSpace, userNow } from "@/lib/dal";
 import { listCategories } from "@/repositories/categories";
 import { listAccountOptions } from "@/repositories/accounts";
-import {
-  listExpenses,
-  summary,
-  type ExpenseWithConversion,
-} from "@/repositories/expenses";
+import { listExpenses, summary } from "@/repositories/expenses";
 import { getUserSettings } from "@/repositories/user-settings";
 import { loadRateIndex } from "@/repositories/fx-rates";
 import { CURRENCY_CODES } from "@/lib/currency";
 import { sumConvertedByDay } from "@/lib/fx/convert";
-import { formatDayTitle, resolveHistoryRange } from "@/lib/dates";
+import { resolveHistoryRange } from "@/lib/dates";
+import { toDayGroups } from "@/lib/day-groups";
+import { toExpenseEntry, type ExpenseEntry } from "@/lib/expense-entry";
 import { AppScreen } from "@/components/layout/app-screen";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import { HistoryFilter } from "@/components/history/history-filter";
@@ -43,7 +41,7 @@ export default async function HistoryPage({
   ]);
   const displayCurrency = settings.displayCurrency;
 
-  const [periodSummary, expenses] = await Promise.all([
+  const [periodSummary, rows] = await Promise.all([
     summary(spaceId, displayCurrency, range, rateIndex),
     listExpenses(
       spaceId,
@@ -52,8 +50,9 @@ export default async function HistoryPage({
       rateIndex,
     ),
   ]);
+  const expenses = rows.map(toExpenseEntry);
 
-  const expensesByCategory: Record<string, ExpenseWithConversion[]> = {};
+  const expensesByCategory: Record<string, ExpenseEntry[]> = {};
   for (const e of expenses) {
     (expensesByCategory[e.categoryId] ??= []).push(e);
   }
@@ -62,17 +61,10 @@ export default async function HistoryPage({
   // groups by category) via sumConvertedByDay, the same sumConverted
   // arithmetic the rest of the app uses, so a day's total follows the
   // identical rounding rules.
-  const days: DayGroup[] = sumConvertedByDay(
-    expenses,
-    displayCurrency,
-    rateIndex,
-  ).map((bucket) => ({
-    day: bucket.day,
-    heading: formatDayTitle(bucket.day, now),
-    totalMinor: bucket.totalMinor,
-    unconverted: bucket.unconverted,
-    items: bucket.items,
-  }));
+  const days: DayGroup[] = toDayGroups(
+    sumConvertedByDay(expenses, displayCurrency, rateIndex),
+    now,
+  );
 
   return (
     <AppScreen tab="history">

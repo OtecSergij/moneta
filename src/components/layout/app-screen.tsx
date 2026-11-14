@@ -13,7 +13,7 @@ export function AppScreen({
   return (
     <div className="min-h-dvh bg-page text-ink lg:pl-[248px]">
       <SideNav active={tab} />
-      <main className="mx-auto flex w-full max-w-[480px] flex-col pb-[calc(61px+max(24px,env(safe-area-inset-bottom)))] lg:max-w-[640px] lg:pb-10">
+      <main className="mx-auto flex w-full max-w-[480px] flex-col pb-[calc(85px+max(24px,env(safe-area-inset-bottom)))] lg:max-w-[640px] lg:pb-10">
         {children}
       </main>
       <TabBar active={tab} />

@@ -1,44 +1,28 @@
-import type { ReactNode } from "react";
-import type { ExpenseWithConversion } from "@/repositories/expenses";
-import { ExpenseRowContent } from "@/components/expenses/expense-row-content";
-import { cn } from "@/lib/utils";
+import type { ExpenseCategory } from "@/repositories/categories";
+import type { ExpenseEntry } from "@/lib/expense-entry";
+import { ListRow } from "@/components/kit/list-row";
+import { EntryRowContent } from "@/components/kit/entry-row-content";
 
-// Rows sit in a white rounded card; `index` > 0 draws the divider above.
 export function ExpenseListRow({
   expense,
-  color,
-  title,
+  category,
   when,
-  subtitle,
-  index,
   onClick,
 }: {
-  expense: ExpenseWithConversion;
-  color?: string;
-  title: string;
+  expense: ExpenseEntry;
+  category?: Pick<ExpenseCategory, "name" | "color">;
   when?: string;
-  subtitle?: ReactNode;
-  index: number;
-  onClick: (expense: ExpenseWithConversion) => void;
+  onClick: (expense: ExpenseEntry) => void;
 }) {
   return (
-    <li>
-      <button
-        type="button"
-        onClick={() => onClick(expense)}
-        className={cn(
-          "flex min-h-16 w-full cursor-pointer items-center gap-3 border-t px-4 py-[11px] text-left text-ink hover-row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary",
-          index === 0 ? "border-transparent" : "border-row-line",
-        )}
-      >
-        <ExpenseRowContent
-          expense={expense}
-          color={color}
-          title={title}
-          when={when}
-          subtitle={subtitle}
-        />
-      </button>
-    </li>
+    <ListRow onClick={() => onClick(expense)}>
+      <EntryRowContent
+        entry={expense}
+        color={category?.color}
+        title={expense.note}
+        when={when}
+        subtitle={category?.name}
+      />
+    </ListRow>
   );
 }

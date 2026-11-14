@@ -1,4 +1,4 @@
-export type AvatarTone = { bg: string; fg: string };
+type AvatarTone = { bg: string; fg: string };
 
 const TONES: readonly AvatarTone[] = [
   { bg: "#E8EFFD", fg: "#1D4ED8" },

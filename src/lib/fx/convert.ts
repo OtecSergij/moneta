@@ -1,9 +1,9 @@
 // Pure integer FX conversion — the one arithmetic module money math goes
-// through in this app (see .omc/plans/multi-currency-expenses.md, "Шаг 3").
+// through in this app (see the module invariants below).
 // No DB, no network: callers hand in a pre-loaded RateIndex and get back
 // micro-minor bigints (1e-6 of a minor unit) that they round exactly once,
 // so a period total never drifts from independently-rounded per-row or
-// per-group amounts by more than the AC-29 tolerance.
+// per-group amounts by more than the reconciliation tolerance.
 //
 // Invariants:
 //   - Rates are bigints scaled by 1e20. `Number` is never applied to a rate
@@ -11,7 +11,7 @@
 //     fractional digits `fx_rates.rate_to_usd` stores.
 //   - A missing rate returns `null`, never a substituted rate of 1.
 
-import { type CurrencyCode, currencyMeta } from "@/lib/currency";
+import { CURRENCY_CODES, type CurrencyCode, currencyMeta } from "@/lib/currency";
 import { divRoundHalfEven } from "@/lib/half-even";
 
 /** One day's rate to USD for a currency, scaled by 1e20. */
@@ -113,7 +113,7 @@ export function convertMicro(row: ConvertibleRow, display: CurrencyCode, index: 
  * in one half-even step, returned as minor units (an exact multiple of
  * `10^(exponent - displayDigits)`). Rounding through an intermediate minor-
  * unit step would let per-group error exceed half a display unit and break
- * the AC-29 tolerance.
+ * the reconciliation tolerance.
  */
 export function roundToDisplay(micro: bigint, currency: CurrencyCode): number {
   const meta = currencyMeta(currency);
@@ -139,7 +139,7 @@ export interface ConvertedTotal {
 
 /**
  * Period total across `rows`: sums micro-minor units first and rounds once
- * at the end (AC-12), instead of summing already-rounded per-row amounts —
+ * at the end, instead of summing already-rounded per-row amounts —
  * the two do not generally agree.
  */
 export function sumConverted(
@@ -160,7 +160,7 @@ export function sumConverted(
   return { totalMinor: roundToDisplay(totalMicro, display), unconverted };
 }
 
-export interface DayBucket<T extends ConvertibleRow> extends ConvertedTotal {
+interface DayBucket<T extends ConvertibleRow> extends ConvertedTotal {
   day: string; // "YYYY-MM-DD"
   items: T[];
 }
@@ -168,9 +168,8 @@ export interface DayBucket<T extends ConvertibleRow> extends ConvertedTotal {
 /**
  * Buckets `rows` into consecutive runs sharing the same `spentAt` and totals
  * each run through `sumConverted` — the history page's "по дням" axis, which
- * the plan singles out as the long one (up to ~90 groups in a quarter, see
- * AC-29). Rows must already be ordered so same-day rows are adjacent (the
- * repository's `ORDER BY spent_at DESC`); this does not sort them itself.
+ * is the long one. Rows must already be ordered so same-day rows are adjacent
+ * (the repository's `ORDER BY spent_at DESC`); this does not sort them itself.
  */
 export function sumConvertedByDay<T extends ConvertibleRow>(
   rows: T[],
@@ -210,4 +209,26 @@ export function formatScaledRate(value: bigint): string {
   const intPart = digits.slice(0, -20) || "0";
   const fracPart = digits.slice(-20);
   return `${intPart}.${fracPart}`;
+}
+
+export type RateSnapshot = Partial<Record<CurrencyCode, string>>;
+
+export function rateSnapshot(index: RateIndex, onDate: string): RateSnapshot {
+  const snapshot: RateSnapshot = {};
+  for (const currency of CURRENCY_CODES) {
+    const rate = rateFor(index, currency, onDate);
+    if (rate !== null) snapshot[currency] = formatScaledRate(rate);
+  }
+  return snapshot;
+}
+
+export function snapshotIndex(snapshot: RateSnapshot, onDate: string): RateIndex {
+  const index: RateIndex = new Map();
+  for (const currency of CURRENCY_CODES) {
+    const rate = snapshot[currency];
+    if (rate !== undefined) {
+      index.set(currency, [{ effectiveDate: onDate, rateToUsd: parseRate(rate) }]);
+    }
+  }
+  return index;
 }

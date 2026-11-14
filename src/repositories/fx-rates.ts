@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { db } from "@/db";
-import { expenses, fxRates } from "@/db/schema";
+import { expenses, fxRates, topUps, transfers } from "@/db/schema";
 import { type CurrencyCode } from "@/lib/currency";
 import type { SpaceId } from "@/lib/space-id";
 import { type RateIndex, type RatePoint, parseRate } from "@/lib/fx/convert";
@@ -19,7 +19,8 @@ const NEGATIVE_CACHE_MS = 60_000;
  * How long a page-render-triggered sync stays quiet for a space. The write
  * paths pass no throttle at all (they know something changed); this only
  * bounds the "opening the app is the retry" path, which would otherwise
- * re-scan the space's whole expense history on every single render.
+ * re-scan the space's whole expense, top-up and transfer history on every
+ * render.
  */
 export const PAGE_SYNC_THROTTLE_MS = 5 * 60_000;
 
@@ -42,13 +43,13 @@ const defaultDeps: FxDeps = { fetch: (...args) => globalThis.fetch(...args) };
 // the save it precedes shares one fetch instead of racing duplicates.
 const inFlight = new Map<string, Promise<boolean>>();
 // Dates that just failed, so retries inside the window don't hammer the
-// provider again (plan Step 4.5, "Лавина запросов при недоступном API").
+// provider again.
 const negativeUntil = new Map<string, number>();
 
 /**
  * Lazily fills `fx_rates` for `date` if it isn't already fully covered.
  * Never throws — a provider outage must not break expense creation, only
- * leave the rate unavailable (plan Step 4.6). Returns whether every currency
+ * leave the rate unavailable. Returns whether every currency
  * a source can supply for that date (`fetchableCurrencies`) ended up present
  * *for that exact date*: a snapshot the aggregator dated differently is
  * written under its own date and reported as a miss.
@@ -229,7 +230,7 @@ export async function loadRatesOn(
 // for them in `fx_rates` — counted in JS rather than a raw `sql<number>`
 // count(*), since a handful of rows per date is cheap and this sidesteps
 // drizzle's raw-fragment/bigint string trap entirely (see convert.ts module
-// doc and plan ADR).
+// doc).
 async function datesFullyCovered(dates: string[]): Promise<Set<string>> {
   if (dates.length === 0) return new Set();
   const rows = await db
@@ -248,11 +249,24 @@ async function datesFullyCovered(dates: string[]): Promise<Set<string>> {
   return covered;
 }
 
+type DatedTable = typeof expenses | typeof topUps | typeof transfers;
+type DayColumn =
+  | typeof expenses.spentAt
+  | typeof topUps.occurredOn
+  | typeof transfers.enteredOn;
+
+function daysOf(spaceId: SpaceId, table: DatedTable, day: DayColumn) {
+  return db
+    .select({ date: day })
+    .from(table)
+    .where(and(eq(table.spaceId, spaceId), gte(day, OFFICIAL_HISTORY_FLOOR)));
+}
+
 /**
- * Fills `fx_rates` for every distinct date anyone in the space spent on, at or
- * after `OFFICIAL_HISTORY_FLOOR`, that isn't already fully covered. Runs up
- * to `BACKFILL_CONCURRENCY` dates at once, caps a single call at
- * `BACKFILL_MAX_DATES` (the remainder is picked up by the next call), and
+ * Fills `fx_rates` for every distinct expense, top-up or transfer date in the
+ * space, at or after `OFFICIAL_HISTORY_FLOOR`, that isn't already fully
+ * covered. Runs up to `BACKFILL_CONCURRENCY` dates at once, caps a single call
+ * at `BACKFILL_MAX_DATES` (the remainder is picked up by the next call), and
  * swallows per-date errors so one bad date doesn't stop the rest. Returns
  * the number of dates that ended up fully filled.
  */
@@ -261,17 +275,11 @@ export async function backfillRates(
   deps: FxDeps = defaultDeps,
 ): Promise<number> {
   try {
-    const expenseDates = await db
-      .selectDistinct({ spentAt: expenses.spentAt })
-      .from(expenses)
-      .where(
-        and(
-          eq(expenses.spaceId, spaceId),
-          gte(expenses.spentAt, OFFICIAL_HISTORY_FLOOR),
-        ),
-      );
+    const entryDates = await daysOf(spaceId, expenses, expenses.spentAt)
+      .union(daysOf(spaceId, topUps, topUps.occurredOn))
+      .union(daysOf(spaceId, transfers, transfers.enteredOn));
 
-    const distinctDates = expenseDates.map((r) => r.spentAt);
+    const distinctDates = entryDates.map((r) => r.date);
     if (distinctDates.length === 0) return 0;
 
     const covered = await datesFullyCovered(distinctDates);
@@ -306,7 +314,8 @@ export async function backfillRates(
 const lastSyncAt = new Map<string, number>();
 
 /**
- * The background fill: the snapshots the space's expense dates need.
+ * The background fill: the snapshots the space's expense, top-up and transfer
+ * dates need.
  *
  * `throttleMs` is for callers that fire on plain navigation — the page
  * renders that make "opening the app" the retry for a provider outage. Write

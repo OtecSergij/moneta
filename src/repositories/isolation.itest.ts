@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { todayISO } from "@/lib/dates";
+import type { SpaceId } from "@/lib/space-id";
 import {
   createCategory,
   deleteCategory,
@@ -15,7 +16,27 @@ import {
   summary,
   updateExpense,
 } from "@/repositories/expenses";
-import { mkAccount, mkExpense, mkMember, mkMigratedOwner, mkSpaceUser } from "@/test/factories";
+import {
+  deleteTopUp,
+  getTopUp,
+  listTopUps,
+  updateTopUp,
+} from "@/repositories/top-ups";
+import {
+  createTransfer,
+  deleteTransfer,
+  listAccountTransfers,
+  updateTransferAmount,
+} from "@/repositories/transfers";
+import {
+  mkAccount,
+  mkExpense,
+  mkMember,
+  mkMigratedOwner,
+  mkSpaceUser,
+  mkTopUp,
+  mkTransfer,
+} from "@/test/factories";
 
 async function setup() {
   const m = await mkMigratedOwner();
@@ -83,8 +104,69 @@ describe("space isolation", () => {
     expect((await getExpense(m.spaceId, expense.id))?.amountMinor).toBe(4200);
   });
 
+  it("a user of another space cannot list, get, update or delete a top-up", async () => {
+    const { m, f, expense } = await setup();
+    const topUp = await mkTopUp(m.spaceId, m.user.id, {
+      accountId: expense.accountId,
+      amountMinor: 3000,
+    });
+
+    expect(await listTopUps(f.spaceId, expense.accountId)).toEqual([]);
+    expect(await getTopUp(f.spaceId, topUp.id)).toBeNull();
+    expect(await updateTopUp(f.spaceId, topUp.id, { amountMinor: 1 })).toEqual({
+      ok: false,
+      reason: "not_found",
+    });
+    expect(await deleteTopUp(f.spaceId, topUp.id)).toEqual({ ok: false });
+
+    expect((await getTopUp(m.spaceId, topUp.id))?.amountMinor).toBe(3000);
+  });
+
+  it("a user of another space cannot list, create to or from, update or delete a transfer", async () => {
+    const { m, f, expense } = await setup();
+    const other = await mkAccount(m.spaceId, m.user.id);
+    const own = await mkAccount(f.spaceId, f.user.id, { currency: "USD" });
+    const transfer = await mkTransfer(m.spaceId, m.user.id, {
+      fromAccountId: expense.accountId,
+      toAccountId: other.id,
+      fromAmountMinor: 3000,
+    });
+
+    expect(await listAccountTransfers(f.spaceId, expense.accountId)).toEqual([]);
+    expect(
+      await createTransfer(
+        f.spaceId,
+        f.user.id,
+        { fromAccountId: expense.accountId, toAccountId: own.id, fromAmountMinor: 1 },
+        todayISO(),
+      ),
+    ).toEqual({ ok: false, reason: "account_not_found" });
+    expect(
+      await createTransfer(
+        f.spaceId,
+        f.user.id,
+        { fromAccountId: own.id, toAccountId: expense.accountId, fromAmountMinor: 1 },
+        todayISO(),
+      ),
+    ).toEqual({ ok: false, reason: "target_not_found" });
+    expect(await updateTransferAmount(f.spaceId, transfer.id, expense.accountId, 1)).toEqual({
+      ok: false,
+      reason: "not_found",
+    });
+    expect(await deleteTransfer(f.spaceId, transfer.id, expense.accountId)).toEqual({
+      ok: false,
+    });
+
+    expect(await listAccountTransfers(f.spaceId, own.id)).toEqual([]);
+    expect(await listAccountTransfers(m.spaceId, expense.accountId)).toEqual([
+      expect.objectContaining({ id: transfer.id, amountMinor: 3000 }),
+    ]);
+  });
+
   it("a raw user id is not a SpaceId", async () => {
     const { user } = await mkMigratedOwner();
+    expectTypeOf(user.id).not.toExtend<SpaceId>();
+    expectTypeOf(listCategories).parameter(0).toEqualTypeOf<SpaceId>();
     // @ts-expect-error a user id must go through resolveSpace() first
     await listCategories(user.id);
   });

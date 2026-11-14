@@ -1,4 +1,4 @@
-import { and, asc, eq, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { db, type Tx } from "@/db";
 import { listItems, lists } from "@/db/schema";
 import type { ListInput, ListVisibility } from "@/lib/lists";
@@ -8,23 +8,24 @@ export type ListSummary = {
   id: string;
   name: string;
   visibility: ListVisibility;
-  isMine: boolean;
   doneCount: number;
   totalCount: number;
-  updatedAt: Date;
 };
 
 export type ListItem = { id: string; text: string; checked: boolean };
 
-export type ListWithItems = ListSummary & { items: ListItem[] };
+export type ListWithItems = Pick<ListSummary, "id" | "name" | "visibility"> & {
+  isMine: boolean;
+  items: ListItem[];
+};
 
 export type ListOpResult = { ok: true } | { ok: false; reason: "not_found" };
 
-export type AddItemResult =
+type AddItemResult =
   | { ok: true; item: ListItem }
   | { ok: false; reason: "not_found" };
 
-export type SetListVisibilityResult =
+type SetListVisibilityResult =
   | { ok: true }
   | { ok: false; reason: "not_found" | "forbidden" };
 
@@ -39,31 +40,23 @@ function visibleList(spaceId: SpaceId, userId: string): SQL {
 
 const NOT_FOUND = { ok: false, reason: "not_found" } as const;
 
-function summaryQuery(spaceId: SpaceId, userId: string, where?: SQL) {
-  return db
-    .select({
-      id: lists.id,
-      name: lists.name,
-      visibility: lists.visibility,
-      isMine: sql<boolean>`${lists.createdBy} = ${userId}`,
-      doneCount: sql<number>`count(${listItems.id}) filter (where ${listItems.checked})::int`,
-      totalCount: sql<number>`count(${listItems.id})::int`,
-      updatedAt: lists.updatedAt,
-    })
-    .from(lists)
-    .leftJoin(listItems, eq(listItems.listId, lists.id))
-    .where(and(visibleList(spaceId, userId), where))
-    .groupBy(lists.id);
-}
-
 export async function listLists(
   spaceId: SpaceId,
   userId: string,
 ): Promise<ListSummary[]> {
-  return await summaryQuery(spaceId, userId).orderBy(
-    asc(lists.position),
-    asc(lists.id),
-  );
+  return await db
+    .select({
+      id: lists.id,
+      name: lists.name,
+      visibility: lists.visibility,
+      doneCount: sql<number>`count(${listItems.id}) filter (where ${listItems.checked})::int`,
+      totalCount: sql<number>`count(${listItems.id})::int`,
+    })
+    .from(lists)
+    .leftJoin(listItems, eq(listItems.listId, lists.id))
+    .where(visibleList(spaceId, userId))
+    .groupBy(lists.id)
+    .orderBy(asc(lists.position), asc(lists.id));
 }
 
 export async function getList(
@@ -71,7 +64,15 @@ export async function getList(
   userId: string,
   listId: string,
 ): Promise<ListWithItems | null> {
-  const [summary] = await summaryQuery(spaceId, userId, eq(lists.id, listId));
+  const [summary] = await db
+    .select({
+      id: lists.id,
+      name: lists.name,
+      visibility: lists.visibility,
+      isMine: sql<boolean>`${lists.createdBy} = ${userId}`,
+    })
+    .from(lists)
+    .where(and(eq(lists.id, listId), visibleList(spaceId, userId)));
   if (!summary) return null;
   const items = await db
     .select({ id: listItems.id, text: listItems.text, checked: listItems.checked })
@@ -125,12 +126,13 @@ export async function moveList(
     // Lock in id order, which never changes, so concurrent moves can't
     // deadlock; read the order in a later statement, because ORDER BY with a
     // lock can return rows sorted by positions from before another move.
-    await tx
+    const locked = await tx
       .select({ id: lists.id })
       .from(lists)
       .where(eq(lists.spaceId, spaceId))
       .orderBy(asc(lists.id))
       .for("no key update");
+    if (locked.length === 0) return NOT_FOUND;
     const rows = await tx
       .select({
         id: lists.id,
@@ -138,7 +140,7 @@ export async function moveList(
         visible: sql<boolean>`${or(eq(lists.visibility, "shared"), eq(lists.createdBy, userId))}`,
       })
       .from(lists)
-      .where(eq(lists.spaceId, spaceId))
+      .where(inArray(lists.id, locked.map((r) => r.id)))
       .orderBy(asc(lists.position), asc(lists.id));
 
     const visible = new Set(rows.filter((r) => r.visible).map((r) => r.id));

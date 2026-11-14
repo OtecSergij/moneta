@@ -10,6 +10,9 @@ import { createLongPress, type LongPressController } from "@/lib/long-press";
 
 export const LONG_PRESS_CLASS = "select-none [-webkit-touch-callout:none]";
 
+const enabled = (e: { currentTarget: HTMLElement }) =>
+  !e.currentTarget.matches(":disabled");
+
 export function useLongPress(onLongPress: () => void) {
   const callbackRef = useRef(onLongPress);
   useEffect(() => {
@@ -30,7 +33,7 @@ export function useLongPress(onLongPress: () => void) {
       controller().pointerDown(
         e.clientX,
         e.clientY,
-        e.isPrimary && e.button === 0,
+        e.isPrimary && e.button === 0 && enabled(e),
       ),
     onPointerMove: (e: PointerEvent<HTMLElement>) =>
       controller().pointerMove(e.clientX, e.clientY),
@@ -39,7 +42,7 @@ export function useLongPress(onLongPress: () => void) {
     onPointerCancel: () => controller().pointerCancel(),
     onContextMenu: (e: MouseEvent<HTMLElement>) => {
       e.preventDefault();
-      controller().contextMenu();
+      controller().contextMenu(enabled(e));
     },
     onKeyDownCapture: () => controller().keyDown(),
     onClickCapture: (e: MouseEvent<HTMLElement>) => {

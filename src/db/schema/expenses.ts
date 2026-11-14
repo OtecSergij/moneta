@@ -17,7 +17,7 @@ import { user } from "./auth";
 import { categories } from "./categories";
 import { spaces } from "./spaces";
 
-// Postgres ENUM for currency. Five values per business-spec.md §7: RUB
+// Postgres ENUM for currency. Five values: RUB
 // (default), USD, EUR, RSD, BTC.
 //
 // `ALTER TYPE ... ADD VALUE` is allowed inside a transaction, but the added
@@ -30,7 +30,7 @@ import { spaces } from "./spaces";
 // transaction; an already-migrated production database would not, and
 // would fail to start. So a literal of a newly added value must never
 // appear outside its own `ADD VALUE` line in the migration that adds it —
-// enforced by src/db/migrations.itest.ts (AC-21, AC-24).
+// enforced by src/db/migrations.itest.ts.
 //
 // The label list is CURRENCY_CODES itself, not a copy of it: `currencyMeta`
 // (src/lib/currency.ts) has to answer for every value this column can hold,
@@ -41,7 +41,7 @@ import { spaces } from "./spaces";
 export const currencyEnum = pgEnum("currency_code", CURRENCY_CODES);
 export type Currency = (typeof currencyEnum.enumValues)[number];
 
-// Individual expense record. Per docs/business-spec.md §4.2.
+// Individual expense record.
 //
 // Money is stored as integer-valued `amount_minor` — never floats (kopecks
 // for RUB, satoshis for BTC, etc. — see src/lib/currency.ts for the
@@ -61,10 +61,10 @@ export const expenses = pgTable(
     // 2.1e15 satoshis, above INTEGER's ~2.1e9 ceiling. `number` mode is
     // exact up to 2^53 (drizzle-orm/pg-core/columns/bigint.js), well above
     // that ceiling, and only applies to column references, not raw `sql<>`
-    // fragments (see plan Step 2.2).
+    // fragments.
     amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
     currency: currencyEnum("currency").notNull().default("RUB"),
-    // Required: every expense carries a short description (business-spec §4.2).
+    // Required: every expense carries a short description.
     note: text("note").notNull(),
     // App-level default to "today in user's timezone"; no DB default because
     // the timezone calculation lives in the app. Always set on insert.
@@ -84,7 +84,7 @@ export const expenses = pgTable(
       t.createdAt.desc(),
     ),
     index("expenses_account_created_idx").on(t.accountId, t.createdAt),
-    // RESTRICT: a category with expenses can't be deleted (business-spec §5.3).
+    // RESTRICT: a category with expenses can't be deleted.
     foreignKey({
       name: "expenses_category_same_space_fk",
       columns: [t.categoryId, t.spaceId],
@@ -94,7 +94,7 @@ export const expenses = pgTable(
       name: "expenses_account_same_space_fk",
       columns: [t.accountId, t.spaceId],
       foreignColumns: [accounts.id, accounts.spaceId],
-    }).onDelete("cascade"),
+    }).onDelete("restrict"),
     check("expenses_amount_positive", sql`${t.amountMinor} > 0`),
     check(
       "expenses_note_len",

@@ -2,7 +2,6 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { listItems, lists } from "@/db/schema";
-import type { SpaceId } from "@/lib/space-id";
 import {
   mkItem,
   mkList,
@@ -10,21 +9,9 @@ import {
   mkSpaceUser,
   type SpaceUser,
 } from "@/test/factories";
+import { session } from "@/test/session-mock";
 
-const session = vi.hoisted(() => ({
-  current: null as { userId: string; spaceId: SpaceId } | null,
-}));
-
-vi.mock("@/lib/dal", () => ({
-  requireSpace: async () => {
-    if (session.current === null) throw new Error("NEXT_REDIRECT;/login");
-    return {
-      user: { id: session.current.userId },
-      spaceId: session.current.spaceId,
-      role: "owner",
-    };
-  },
-}));
+vi.mock("@/lib/dal", () => import("@/test/session-mock"));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({

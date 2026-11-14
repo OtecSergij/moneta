@@ -2,7 +2,7 @@
 
 ## Контекст
 - Next.js + собственный Postgres (Coolify на VPS)
-- **Multi-user**: публичная регистрация открыта, каждый юзер видит только свои данные
+- **Multi-user**: публичная регистрация открыта, данные общие внутри пространства и изолированы между пространствами (см. [Data isolation](#data-isolation))
 - Способы входа: email/password + «Sign in with Google»
 
 ## Auth-библиотека: Better Auth
@@ -11,14 +11,14 @@
 ## Методы аутентификации
 1. **Email + password** — scrypt (можно переключить на argon2)
 2. **«Sign in with Google»** (OIDC) — основной способ
-3. **GitHub** — не в первой итерации (unverified emails требуют explicit linking, лишний риск)
+3. **GitHub** — не подключён: unverified emails требуют explicit linking, лишний риск
 
 ## Управление сессией: cookies + sessions в Postgres
 - Подписанный HttpOnly cookie с session ID
-- Таблица `sessions` в Postgres, валидация на каждый запрос
+- Таблица `session` в Postgres. Сессия кешируется в cookie на 5 минут, затем сверяется с базой
 - **Без JWT**, без access/refresh-токенов
 
-Причины: мгновенный logout и «выйти со всех устройств», HttpOnly cookie неуязвим к XSS, нет проблемы «где хранить токен на клиенте». JWT имеет смысл при микросервисах / мобильных клиентах / cross-domain — у нас ничего из этого нет.
+Причины: сессию можно отозвать на сервере (logout, сброс пароля; до других устройств отзыв доходит за время cookie-кеша, до 5 минут), HttpOnly cookie неуязвим к XSS, нет проблемы «где хранить токен на клиенте». JWT имеет смысл при микросервисах / мобильных клиентах / cross-domain — у нас ничего из этого нет.
 
 ### Параметры cookie / сессии
 | Параметр | Значение | Почему |
@@ -29,19 +29,19 @@
 | Lifetime | 30 дней | Compromise UX vs security |
 | Expiry стратегия | **Rolling** | Активный запрос продлевает на 30 дней; неактивен 30 → разлогин |
 | Update interval | 1 день | Не пишем `expires_at` в БД чаще раза в сутки |
-| Смена пароля | Инвалидировать все сессии кроме текущей | Стандарт безопасности |
-| «Выйти со всех устройств» | Кнопка в `/settings`, удаляет все session-rows для `user_id` | UX |
+| Сброс пароля | Инвалидирует все сессии, вход заново (`revokeSessionsOnPasswordReset`) | Стандарт безопасности |
 
-## Email verification и password reset — с первого дня
+## Email verification и password reset
 
 Multi-user без email verification = реальные дыры:
 - **Account squatting**: занять чужой email и заблокировать настоящего владельца
 - **Account takeover через auto-link**: см. раздел [Account linking](#account-linking)
 - **Spam регистрации**: боты создают тысячи мусорных аккаунтов
 
-Поэтому с первого дня:
+Поэтому:
 - Email verification **обязателен** при регистрации (без verified email — нет доступа в приложение)
-- Password reset работает через email
+- Password reset работает через email и подтверждает email: ссылка пришла на этот адрес
+- Новую ссылку подтверждения присылает вход с верным паролем и повторная регистрация на неподтверждённый адрес. Нерешённый риск этого: [auth-email-takeover.md](./auth-email-takeover.md)
 - Email-провайдер — Resend (см. ниже)
 
 ## Email-провайдер: Resend
@@ -50,20 +50,16 @@ Free tier: 3 000 писем/месяц, 100/день, 1 верифицирова
 
 API-based отправка через HTTPS, не нужен открытый SMTP-порт. У Better Auth готовый адаптер.
 
-**TODO (до публичного деплоя):**
-1. Купить домен (поддомен типа `moneta.your-domain.com` подойдёт)
-2. В Resend dashboard → Add domain → получить готовый список DNS-записей (SPF, DKIM, DMARC, return-path)
-3. Вставить записи в DNS у регистратора, дождаться зелёного в Resend
-4. До этого email verification не работает — публичный деплой откладываем
-
 ## Rate limiting — встроенный в Better Auth
 
-Минимальные лимиты (storage: Postgres через адаптер Better Auth):
-- Login: **5 попыток / 15 минут** на email
-- Sign-up: **3 попытки / час** на IP
-- Password reset request: **3 / час** на email
-- Email verification resend: **1 / минуту** на email
-- OAuth callback: **10 / минуту** на IP
+Лимиты (storage: Postgres через адаптер Better Auth). Better Auth считает их по IP и пути запроса, не по email:
+- Login: **5 попыток / 15 минут**
+- Sign-up: **3 попытки / час**
+- Password reset request: **3 / час**
+- Email verification resend (`/send-verification-email`): **1 / минуту**. Интерфейс его не вызывает: повторную ссылку шлют вход и регистрация под своими лимитами
+- OAuth callback: **10 / минуту**
+
+Следствие: перебор одного email с разных IP эти лимиты не остановят.
 
 Зачем это в multi-user с открытой регистрацией:
 - Brute-force на чужой email (email-адрес часто известен публично)
@@ -84,84 +80,47 @@ Caddy (второй прокси на выбор в Coolify) `X-Real-Ip` сам 
 
 ## Схема БД
 
-```sql
-users (
-  id                uuid primary key,
-  email             text unique not null,
-  email_verified_at timestamptz,
-  created_at        timestamptz
-);
-
-accounts (
-  id                  uuid primary key,
-  user_id             uuid references users(id),
-  provider            text not null,    -- 'password' | 'google' | 'github'
-  provider_account_id text,              -- 'sub' от провайдера, null для 'password'
-  password_hash       text,              -- только для provider='password'
-  unique (provider, provider_account_id),
-  unique (user_id, provider)
-);
-
-sessions (
-  id         text primary key,           -- session ID в cookie
-  user_id    uuid references users(id),
-  expires_at timestamptz,
-  ...
-);
-```
-
-Better Auth накатит свою версию этих таблиц через миграции адаптера — схема выше для понимания модели.
+Таблицы Better Auth — `user`, `session`, `account`, `verification`, `rate_limit` — описаны в `src/db/schema/auth.ts`. Таблица `account` хранит способы входа пользователя (пароль, Google); это не счета из `accounts`.
 
 ## Account linking
 
 **Auto-link** = при OAuth-логине, если в БД уже есть юзер с тем же email, OAuth-аккаунт прикрепляется к существующему юзеру (а не создаётся второй с дубликатом email).
 
-**Правило**: auto-link срабатывает **только если `email_verified=true` в ID-token провайдера.**
+**Правило**: auto-link срабатывает **только если `email_verified=true` в ID-token провайдера и email локального аккаунта подтверждён** (`requireLocalEmailVerified`).
 
-- **Google**: всегда `email_verified=true` (Google сам почтовый провайдер) → auto-link разрешён
+- **Google**: всегда `email_verified=true` (Google сам почтовый провайдер) → auto-link разрешён к аккаунту с подтверждённым email
 - **GitHub** (если добавим): `email_verified` может быть `false` → **explicit linking only** через настройки после логина
 
 Без проверки `email_verified` auto-link становится вектором account takeover: злоумышленник регистрирует у провайдера с непроверенным email чужого юзера, auto-link привязывает его к существующему аккаунту в нашей БД, он видит чужие данные.
+
+Без проверки локального email то же самое с другой стороны: злоумышленник регистрирует у нас чужой email со своим паролем, владелец входит через Google, аккаунт привязывается, и пароль злоумышленника открывает его. Владелец сначала сбрасывает пароль, это подтверждает email, после чего Google привязывается.
 
 ## UX логина — generic error messages (no email enumeration)
 
 В multi-user окружении любая утечка «существует ли email» — это enumeration oracle для атакующего.
 
-- **Login паролем**: всегда `«Неверный email или пароль»`, независимо от того, есть ли email в БД и привязан ли он к OAuth.
-- **Password reset request**: одинаковая UI-реакция всегда (`«Если такой email зарегистрирован, мы отправили письмо»`). Если email есть — письмо уходит; если нет — ничего.
-- **Sign-up на существующий email**: `«Не удалось создать аккаунт»` + ссылка `«забыли пароль?»`. Не подтверждаем явно «email уже зарегистрирован».
-- **Account linking** делается **только из настроек после успешного логина обоими методами** — там identity уже подтверждена, утечки нет.
+- **Login паролем**: `«Неверный email или пароль»`, независимо от того, есть ли email в БД и привязан ли он к OAuth. Исключение: верный пароль при неподтверждённой почте даёт просьбу подтвердить email и новую ссылку — пароль уже доказан, утечки нет.
+- **Password reset request**: одинаковая UI-реакция всегда (экран «Проверьте почту»). Если email есть — письмо уходит; если нет — ничего.
+- **Sign-up на существующий email**: тот же ответ, что для нового — экран «Проверьте почту». Не подтверждаем явно «email уже зарегистрирован». Если адрес не подтверждён, уходит новая ссылка подтверждения; если подтверждён, ничего.
+- **Ошибка входа через Google**: возврат на страницу входа или регистрации с сообщением. При `account_not_linked` сообщение предлагает войти паролем или восстановить его.
+- **Account linking**: ручной привязки в интерфейсе нет, Google привязывается автоматически (см. [Account linking](#account-linking)).
 
 ## Data isolation
 
 Multi-user + Postgres без RLS = изоляция enforce'ится на application-level. Единица изоляции — **пространство** (`spaces`): владелец и участники по приглашению видят и правят общие данные; пользователь состоит ровно в одном пространстве.
 
 **Подход — repository pattern по `SpaceId`:**
-- Репозитории общих данных (`categories`, `expenses`, `lists` с `list_items`, `accounts`) принимают branded-тип `SpaceId`. Его выдают только `resolveSpace()` / `getMembership()` из `src/repositories/spaces.ts` — подставить `user.id` или строку от клиента TypeScript не даст.
+- Репозитории общих данных (`categories`, `expenses`, `lists` с `list_items`, `accounts`, `top_ups`, `transfers`) принимают branded-тип `SpaceId`. Его выдают только `resolveSpace()` / `getMembership()` из `src/repositories/spaces.ts` — подставить `user.id` или строку от клиента TypeScript не даст.
 - Страницы и server actions берут пространство только из `requireSpace()` в `src/lib/dal.ts`; `spaceId` от клиента не принимается.
-- **Исключения:** `user_settings` — личные, по `userId`; `fx_rates` — глобальная таблица. Подсказки формы (последние категория, валюта и счёт) считаются внутри пространства по `created_by = я`.
+- **Исключения:** `user_settings` — личные, по `userId`; `fx_rates` — глобальная таблица. Подсказки формы (последние категория и счёт) считаются внутри пространства по `created_by = я`.
 - **Приватные списки** — исключение внутри пространства: список с `visibility = private` видит и правит только автор. Каждое чтение и запись списков и пунктов повторяет предикат `visibleList` (`space_id` и «общий или `created_by = я`») в том же запросе.
 - **Обязательный isolation-тест**: интеграционный тест «пространство A не видит и не правит данные пространства B» — на каждую сущность.
 
 **Приглашение в пространство:**
-- Ссылка одноразовая (токен 128 бит), у пространства одна действующая; новая отменяет старую; срок жизни 7 дней (`INVITE_TTL_DAYS`).
+- Правила ссылки (одна действующая, одноразовая, срок жизни) — в `docs/product-spec.md`, раздел «Приглашение». Токен — 128 бит, срок задаёт `INVITE_TTL_DAYS`.
 - `inviteGuard` (`hooks.before` Better Auth) проверяет токен **до** поиска email: на недействующий токен ответ `INVITE_INVALID` одинаков для нового и существующего адреса — оракула перебора email нет.
 - **Принятый остаточный риск:** держатель *действующей* ссылки может проверить, занят ли email — новый email гасит ссылку, существующий оставляет её действующей. Проба шумная (создаёт аккаунт, шлёт письмо), тратит ссылку и доступна только тому, у кого ссылка уже есть.
 
+**Логи:** события несут только идентификаторы, без email и без токена приглашения. Исключение: без `RESEND_API_KEY` или `EMAIL_FROM` письмо целиком печатается в лог, в любом окружении.
+
 Postgres RLS сейчас не делаем — overhead (миграции с policies, транзакционная обёртка под `SET LOCAL`, осторожность с pgBouncer) не оправдан. Можно добавить поверх позже, если scope изменится.
-
-## Порядок реализации
-
-_Статус (июнь 2026): пп. 2–7 выполнены — auth-формы, isolation-тесты, Resend
-(домен + DNS, email verification + password reset), Google OAuth с auto-link,
-rate limiting. Остаётся деплой в Coolify (п.1 — БД/миграции готовы, сам деплой
-ещё нет) и опц. п.8._
-
-1. Поднять Postgres в Coolify, подключить Better Auth с Drizzle-адаптером, накатить миграции.
-2. Email/password sign-up + login + базовый UI (формы, ошибки, redirect).
-3. Repository pattern для `categories` / `expenses` + isolation-тесты — **до** того, как появятся ручки данных.
-4. Купить домен, настроить DNS-записи через Resend dashboard, подключить Resend, включить email verification и password reset.
-5. Завести OAuth-приложение в Google Cloud Console (`openid email profile`, non-sensitive, без app verification и без оплаты), добавить Google-провайдер с auto-link по `email_verified`.
-6. UI логина / регистрации / verify / reset через хуки Better Auth (`useSession`, `signIn`, `signOut`).
-7. Включить rate-limiter с лимитами выше.
-8. **Позже:** GitHub или другие OIDC-провайдеры по необходимости (explicit linking only, если `email_verified` не гарантирован).

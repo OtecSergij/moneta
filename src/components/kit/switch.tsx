@@ -21,7 +21,7 @@ export function Switch({
       className={cn(
         "relative h-[31px] w-[51px] flex-none cursor-pointer rounded-chip transition-colors",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
-        "disabled:cursor-not-allowed disabled:opacity-60",
+        "disabled:cursor-not-allowed disabled:opacity-50",
         checked ? "bg-primary" : "bg-control-line",
         className,
       )}

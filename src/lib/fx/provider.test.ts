@@ -68,7 +68,7 @@ describe("fetchRubToUsd — Central Bank of Russia", () => {
 
     const [[url, init]] = calls(fetch);
     expect(url).toBe("https://www.cbr.ru/scripts/XML_daily.asp?date_req=04/09/2026");
-    // Every request carries an abort signal (plan Step 4.2) — Node's fetch
+    // Every request carries an abort signal — Node's fetch
     // has no default timeout.
     expect(init?.signal).toBeInstanceOf(AbortSignal);
   });

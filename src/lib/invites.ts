@@ -22,7 +22,7 @@ export function displayInviteUrl(url: string): string {
   return url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
 }
 
-export type ExtractedInviteToken =
+type ExtractedInviteToken =
   { kind: "none" } | { kind: "invalid" } | { kind: "token"; token: string };
 
 function classify(value: unknown): ExtractedInviteToken {

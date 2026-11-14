@@ -12,7 +12,7 @@ const session = vi.hoisted(() => ({ userId: null as string | null }));
 vi.mock("@/lib/dal", () => ({
   requireSession: async () => {
     // What redirect("/login") does inside a real request: it throws, so the
-    // action body never runs. AC-28's "returns an error" is that rejection —
+    // action body never runs. A signed-out call fails by that rejection —
     // the action has no catch of its own and must not grow one, or a signed-out
     // caller would get a normal-looking answer.
     if (session.userId === null) throw new Error("NEXT_REDIRECT;/login");
@@ -57,7 +57,7 @@ async function withCountedFetch<T>(
   }
 }
 
-describe("quoteConversionAction — session gate (AC-28)", () => {
+describe("quoteConversionAction — session gate", () => {
   it("rejects without a session and reaches no external API", async () => {
     session.userId = null;
 

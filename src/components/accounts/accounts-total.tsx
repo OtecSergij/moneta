@@ -1,6 +1,7 @@
 import type { CurrencyCode } from "@/lib/currency";
 import type { AccountsSummary } from "@/lib/accounts-total";
 import { TotalMoney } from "@/components/ui/total-money";
+import { SummaryCard } from "@/components/kit/summary-card";
 
 export function AccountsTotal({
   summary,
@@ -11,11 +12,11 @@ export function AccountsTotal({
 }) {
   const shares = summary.rows.filter((row) => row.sharePermille > 0);
   return (
-    <section
-      aria-label="Всего на счетах"
-      className="mx-4 mt-2 flex flex-col gap-1 rounded-card bg-card p-5"
+    <SummaryCard
+      ariaLabel="Всего на счетах"
+      label="Всего на счетах"
+      className="mx-4 mt-2"
     >
-      <span className="text-sm text-ink-2">Всего на счетах</span>
       <TotalMoney
         minor={summary.totalMinor}
         currency={currency}
@@ -36,6 +37,6 @@ export function AccountsTotal({
           ))}
         </span>
       ) : null}
-    </section>
+    </SummaryCard>
   );
 }

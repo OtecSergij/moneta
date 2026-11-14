@@ -20,7 +20,7 @@ export const TABS = [
   Icon: LucideIcon;
 }[];
 
-export type TabKey = (typeof TABS)[number]["key"];
+type TabKey = (typeof TABS)[number]["key"];
 
 export type Section = TabKey | "settings" | "none";
 

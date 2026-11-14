@@ -1,24 +1,32 @@
 "use server";
 
-import { after } from "next/server";
 import { requireSpace } from "@/lib/dal";
 import {
   ExpenseInput,
   ExpensePatch,
   createExpense,
   deleteExpense,
+  getExpense,
   updateExpense,
-  type Expense,
 } from "@/repositories/expenses";
-import { ensureRates, syncSpaceRates } from "@/repositories/fx-rates";
+import { entryGone } from "./entry-gone";
+import { fillRatesAfterWrite } from "./entry-rates";
 import { revalidateFor } from "./revalidate";
-import { INVALID, isUuid, type ActionResult } from "./types";
+import {
+  ACCOUNT_NOT_FOUND,
+  INVALID,
+  isUuid,
+  type ActionResult,
+  type ActionResultWithNotFound,
+} from "./types";
+
+const EXPENSE_NOT_FOUND = { ok: false, error: "Трата не найдена" } as const;
 
 // See categories.ts for the auth/validation rationale — same rules apply.
 
 export async function createExpenseAction(
   input: unknown,
-): Promise<ActionResult<Expense>> {
+): Promise<ActionResult<null>> {
   const { user, spaceId } = await requireSpace();
   const parsed = ExpenseInput.safeParse(input);
   if (!parsed.success) return INVALID;
@@ -35,54 +43,47 @@ export async function createExpenseAction(
     return { ok: false, error: "Не удалось сохранить трату. Проверьте категорию, дату и счёт" };
   }
   revalidateFor("expense");
-  // Snapshot top-up after the response, so a save never waits on a provider.
-  // `spaceId` is read here, not inside the callback: after() runs outside the
-  // request context.
-  after(async () => {
-    await ensureRates(parsed.data.spentAt);
-    // Unthrottled: this path knows state just changed, so it must converge
-    // now rather than wait out the page path's quiet window.
-    await syncSpaceRates(spaceId);
-  });
-  return { ok: true, data: expense };
+  fillRatesAfterWrite(spaceId, parsed.data.spentAt);
+  return { ok: true, data: null };
 }
 
+// `accountId` names the account whose page the call comes from: once that
+// account is gone too, the answer is ACCOUNT_NOT_FOUND.
 export async function updateExpenseAction(
   id: string,
   patch: unknown,
-): Promise<ActionResult<Expense>> {
+  accountId?: string,
+): Promise<ActionResultWithNotFound<null>> {
   const { spaceId } = await requireSpace();
-  if (!isUuid(id)) {
-    return { ok: false, error: "Трата не найдена" };
-  }
+  if (accountId !== undefined && !isUuid(accountId)) return ACCOUNT_NOT_FOUND;
+  if (!isUuid(id)) return EXPENSE_NOT_FOUND;
   const parsed = ExpensePatch.safeParse(patch);
   if (!parsed.success) return INVALID;
 
   const expense = await updateExpense(spaceId, id, parsed.data);
   if (!expense) {
-    revalidateFor("expense");
-    return { ok: false, error: "Не удалось обновить трату" };
+    const gone = (await getExpense(spaceId, id)) === null;
+    return await entryGone(
+      spaceId,
+      accountId,
+      "expense",
+      gone ? EXPENSE_NOT_FOUND : ({ ok: false, error: "Не удалось обновить трату" } as const),
+    );
   }
   revalidateFor("expense");
-  // The patch may not touch spentAt at all — skip the top-up rather than
-  // guessing which date to fill.
-  const { spentAt } = parsed.data;
-  after(async () => {
-    if (spentAt !== undefined) await ensureRates(spentAt);
-    await syncSpaceRates(spaceId);
-  });
-  return { ok: true, data: expense };
+  fillRatesAfterWrite(spaceId, parsed.data.spentAt);
+  return { ok: true, data: null };
 }
 
 export async function deleteExpenseAction(
   id: string,
-): Promise<ActionResult<{ id: string }>> {
+  accountId?: string,
+): Promise<ActionResultWithNotFound<null>> {
   const { spaceId } = await requireSpace();
-  if (!isUuid(id)) {
-    return { ok: false, error: "Трата не найдена" };
-  }
+  if (accountId !== undefined && !isUuid(accountId)) return ACCOUNT_NOT_FOUND;
+  if (!isUuid(id)) return EXPENSE_NOT_FOUND;
   const result = await deleteExpense(spaceId, id);
-  if (!result.ok) return { ok: false, error: "Трата не найдена" };
+  if (!result.ok) return await entryGone(spaceId, accountId, "expense", EXPENSE_NOT_FOUND);
   revalidateFor("expense");
-  return { ok: true, data: { id } };
+  return { ok: true, data: null };
 }

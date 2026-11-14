@@ -14,13 +14,6 @@ export const CATEGORY_NAME_MAX = 40;
 // the repository.
 export const CategoryInput = z.object({
   name: z.string().trim().min(1).max(CATEGORY_NAME_MAX),
-  // .optional() outermost so the inferred key is optional (`description?`), not
-  // a required key valued `string | undefined`.
-  description: z
-    .string()
-    .max(250)
-    .transform((v) => (v.trim().length > 0 ? v : undefined))
-    .optional(),
   color: z.enum(PALETTE_COLORS),
 });
 export type CategoryInput = z.infer<typeof CategoryInput>;

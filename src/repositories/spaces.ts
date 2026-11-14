@@ -11,7 +11,7 @@ import { isUniqueViolation } from "@/lib/db-errors";
 import type { SpaceId } from "@/lib/space-id";
 
 export type SpaceRole = "owner" | "member";
-export type Membership = { spaceId: SpaceId; role: SpaceRole };
+type Membership = { spaceId: SpaceId; role: SpaceRole };
 
 export type SpaceMember = {
   userId: string;

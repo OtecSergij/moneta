@@ -4,10 +4,12 @@ import { expenses } from "@/db/schema";
 import { todayISO } from "@/lib/dates";
 import { DEFAULT_PALETTE_COLOR, PALETTE_COLORS } from "@/lib/palette";
 import {
+  CategoryPatch,
   createCategory,
   deleteCategory,
   getCategory,
   listCategories,
+  listCategoriesWithUsage,
   updateCategory,
 } from "@/repositories/categories";
 import { mkAccount, mkExpense, mkMember, mkSpaceUser } from "@/test/factories";
@@ -22,6 +24,22 @@ describe("categories repository — order", () => {
       "Такси",
       "Аптека",
       "Кафе",
+    ]);
+    expect((await listCategoriesWithUsage(a.spaceId)).map((c) => c.name)).toEqual([
+      "Такси",
+      "Аптека",
+      "Кафе",
+    ]);
+  });
+
+  it("list rows carry only id, name, color and, with usage, hasExpenses", async () => {
+    const a = await mkSpaceUser();
+    const cat = await createCategory(a.spaceId, a.user.id, { name: "Кафе" });
+    const row = { id: cat.id, name: "Кафе", color: cat.color };
+
+    expect(await listCategories(a.spaceId)).toEqual([row]);
+    expect(await listCategoriesWithUsage(a.spaceId)).toEqual([
+      { ...row, hasExpenses: false },
     ]);
   });
 });
@@ -102,11 +120,9 @@ describe("categories repository — isolation", () => {
     const u = await mkSpaceUser();
     const cat = await createCategory(u.spaceId, u.user.id, {
       name: "Coffee",
-      description: "for the soul",
       color: PALETTE_COLORS[7],
     });
     expect(cat.name).toBe("Coffee");
-    expect(cat.description).toBe("for the soul");
     expect(cat.createdBy).toBe(u.user.id);
 
     expect(await deleteCategory(u.spaceId, cat.id)).toEqual({ ok: true });
@@ -132,6 +148,23 @@ describe("categories repository — shared space", () => {
     ).toBe("Квартира");
   });
 
+  it("one renames, the other recolours: both changes survive", async () => {
+    const owner = await mkSpaceUser();
+    const member = await mkMember(owner.spaceId);
+    const cat = await createCategory(owner.spaceId, owner.user.id, {
+      name: "Кафе",
+      color: PALETTE_COLORS[0],
+    });
+
+    await updateCategory(owner.spaceId, cat.id, { name: "Рестораны" });
+    await updateCategory(member.spaceId, cat.id, { color: PALETTE_COLORS[3] });
+
+    expect(await getCategory(owner.spaceId, cat.id)).toMatchObject({
+      name: "Рестораны",
+      color: PALETTE_COLORS[3],
+    });
+  });
+
   it("hasExpenses counts expenses of every member", async () => {
     const owner = await mkSpaceUser();
     const member = await mkMember(owner.spaceId);
@@ -142,7 +175,7 @@ describe("categories repository — shared space", () => {
     await mkExpense(owner.spaceId, member.user.id, { categoryId: used.id });
 
     const byName = Object.fromEntries(
-      (await listCategories(owner.spaceId)).map((c) => [c.name, c.hasExpenses]),
+      (await listCategoriesWithUsage(owner.spaceId)).map((c) => [c.name, c.hasExpenses]),
     );
     expect(byName).toEqual({ Used: true, Unused: false });
   });
@@ -202,6 +235,18 @@ describe("categories repository — shared space", () => {
       spy.mockRestore();
     }
     expect(await getCategory(owner.spaceId, cat.id)).not.toBeNull();
+  });
+});
+
+describe("updateCategory — a patch of only undefined keys", () => {
+  it("changes nothing and returns the row", async () => {
+    const u = await mkSpaceUser();
+    const cat = await createCategory(u.spaceId, u.user.id, { name: "Кафе" });
+    const patch = CategoryPatch.parse({ name: undefined, color: undefined });
+    expect(Object.keys(patch)).toEqual(["name", "color"]);
+
+    expect(await updateCategory(u.spaceId, cat.id, patch)).toEqual(cat);
+    expect(await getCategory(u.spaceId, cat.id)).toEqual(cat);
   });
 });
 

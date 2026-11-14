@@ -11,7 +11,6 @@ import { user } from "./auth";
 import { spaces } from "./spaces";
 
 // User-defined spending category (e.g. "Еда", "Транспорт", "Кафе").
-// Per docs/business-spec.md §4.1.
 export const categories = pgTable(
   "categories",
   {

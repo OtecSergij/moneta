@@ -1,30 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import { Trash2 } from "lucide-react";
-import { unstable_rethrow } from "next/navigation";
 import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
 import { minorToInput } from "@/lib/money";
+import { useActionRunner } from "@/lib/hooks/use-action-runner";
+import { useSheetTask } from "@/lib/hooks/use-sheet-task";
 import { type CurrencyCode } from "@/lib/currency";
 import {
   expenseFormSchema,
-  toExpenseInput,
+  expensePatch,
   type ExpenseFormValues,
 } from "@/lib/expense-form";
 import {
   deleteExpenseAction,
   updateExpenseAction,
 } from "@/lib/actions/expenses";
-import type { Category } from "@/repositories/categories";
-import type { Expense } from "@/repositories/expenses";
+import type { ExpenseCategory } from "@/repositories/categories";
+import type { ExpenseEntry } from "@/lib/expense-entry";
 import { BottomSheet } from "@/components/kit/bottom-sheet";
-import { Button } from "@/components/kit/button";
+import { SheetEditActions } from "@/components/kit/sheet-edit-actions";
 import { ExpenseFormFields } from "@/components/expenses/expense-form-fields";
 import type { ExpenseAccount } from "@/components/expenses/account-chips";
 
-function toDefaults(e: Expense): ExpenseFormValues {
+function toDefaults(e: ExpenseEntry): ExpenseFormValues {
   return {
     amount: minorToInput(e.amountMinor, e.currency),
     currency: e.currency,
@@ -40,71 +38,55 @@ export function ExpenseSheet({
   categories,
   accounts,
   displayCurrency,
+  accountId,
   onClose,
 }: {
-  expense: Expense;
-  categories: Category[];
+  expense: ExpenseEntry;
+  categories: ExpenseCategory[];
   accounts: ExpenseAccount[];
   displayCurrency: CurrencyCode;
+  // The account whose page the card is opened on.
+  accountId?: string;
   onClose: () => void;
 }) {
-  const [deleting, setDeleting] = useState(false);
+  const run = useActionRunner("/accounts");
+  const { pending: saving, run: runSave } = useSheetTask(onClose);
+  const { pending: deleting, run: runDelete } = useSheetTask(onClose);
 
   const methods = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
     defaultValues: toDefaults(expense),
   });
-  const saving = methods.formState.isSubmitting;
+  const busy = saving || deleting;
 
-  async function onSubmit(values: ExpenseFormValues) {
-    let res;
-    try {
-      res = await updateExpenseAction(expense.id, toExpenseInput(values));
-    } catch (error) {
-      unstable_rethrow(error);
-      toast.error("Не удалось обновить трату");
-      return;
-    }
-    if (!res.ok) {
-      toast.error(res.error);
-      return;
-    }
-    toast.success("Трата обновлена");
-    onClose();
+  function onSubmit(values: ExpenseFormValues) {
+    const patch = expensePatch(values, expense);
+    return runSave(() =>
+      run(
+        () => updateExpenseAction(expense.id, patch, accountId),
+        "Не удалось обновить трату",
+        "Трата обновлена",
+      ),
+    );
   }
 
-  async function onDelete() {
-    setDeleting(true);
-    let res;
-    try {
-      res = await deleteExpenseAction(expense.id);
-    } catch (error) {
-      unstable_rethrow(error);
-      toast.error("Не удалось удалить трату");
-      return;
-    } finally {
-      setDeleting(false);
-    }
-    if (!res.ok) {
-      toast.error(res.error);
-      return;
-    }
-    toast.success("Трата удалена");
-    onClose();
+  function onDelete() {
+    return runDelete(() =>
+      run(
+        () => deleteExpenseAction(expense.id, accountId),
+        "Не удалось удалить трату",
+        "Трата удалена",
+      ),
+    );
   }
 
   return (
     <BottomSheet
-      open
       variant="compact"
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
+      onClose={onClose}
       ariaLabel="Трата"
-      onOpenAutoFocus={(e) => {
-        e.preventDefault();
-        (e.currentTarget as HTMLElement).focus();
-      }}
+      focusSheet
+      busy={busy}
     >
       <FormProvider {...methods}>
         <form
@@ -117,27 +99,14 @@ export function ExpenseSheet({
             categories={categories}
             accounts={accounts}
             displayCurrency={displayCurrency}
+            disabled={busy}
           />
-          <div className="mt-1 flex gap-2.5">
-            <Button
-              variant="danger"
-              iconOnly
-              aria-label="Удалить трату"
-              loading={deleting}
-              disabled={saving}
-              onClick={onDelete}
-            >
-              <Trash2 className="size-[22px]" strokeWidth={1.75} aria-hidden />
-            </Button>
-            <Button
-              type="submit"
-              className="flex-1"
-              loading={saving}
-              disabled={deleting}
-            >
-              Сохранить
-            </Button>
-          </div>
+          <SheetEditActions
+            deleteLabel="Удалить трату"
+            onDelete={onDelete}
+            deleting={deleting}
+            saving={saving}
+          />
         </form>
       </FormProvider>
     </BottomSheet>

@@ -9,11 +9,13 @@ import {
   spaceInvites,
   spaceMembers,
   spaces,
+  transfers,
   user,
 } from "@/db/schema";
 import { todayISO } from "@/lib/dates";
 import { PALETTE_COLORS } from "@/lib/palette";
 import type { SpaceId } from "@/lib/space-id";
+import { TOP_UP_DEFAULT_NOTE, type TopUpInput } from "@/lib/top-ups";
 import { createCategory } from "@/repositories/categories";
 import {
   type Expense,
@@ -21,6 +23,7 @@ import {
   createExpense,
 } from "@/repositories/expenses";
 import { getMembership, resolveSpace } from "@/repositories/spaces";
+import { type TopUp, createTopUp } from "@/repositories/top-ups";
 
 type User = typeof user.$inferSelect;
 export type SpaceUser = { user: User; spaceId: SpaceId };
@@ -47,8 +50,8 @@ async function membershipOf(userId: string): Promise<SpaceId> {
   return membership.spaceId;
 }
 
-// A user who signed up after phase 1: their space is a fresh random uuid, so
-// space id !== user id.
+// A user who signed up after spaces were introduced: their space is a fresh
+// random uuid, so space id !== user id.
 export async function mkSpaceUser(
   overrides: Partial<typeof user.$inferInsert> = {},
 ): Promise<SpaceUser> {
@@ -57,7 +60,7 @@ export async function mkSpaceUser(
   return { user: u, spaceId };
 }
 
-// A user whose space came out of the phase-1 data migration (space id = user id).
+// A user whose space came out of the spaces data migration (space id = user id).
 export async function mkMigratedOwner(
   overrides: Partial<typeof user.$inferInsert> = {},
 ): Promise<SpaceUser> {
@@ -215,6 +218,44 @@ export async function mkAccount(
       color: PALETTE_COLORS[0],
       anchorAmountMinor: 0,
       ...overrides,
+    })
+    .returning();
+  return row;
+}
+
+export async function mkTopUp(
+  spaceId: SpaceId,
+  userId: string,
+  input: Partial<TopUpInput> & Pick<TopUpInput, "accountId">,
+): Promise<TopUp> {
+  const result = await createTopUp(spaceId, userId, {
+    amountMinor: 1000,
+    note: TOP_UP_DEFAULT_NOTE,
+    occurredOn: todayISO(),
+    ...input,
+  });
+  if (!result.ok) throw new Error(`mkTopUp: createTopUp failed (${result.reason})`);
+  return result.topUp;
+}
+
+export async function mkTransfer(
+  spaceId: SpaceId,
+  userId: string,
+  input: Partial<typeof transfers.$inferInsert> & {
+    fromAccountId: string | null;
+    toAccountId: string | null;
+  },
+): Promise<typeof transfers.$inferSelect> {
+  const fromAmountMinor = input.fromAmountMinor ?? 1000;
+  const [row] = await db
+    .insert(transfers)
+    .values({
+      spaceId,
+      createdBy: userId,
+      fromAmountMinor,
+      toAmountMinor: fromAmountMinor,
+      enteredOn: todayISO(),
+      ...input,
     })
     .returning();
   return row;

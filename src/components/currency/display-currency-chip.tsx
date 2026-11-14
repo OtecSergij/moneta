@@ -1,17 +1,18 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
-import { unstable_rethrow } from "next/navigation";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
-import { toast } from "sonner";
 import {
   CURRENCY_CODES,
   currencyMeta,
   type CurrencyCode,
 } from "@/lib/currency";
 import { setDisplayCurrencyAction } from "@/lib/actions/display-currency";
+import { runAction } from "@/lib/hooks/use-action-runner";
+import { useSyncedState } from "@/lib/hooks/use-synced-state";
 import { cn } from "@/lib/utils";
+import { RoundIconButton } from "@/components/kit/round-icon-button";
 
 const MENU_LABEL = "Валюта отображения";
 
@@ -20,40 +21,38 @@ export function DisplayCurrencyChip({
 }: {
   initialCurrency: CurrencyCode;
 }) {
-  const [value, setValue] = useState(initialCurrency);
-  const [seenCurrency, setSeenCurrency] = useState(initialCurrency);
-  if (seenCurrency !== initialCurrency) {
-    setSeenCurrency(initialCurrency);
-    setValue(initialCurrency);
-  }
+  const [value, setValue] = useSyncedState(initialCurrency);
   const [, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   // Radix opens the menu on pointerdown for every pointer type; on a phone
   // that fires at the start of a scroll gesture, so touch opens on click.
   const touchPress = useRef(false);
+  const latestRequest = useRef(0);
+  const confirmed = useRef(initialCurrency);
+
+  useEffect(() => {
+    confirmed.current = initialCurrency;
+  }, [initialCurrency]);
 
   function select(next: CurrencyCode) {
     if (next === value) return;
 
-    const previous = value;
+    const request = ++latestRequest.current;
     setValue(next);
     startTransition(async () => {
-      try {
-        const res = await setDisplayCurrencyAction(next);
-        if (res.ok) return;
-        toast.error(res.error);
-      } catch (error) {
-        unstable_rethrow(error);
-        toast.error("Не удалось сохранить");
-      }
-      setValue(previous);
+      const saved = await runAction(
+        () => setDisplayCurrencyAction(next),
+        "Не удалось сохранить",
+      );
+      if (saved) confirmed.current = next;
+      else if (request === latestRequest.current) setValue(confirmed.current);
     });
   }
 
   return (
     <DropdownMenu.Root open={open} onOpenChange={setOpen}>
       <DropdownMenu.Trigger
-        aria-label={`${MENU_LABEL}: ${value}`}
+        asChild
         onPointerDown={(e) => {
           touchPress.current = e.pointerType !== "mouse";
           if (touchPress.current) e.preventDefault();
@@ -63,13 +62,11 @@ export function DisplayCurrencyChip({
           touchPress.current = false;
           setOpen((o) => !o);
         }}
-        className="group flex h-11 cursor-pointer items-center gap-1.5 rounded-chip bg-card pr-3 pl-4 text-sm font-semibold text-ink shadow-[inset_0_0_0_1px_var(--color-line)] hover-outline focus-visible:outline-2 focus-visible:outline-primary data-[state=open]:shadow-[inset_0_0_0_1px_var(--color-bar-past)]"
       >
-        {value}
-        <ChevronDown
-          aria-hidden
-          className="size-4 group-data-[state=open]:rotate-180"
-          strokeWidth={1.75}
+        <RoundIconButton
+          icon={ChevronDown}
+          label={`${MENU_LABEL}: ${value}`}
+          text={value}
         />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>

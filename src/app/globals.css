@@ -17,16 +17,16 @@
   --color-ink-badge: #3f3f46;
   --color-bar-past: #a1a1aa;
   --color-check-line: #8e8e96;
-  --color-select: #18181b;
   --color-primary: #2563eb;
   --color-primary-ink: #1d4ed8;
   --color-primary-soft: #e8effd;
+  --color-primary-soft-hover: #dbe6fc;
   --color-edit-row: #f8faff;
   --color-error: #dc2626;
   --color-danger-ink: #b91c1c;
   --color-danger-soft: #fef2f2;
-  --color-danger-deep: #7f1d1d;
   --color-ok: #16a34a;
+  --color-ok-ink: #15803d;
   --color-warn-soft: #fef3c7;
   --color-warn-ink: #92400e;
   --color-overlay: rgba(9, 9, 11, 0.45);
@@ -51,6 +51,14 @@ body {
   font-family: var(--font-sans);
 }
 
+/* iOS Safari greys the text of a disabled input through text-fill-color. */
+@layer base {
+  input:disabled,
+  input:disabled::placeholder {
+    -webkit-text-fill-color: currentcolor;
+  }
+}
+
 /* Hover highlight, one utility per kind from the «Наведение» block of the
    canvas «Система» board, mouse only. Rows use #fafafa instead of the canvas
    rgba(9, 9, 11, 0.04): on a white card that is #f5f5f5, the page colour. */
@@ -72,11 +80,11 @@ body {
   }
 }
 
-@utility hover-dark {
+@utility hover-tint {
   transition: background-color 120ms;
   @media (hover: hover) and (pointer: fine) {
     &:hover:not(:disabled) {
-      background-color: #3f3f46;
+      background-color: var(--color-primary-soft-hover);
     }
   }
 }
@@ -97,12 +105,12 @@ body {
       background-color: var(--color-line);
     }
     &[aria-pressed="true"]:hover:not(:disabled) {
-      background-color: #3f3f46;
+      background-color: var(--color-primary-soft-hover);
     }
   }
 }
 
-/* White buttons: «Отмена» and the dashed «Новая». */
+/* White button: the dashed «Новая» chip. */
 @utility hover-white {
   transition: background-color 120ms;
   @media (hover: hover) and (pointer: fine) {
@@ -151,21 +159,12 @@ body {
   }
 }
 
-@utility hover-danger {
-  transition: background-color 120ms;
-  @media (hover: hover) and (pointer: fine) {
-    &:hover:not(:disabled) {
-      background-color: var(--color-danger-ink);
-    }
-  }
-}
-
 @utility hover-seg {
   transition:
     background-color 120ms,
     color 120ms;
   @media (hover: hover) and (pointer: fine) {
-    &:not([aria-pressed="true"]):hover {
+    &:not([aria-pressed="true"]):hover:not(:disabled) {
       color: var(--color-ink);
       background-color: rgba(255, 255, 255, 0.55);
     }
@@ -192,7 +191,7 @@ body {
     transition: transform 120ms;
   }
   @media (hover: hover) and (pointer: fine) {
-    &:not([aria-checked="true"]):hover > span {
+    &:not([aria-checked="true"]):hover:not(:disabled) > span {
       transform: scale(1.15);
     }
   }

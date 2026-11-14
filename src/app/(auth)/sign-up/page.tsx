@@ -13,7 +13,17 @@ export const metadata: Metadata = { title: "Регистрация — moneta" }
 // frozen to `false` in the build-time prerender and the button never shows.
 export const dynamic = "force-dynamic";
 
-export default async function SignUpPage() {
+export default async function SignUpPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   if (await getSession()) redirect("/");
-  return <SignUpForm hasGoogle={hasGoogleOAuth} />;
+  const { error } = await searchParams;
+  return (
+    <SignUpForm
+      hasGoogle={hasGoogleOAuth}
+      googleError={typeof error === "string" ? error : undefined}
+    />
+  );
 }

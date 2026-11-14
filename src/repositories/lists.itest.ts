@@ -81,14 +81,22 @@ describe("lists repository — visibility", () => {
     expect(await renameList(b.spaceId, b.user.id, id, "Продукты на неделю")).toEqual({ ok: true });
 
     for (const who of [a, b]) {
-      const list = await getList(who.spaceId, who.user.id, id);
-      expect(list).toMatchObject({
+      expect(await getList(who.spaceId, who.user.id, id)).toEqual({
+        id,
         name: "Продукты на неделю",
+        visibility: "shared",
         isMine: who === a,
-        doneCount: 1,
-        totalCount: 1,
         items: [{ id: added.item.id, text: "Молоко", checked: true }],
       });
+      expect(await listLists(who.spaceId, who.user.id)).toEqual([
+        {
+          id,
+          name: "Продукты на неделю",
+          visibility: "shared",
+          doneCount: 1,
+          totalCount: 1,
+        },
+      ]);
     }
   });
 
@@ -217,7 +225,9 @@ describe("lists repository — ordering and updates", () => {
       ["Четвёртый", false],
       [first.text, true],
     ]);
-    expect(got).toMatchObject({ doneCount: 1, totalCount: 4 });
+    expect(await listLists(a.spaceId, a.user.id)).toEqual([
+      expect.objectContaining({ doneCount: 1, totalCount: 4 }),
+    ]);
   });
 
   it("resetList unchecks every item", async () => {
@@ -231,7 +241,9 @@ describe("lists repository — ordering and updates", () => {
 
     const got = await getList(a.spaceId, a.user.id, list.id);
     expect(got?.items.every((i) => !i.checked)).toBe(true);
-    expect(got).toMatchObject({ doneCount: 0, totalCount: 3 });
+    expect(await listLists(a.spaceId, a.user.id)).toEqual([
+      expect.objectContaining({ doneCount: 0, totalCount: 3 }),
+    ]);
   });
 
   it("deleteList cascades to its items", async () => {

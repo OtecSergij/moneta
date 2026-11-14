@@ -1,6 +1,7 @@
 import type { CurrencyCode } from "@/lib/currency";
 import { weekRangeLabel, type DateRange } from "@/lib/dates";
 import { TotalMoney } from "@/components/ui/total-money";
+import { SummaryCard } from "@/components/kit/summary-card";
 import { cn } from "@/lib/utils";
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -8,7 +9,7 @@ const BAR_MAX_PX = 56;
 const BAR_MIN_PX = 6;
 const BAR_EMPTY_PX = 4;
 
-export type WeekDay = { day: string; totalMinor: number };
+type WeekDay = { day: string; totalMinor: number };
 
 export function WeekCard({
   range,
@@ -28,13 +29,11 @@ export function WeekCard({
   const max = Math.max(0, ...days.map((d) => d.totalMinor));
 
   return (
-    <section
-      aria-label="Траты на этой неделе"
-      className="mx-4 mt-2 flex flex-col gap-1 rounded-card bg-card p-5"
+    <SummaryCard
+      ariaLabel="Траты на этой неделе"
+      label={`На этой неделе · ${weekRangeLabel(range)}`}
+      className="mx-4 mt-2"
     >
-      <span className="text-sm text-ink-2">
-        На этой неделе · {weekRangeLabel(range)}
-      </span>
       <TotalMoney
         size="hero"
         minor={totalMinor}
@@ -71,6 +70,6 @@ export function WeekCard({
           );
         })}
       </span>
-    </section>
+    </SummaryCard>
   );
 }

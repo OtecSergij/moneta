@@ -1,9 +1,11 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
 import { CATEGORY_NAME_MAX } from "@/lib/categories";
+import { onEnterKey } from "@/lib/enter-key";
 import { firstFreeColor } from "@/lib/palette";
-import type { Category } from "@/repositories/categories";
+import type { useSheetTask } from "@/lib/hooks/use-sheet-task";
+import type { ExpenseCategory } from "@/repositories/categories";
+import { Button } from "@/components/kit/button";
 import { ColorSwatches } from "@/components/kit/color-swatches";
 import { TextField } from "@/components/kit/text-field";
 import { useCategoryForm } from "@/components/categories/use-category-form";
@@ -11,17 +13,20 @@ import { useCategoryForm } from "@/components/categories/use-category-form";
 export function NewCategoryPanel({
   categories,
   autoFocus,
+  saveTask,
   onCreated,
   onCancel,
 }: {
-  categories: Category[];
+  categories: ExpenseCategory[];
   autoFocus: boolean;
-  onCreated: (category: Category) => void;
+  saveTask: ReturnType<typeof useSheetTask>;
+  onCreated: (category: ExpenseCategory) => void;
   onCancel?: () => void;
 }) {
   const { name, setName, color, setColor, nameError, saving, submit } =
     useCategoryForm({
       defaultColor: firstFreeColor(categories.map((c) => c.color)),
+      saveTask,
       onSaved: onCreated,
     });
 
@@ -32,45 +37,39 @@ export function NewCategoryPanel({
         labelHidden
         value={name}
         onChange={(e) => setName(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-            e.preventDefault();
-            submit();
-          }
-        }}
+        onKeyDown={(e) => onEnterKey(e, submit)}
         maxLength={CATEGORY_NAME_MAX}
         error={nameError}
         autoFocus={autoFocus}
-        className="[&>div]:h-11 [&>div]:rounded-control [&>div]:bg-card [&>div]:px-3.5"
+        size="sm"
+        tone="card"
+        disabled={saving}
       />
-      <ColorSwatches value={color} onChange={setColor} size="panel" />
+      <ColorSwatches
+        value={color}
+        onChange={setColor}
+        size="panel"
+        disabled={saving}
+      />
       <div className="flex justify-end gap-2">
         {onCancel ? (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={saving}
             onClick={onCancel}
-            className="h-11 cursor-pointer rounded-control px-4 text-[15px] font-medium text-ink hover-ghost focus-visible:outline-2 focus-visible:outline-primary"
           >
             Отмена
-          </button>
+          </Button>
         ) : null}
-        <button
-          type="button"
+        <Button
+          size="sm"
+          loading={saving}
           onClick={submit}
-          disabled={saving}
-          aria-busy={saving || undefined}
-          className="inline-flex h-11 min-w-[104px] cursor-pointer items-center justify-center rounded-control bg-primary px-[18px] text-[15px] font-semibold text-white hover-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60"
+          className="min-w-[104px]"
         >
-          {saving ? (
-            <Loader2
-              className="size-5 animate-spin"
-              strokeWidth={1.75}
-              aria-hidden
-            />
-          ) : (
-            "Добавить"
-          )}
-        </button>
+          Добавить
+        </Button>
       </div>
     </div>
   );

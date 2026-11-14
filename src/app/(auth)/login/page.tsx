@@ -11,9 +11,19 @@ export const metadata: Metadata = { title: "Вход — moneta" };
 // the live env instead of being frozen to `false` in the build-time prerender.
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   // Send already-signed-in users home — gated on a *validated* session, not
   // mere cookie presence, so a stale cookie renders the form (see proxy.ts).
   if (await getSession()) redirect("/");
-  return <LoginForm hasGoogle={hasGoogleOAuth} />;
+  const { error } = await searchParams;
+  return (
+    <LoginForm
+      hasGoogle={hasGoogleOAuth}
+      googleError={typeof error === "string" ? error : undefined}
+    />
+  );
 }

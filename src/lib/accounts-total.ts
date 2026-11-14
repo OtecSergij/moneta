@@ -1,5 +1,10 @@
 import type { CurrencyCode } from "@/lib/currency";
-import { type RateIndex, convertRow, sumConverted } from "@/lib/fx/convert";
+import {
+  type ConvertibleRow,
+  type RateIndex,
+  convertRow,
+  sumConverted,
+} from "@/lib/fx/convert";
 
 export type AccountBalance = {
   id: string;
@@ -7,7 +12,6 @@ export type AccountBalance = {
   currency: CurrencyCode;
   color: string;
   balanceMinor: number;
-  expenseCount: number;
 };
 
 export type AccountSummaryRow = AccountBalance & {
@@ -21,22 +25,34 @@ export type AccountsSummary = {
   rows: AccountSummaryRow[];
 };
 
+function toRow(
+  account: Pick<AccountBalance, "balanceMinor" | "currency">,
+  today: string,
+): ConvertibleRow {
+  return { amountMinor: account.balanceMinor, currency: account.currency, spentAt: today };
+}
+
+export function balanceInDisplay(
+  account: Pick<AccountBalance, "balanceMinor" | "currency">,
+  display: CurrencyCode,
+  index: RateIndex,
+  today: string,
+): number | null {
+  return convertRow(toRow(account, today), display, index);
+}
+
 export function summarizeAccounts(
   accounts: AccountBalance[],
   display: CurrencyCode,
   index: RateIndex,
   today: string,
 ): AccountsSummary {
-  const convertible = accounts.map((a) => ({
-    amountMinor: a.balanceMinor,
-    currency: a.currency,
-    spentAt: today,
-  }));
+  const convertible = accounts.map((a) => toRow(a, today));
   const { totalMinor, unconverted } = sumConverted(convertible, display, index);
 
-  const converted = accounts.map((a, i) => ({
+  const converted = accounts.map((a) => ({
     ...a,
-    convertedMinor: convertRow(convertible[i], display, index),
+    convertedMinor: balanceInDisplay(a, display, index, today),
   }));
   converted.sort((x, y) => {
     if (x.convertedMinor === null || y.convertedMinor === null) {

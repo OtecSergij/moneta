@@ -2,7 +2,6 @@
 
 import { after } from "next/server";
 import { requireSpace } from "@/lib/dal";
-import type { CurrencyCode } from "@/lib/currency";
 import {
   DisplayCurrencyInput,
   setDisplayCurrency,
@@ -15,14 +14,14 @@ import type { ActionResult } from "./types";
 // input server-side. Never trust the client.
 export async function setDisplayCurrencyAction(
   input: unknown,
-): Promise<ActionResult<CurrencyCode>> {
+): Promise<ActionResult<null>> {
   const { user, spaceId } = await requireSpace();
   const parsed = DisplayCurrencyInput.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Проверьте выбранную валюту" };
   }
 
-  const displayCurrency = await setDisplayCurrency(user.id, parsed.data);
+  await setDisplayCurrency(user.id, parsed.data);
 
   revalidateFor("displayCurrency");
 
@@ -30,5 +29,5 @@ export async function setDisplayCurrencyAction(
   // space id is resolved here and closed over rather than re-derived inside.
   after(() => syncSpaceRates(spaceId));
 
-  return { ok: true, data: displayCurrency };
+  return { ok: true, data: null };
 }

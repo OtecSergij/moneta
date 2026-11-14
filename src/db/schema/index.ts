@@ -5,4 +5,6 @@ export * from "./expenses";
 export * from "./fx-rates";
 export * from "./lists";
 export * from "./spaces";
+export * from "./top-ups";
+export * from "./transfers";
 export * from "./user-settings";

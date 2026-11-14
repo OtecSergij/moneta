@@ -2,9 +2,8 @@
 
 import { useId, useRef, useState, useTransition, type MouseEvent } from "react";
 import Link from "next/link";
-import { unstable_rethrow, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Lock } from "lucide-react";
-import { toast } from "sonner";
 import {
   DndContext,
   DragOverlay,
@@ -29,43 +28,43 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { moveListAction } from "@/lib/actions/lists";
+import { runAction } from "@/lib/hooks/use-action-runner";
 import { LONG_PRESS_CLASS } from "@/lib/hooks/use-long-press";
+import { useSyncedState } from "@/lib/hooks/use-synced-state";
 import {
   LONG_PRESS_DELAY_MS,
   LONG_PRESS_MOVE_TOLERANCE_PX,
 } from "@/lib/long-press";
 import type { ListSummary } from "@/repositories/lists";
+import { RowGroup } from "@/components/kit/row-group";
+import { ProgressBar } from "@/components/kit/progress-bar";
 import { cn } from "@/lib/utils";
 
 export function ListProgress({
   done,
   total,
-  trackClassName,
+  track,
   okWhenComplete = true,
 }: {
   done: number;
   total: number;
-  trackClassName: string;
+  track: "page" | "line";
   okWhenComplete?: boolean;
 }) {
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   return (
-    <span
-      aria-hidden
-      className={cn("block h-1 overflow-hidden rounded-chip", trackClassName)}
-    >
-      <span
-        className={cn(
-          "block h-full rounded-chip",
-          okWhenComplete && total > 0 && done === total ? "bg-ok" : "bg-primary",
-        )}
-        style={{ width: `${pct}%` }}
-      />
-    </span>
+    <ProgressBar
+      percent={total > 0 ? Math.round((done / total) * 100) : 0}
+      color={
+        okWhenComplete && total > 0 && done === total
+          ? "var(--color-ok)"
+          : "var(--color-primary)"
+      }
+      track={track}
+    />
   );
 }
 
-export function PrivateBadge() {
+function PrivateBadge() {
   return (
     <span className="flex flex-none items-center gap-1 rounded-chip bg-page py-0.5 pr-2 pl-1.5 text-xs font-medium text-ink-badge">
       <Lock aria-hidden className="size-3" strokeWidth={1.75} />
@@ -76,6 +75,8 @@ export function PrivateBadge() {
 
 const ROW_CLASS = "flex flex-col gap-2.5 p-4 text-ink";
 
+const MOVE_FAILED = "Не удалось переставить список";
+
 const verticalOnly: Modifier = ({ transform }) => ({ ...transform, x: 0 });
 
 const SCREEN_READER_INSTRUCTIONS = {
@@ -84,12 +85,7 @@ const SCREEN_READER_INSTRUCTIONS = {
 };
 
 export function ListRows({ lists }: { lists: ListSummary[] }) {
-  const [items, setItems] = useState(lists);
-  const [seenLists, setSeenLists] = useState(lists);
-  if (seenLists !== lists) {
-    setSeenLists(lists);
-    setItems(lists);
-  }
+  const [items, setItems] = useSyncedState(lists);
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
   const [, startTransition] = useTransition();
   const router = useRouter();
@@ -154,12 +150,11 @@ export function ListRows({ lists }: { lists: ListSummary[] }) {
     const listId = String(active.id);
     const afterId = to === 0 ? null : next[to - 1].id;
     startTransition(async () => {
-      try {
-        if ((await moveListAction(listId, afterId)).ok) return;
-      } catch (error) {
-        unstable_rethrow(error);
-      }
-      toast.error("Не удалось переставить список");
+      const moved = await runAction(async () => {
+        const res = await moveListAction(listId, afterId);
+        return res.ok ? res : { ok: false, error: MOVE_FAILED };
+      }, MOVE_FAILED);
+      if (moved) return;
       setItems(previous);
       router.refresh();
     });
@@ -190,17 +185,17 @@ export function ListRows({ lists }: { lists: ListSummary[] }) {
       onDragCancel={() => setActiveId(null)}
     >
       <SortableContext items={items} strategy={verticalListSortingStrategy}>
-        <ul
+        <RowGroup
           onPointerDownCapture={() => {
             pointerDragged.current = false;
           }}
           onClickCapture={onClickCapture}
-          className="mx-4 mt-2 overflow-hidden rounded-card bg-card"
+          className="mx-4 mt-2"
         >
-          {items.map((list, i) => (
-            <SortableRow key={list.id} list={list} divider={i > 0} />
+          {items.map((list) => (
+            <SortableRow key={list.id} list={list} />
           ))}
-        </ul>
+        </RowGroup>
       </SortableContext>
       <DragOverlay>
         {active ? (
@@ -218,7 +213,7 @@ export function ListRows({ lists }: { lists: ListSummary[] }) {
   );
 }
 
-function SortableRow({ list, divider }: { list: ListSummary; divider: boolean }) {
+function SortableRow({ list }: { list: ListSummary }) {
   const {
     attributes,
     listeners,
@@ -232,10 +227,7 @@ function SortableRow({ list, divider }: { list: ListSummary; divider: boolean })
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      className={cn(
-        divider && "border-t border-row-line",
-        isDragging && "opacity-0",
-      )}
+      className={cn(isDragging && "opacity-0")}
     >
       <Link
         href={`/lists/${list.id}`}
@@ -269,7 +261,7 @@ function ListRowContent({ list }: { list: ListSummary }) {
       <ListProgress
         done={list.doneCount}
         total={list.totalCount}
-        trackClassName="bg-page"
+        track="page"
       />
     </>
   );

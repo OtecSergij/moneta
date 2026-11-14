@@ -22,14 +22,19 @@ import {
   spaceInvites,
   spaceMembers,
   spaces,
+  topUps,
+  transfers,
   user,
 } from "@/db/schema";
 import { todayISO } from "@/lib/dates";
 import type { PaletteColor } from "@/lib/palette";
-import { createAccount, listAccounts } from "@/repositories/accounts";
+import { TOP_UP_DEFAULT_NOTE } from "@/lib/top-ups";
+import { createAccount, deleteAccount, listAccounts } from "@/repositories/accounts";
 import { createCategory } from "@/repositories/categories";
 import { createExpense, type ExpenseInput } from "@/repositories/expenses";
 import { resolveSpace } from "@/repositories/spaces";
+import { createTopUp } from "@/repositories/top-ups";
+import { createTransfer } from "@/repositories/transfers";
 
 const SEED_EMAIL = "demo@moneta.test";
 const SEED_PASSWORD = "moneta-demo-2026";
@@ -109,6 +114,29 @@ const ACCOUNTS: Array<{
   { name: "Карта RUB", currency: "RUB", color: "#8B5CF6", balanceMinor: 8642000, anchorDaysAgo: 5 },
 ];
 
+// On «Карта RUB», as the «Счёт» board draws them: one with a description on a
+// day with expenses, one without on a day without.
+const TOP_UPS: Array<{ note: string; amountMinor: number; daysAgo: number; by: Author }> = [
+  { note: "Зарплата", amountMinor: 8051240, daysAgo: 0, by: "owner" },
+  { note: TOP_UP_DEFAULT_NOTE, amountMinor: 1606300, daysAgo: 13, by: "partner" },
+];
+
+// Every state of a transfer row on the «Счёт» board: out and in, and one whose
+// source («Старая карта», deleted below) left its place empty.
+const OLD_CARD = "old";
+const TRANSFERS: Array<{
+  from: ExpenseInput["currency"] | typeof OLD_CARD;
+  to: ExpenseInput["currency"];
+  fromAmountMinor: number;
+  toAmountMinor: number;
+  daysAgo: number;
+  by: Author;
+}> = [
+  { from: "USD", to: "EUR", fromAmountMinor: 10000, toAmountMinor: 9200, daysAgo: 0, by: "owner" },
+  { from: "RSD", to: "USD", fromAmountMinor: 1620000, toAmountMinor: 15000, daysAgo: 6, by: "partner" },
+  { from: OLD_CARD, to: "USD", fromAmountMinor: 5000, toAmountMinor: 5000, daysAgo: 9, by: "owner" },
+];
+
 const LISTS: Array<{ name: string; done: string[]; todo: string[]; isPrivate?: true; by: Author }> = [
   {
     name: "Продукты на неделю",
@@ -157,10 +185,11 @@ function assertLocalDatabase() {
 }
 
 async function reset() {
+  await db.delete(expenses);
+  await db.delete(transfers);
   await db.delete(accounts);
   await db.delete(listItems);
   await db.delete(lists);
-  await db.delete(expenses);
   await db.delete(categories);
   await db.delete(pendingSpaceJoins);
   await db.delete(spaceInvites);
@@ -229,6 +258,13 @@ async function main() {
   for (const e of TODAY) planned.push({ ...e, day: now });
 
   const charged = new Map<string, Array<{ amountMinor: number; createdAt: Date }>>();
+  const charge = (accountId: string, amountMinor: number, createdAt: Date) =>
+    charged.set(accountId, [...(charged.get(accountId) ?? []), { amountMinor, createdAt }]);
+  // Recorded on its day; a moment still ahead today stays in the past.
+  const enteredAt = (day: Date, order: number, otherwise: Date = now) => {
+    const onDay = addMinutes(setHours(startOfDay(day), 9), order);
+    return onDay < now ? onDay : otherwise;
+  };
   for (const [i, e] of planned.entries()) {
     const accountId = accountIds.get(e.currency)!;
     const row = await createExpense(spaceId, authorId[e.by], {
@@ -240,12 +276,55 @@ async function main() {
       accountId,
     });
     if (!row) throw new Error(`createExpense rejected: ${e.note}`);
-    // Recorded on the day it was spent; today's entries stay in the past.
-    const onDay = addMinutes(setHours(startOfDay(e.day), 9), i);
-    const createdAt = onDay < now ? onDay : subSeconds(now, planned.length - i);
+    const createdAt = enteredAt(e.day, i, subSeconds(now, planned.length - i));
     await db.update(expenses).set({ createdAt }).where(eq(expenses.id, row.id));
-    charged.set(accountId, [...(charged.get(accountId) ?? []), { amountMinor: e.amountMinor, createdAt }]);
+    charge(accountId, e.amountMinor, createdAt);
   }
+
+  const topUpAccountId = accountIds.get("RUB")!;
+  for (const [i, t] of TOP_UPS.entries()) {
+    const day = subDays(now, t.daysAgo);
+    const result = await createTopUp(spaceId, authorId[t.by], {
+      accountId: topUpAccountId,
+      amountMinor: t.amountMinor,
+      note: t.note,
+      occurredOn: todayISO(day),
+    });
+    if (!result.ok) throw new Error(`createTopUp rejected: ${result.reason}`);
+    const createdAt = enteredAt(day, planned.length + i);
+    await db.update(topUps).set({ createdAt }).where(eq(topUps.id, result.topUp.id));
+    charge(topUpAccountId, -t.amountMinor, createdAt);
+  }
+
+  // Kept out of ACCOUNTS and accountIds: both are keyed by currency, and a
+  // second USD account would replace «Карта USD».
+  const oldCard = await createAccount(spaceId, owner.id, {
+    name: "Старая карта",
+    currency: "USD",
+    color: "#64748B",
+    balanceMinor: 0,
+  });
+  const transferAccountId = (key: (typeof TRANSFERS)[number]["from"]) =>
+    key === OLD_CARD ? oldCard.id : accountIds.get(key)!;
+  const entriesBefore = planned.length + TOP_UPS.length;
+  for (const [i, t] of TRANSFERS.entries()) {
+    const day = subDays(now, t.daysAgo);
+    const fromAccountId = transferAccountId(t.from);
+    const toAccountId = transferAccountId(t.to);
+    const result = await createTransfer(
+      spaceId,
+      authorId[t.by],
+      { fromAccountId, toAccountId, fromAmountMinor: t.fromAmountMinor, toAmountMinor: t.toAmountMinor },
+      todayISO(day),
+    );
+    if (!result.ok) throw new Error(`createTransfer rejected: ${result.reason}`);
+    const createdAt = enteredAt(day, entriesBefore + i);
+    await db.update(transfers).set({ createdAt }).where(eq(transfers.id, result.transfer.id));
+    charge(fromAccountId, t.fromAmountMinor, createdAt);
+    charge(toAccountId, -t.toAmountMinor, createdAt);
+  }
+  const oldCardDeleted = await deleteAccount(spaceId, oldCard.id);
+  if (!oldCardDeleted.ok) throw new Error(`deleteAccount rejected: ${oldCardDeleted.reason}`);
 
   for (const a of ACCOUNTS) {
     const id = accountIds.get(a.currency)!;
@@ -290,7 +369,7 @@ async function main() {
   }
 
   console.log(
-    `Seeded ${SEED_EMAIL} + ${PARTNER_EMAIL} in one space: ${CATEGORIES.length} categories, ${planned.length} expenses, ${LISTS.length} lists, ${ACCOUNTS.length} accounts`,
+    `Seeded ${SEED_EMAIL} + ${PARTNER_EMAIL} in one space: ${CATEGORIES.length} categories, ${planned.length} expenses, ${TOP_UPS.length} top-ups, ${TRANSFERS.length} transfers, ${LISTS.length} lists, ${ACCOUNTS.length} accounts`,
   );
 }
 

@@ -25,7 +25,7 @@ export async function requireSession() {
   return session;
 }
 
-export type SpaceContext = {
+type SpaceContext = {
   user: Session["user"];
   spaceId: SpaceId;
   role: SpaceRole;

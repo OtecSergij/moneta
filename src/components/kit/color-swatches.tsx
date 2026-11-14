@@ -17,16 +17,19 @@ export function ColorSwatches({
   value,
   onChange,
   size,
+  disabled = false,
 }: {
   value: PaletteColor;
   onChange: (color: PaletteColor) => void;
   size: keyof typeof SIZES;
+  disabled?: boolean;
 }) {
   const s = SIZES[size];
   return (
     <RadioGroup.Root
       value={value}
       onValueChange={(v) => onChange(v as PaletteColor)}
+      disabled={disabled}
       aria-label="Цвет"
       className={cn("grid grid-cols-5 justify-items-center", s.grid)}
     >
@@ -38,6 +41,7 @@ export function ColorSwatches({
           className={cn(
             "flex cursor-pointer items-center justify-center rounded-chip hover-swatch",
             "focus-visible:outline-2 focus-visible:outline-primary",
+            "disabled:cursor-not-allowed disabled:opacity-50",
             s.item,
           )}
         >

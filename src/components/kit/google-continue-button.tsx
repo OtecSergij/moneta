@@ -1,9 +1,10 @@
-import type { ComponentProps } from "react";
-import { Loader2 } from "lucide-react";
+import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/kit/button";
 
-type GoogleContinueButtonProps = ComponentProps<"button"> & {
+type GoogleContinueButtonProps = Omit<ComponentProps<"button">, "className"> & {
   loading?: boolean;
+  children: ReactNode;
 };
 
 function GoogleLogo() {
@@ -32,8 +33,7 @@ function GoogleLogo() {
 export function GoogleContinueButton({
   loading = false,
   disabled,
-  className,
-  children = "Продолжить с Google",
+  children,
   ...props
 }: GoogleContinueButtonProps) {
   return (
@@ -45,13 +45,12 @@ export function GoogleContinueButton({
         "inline-flex h-13 w-full cursor-pointer items-center justify-center gap-2.5 rounded-field bg-card px-4 text-base font-semibold text-ink",
         "shadow-[inset_0_0_0_1px_var(--color-control-line)] hover-outline",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
-        "disabled:cursor-not-allowed disabled:opacity-60",
-        className,
+        "disabled:cursor-not-allowed disabled:opacity-50",
       )}
       {...props}
     >
       {loading ? (
-        <Loader2 className="size-5 animate-spin" strokeWidth={1.75} aria-hidden />
+        <Spinner />
       ) : (
         <GoogleLogo />
       )}

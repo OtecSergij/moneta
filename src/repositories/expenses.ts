@@ -1,7 +1,7 @@
 import { and, between, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, type DbExecutor } from "@/db";
-import { accounts, categories, currencyEnum, expenses } from "@/db/schema";
+import { categories, currencyEnum, expenses } from "@/db/schema";
 import { CURRENCY_CODES, type CurrencyCode } from "@/lib/currency";
 import { EXPENSE_NOTE_MAX } from "@/lib/expense-constants";
 import {
@@ -11,16 +11,17 @@ import {
   convertRow,
   sumConverted,
 } from "@/lib/fx/convert";
-import { maxEntryDate } from "@/lib/fx/provider";
+import { isAllowedEntryDate } from "@/lib/fx/provider";
 import { isForeignKeyViolation } from "@/lib/db-errors";
 import type { SpaceId } from "@/lib/space-id";
 import { loadRateIndex } from "@/repositories/fx-rates";
+import { accountsOfSpace } from "./accounts";
 
 // Shared by the form (react-hook-form + zod) and the repo.
 //
 // `spentAt` is a date string "YYYY-MM-DD" — `date` column type in `mode:
 // "string"`. Its upper bound is checked in createExpense/updateExpense
-// (spentAtIsValid), not here, because "today" depends on user's timezone.
+// (isAllowedEntryDate), not here, because "today" depends on user's timezone.
 //
 // `currency` is constrained to the pg enum values from db/schema/expenses.ts,
 // kept in sync with `CurrencyCode` (src/lib/currency.ts).
@@ -29,7 +30,7 @@ export const ExpenseInput = z.object({
   amountMinor: z.int().positive(),
   currency: z.enum(currencyEnum.enumValues),
   // Required: trimmed, non-empty, capped — mirrors the NOT NULL `note` column
-  // and the form's "Добавьте описание" rule (business-spec §4.2).
+  // and the form's "Добавьте описание" rule.
   note: z.string().trim().min(1).max(EXPENSE_NOTE_MAX),
   spentAt: z.iso.date(),
   accountId: z.uuid(),
@@ -46,10 +47,11 @@ export type ExpenseWithConversion = Expense & {
   displayCurrency: CurrencyCode;
 };
 
-export interface ListExpensesOpts {
+interface ListExpensesOpts {
   from?: string; // "YYYY-MM-DD" inclusive
   to?: string; // "YYYY-MM-DD" inclusive
   categoryId?: string;
+  accountId?: string;
   limit?: number;
 }
 
@@ -74,6 +76,9 @@ export async function listExpenses(
   }
   if (opts.categoryId) {
     conds.push(eq(expenses.categoryId, opts.categoryId));
+  }
+  if (opts.accountId) {
+    conds.push(eq(expenses.accountId, opts.accountId));
   }
 
   const q = db
@@ -103,7 +108,7 @@ export async function listExpenses(
 }
 
 // Category and account of the most recent expense this user created in the
-// space — pre-select the quick-add form (business-spec §5.1). Personal: a
+// space — pre-select the quick-add form. Personal: a
 // partner's entries don't change them. Ordered by creation, not spending date,
 // so a backdated entry doesn't change "last used". Null when there are none.
 export async function lastUsedIds(
@@ -151,24 +156,10 @@ async function accountAccepts(
   currency: CurrencyCode,
   executor: DbExecutor = db,
 ): Promise<boolean> {
-  const [account] = await executor
-    .select({ currency: accounts.currency })
-    .from(accounts)
-    .where(and(eq(accounts.id, accountId), eq(accounts.spaceId, spaceId)))
-    .limit(1);
+  const [account] = await accountsOfSpace(executor, spaceId, [accountId]);
   if (account?.currency === currency) return true;
   console.info("expense.account_rejected", { spaceId, accountId });
   return false;
-}
-
-// Upper bound on the entry date. The old rationale for leaving this to the UI
-// was that "today" depends on the user's timezone; maxEntryDate() now answers
-// that by allowing the client to be one day ahead of this server, so the
-// bound can be enforced here too. Deliberately no lower bound:
-// PROVIDER_HISTORY_FLOOR limits which rates exist, not which expenses may be
-// recorded — an older one is simply shown unconverted.
-function spentAtIsValid(spentAt: string): boolean {
-  return spentAt <= maxEntryDate();
 }
 
 export async function createExpense(
@@ -177,7 +168,7 @@ export async function createExpense(
   input: ExpenseInput,
 ): Promise<Expense | null> {
   if (!(await categoryInSpace(spaceId, input.categoryId))) return null;
-  if (!spentAtIsValid(input.spentAt)) return null;
+  if (!isAllowedEntryDate(input.spentAt)) return null;
   if (!(await accountAccepts(spaceId, input.accountId, input.currency))) {
     return null;
   }
@@ -208,14 +199,14 @@ export async function updateExpense(
   id: string,
   patch: ExpensePatch,
 ): Promise<Expense | null> {
-  if (Object.keys(patch).length === 0) {
+  if (Object.values(patch).every((v) => v === undefined)) {
     return getExpense(spaceId, id);
   }
 
   if (patch.categoryId && !(await categoryInSpace(spaceId, patch.categoryId))) {
     return null;
   }
-  if (patch.spentAt !== undefined && !spentAtIsValid(patch.spentAt)) {
+  if (patch.spentAt !== undefined && !isAllowedEntryDate(patch.spentAt)) {
     return null;
   }
   const where = and(eq(expenses.id, id), eq(expenses.spaceId, spaceId));
@@ -254,7 +245,7 @@ export async function deleteExpense(
 }
 
 // Aggregated view for the home/history screens: per-category totals over a
-// date range, plus the grand total. Per business-spec §5.1.
+// date range, plus the grand total.
 //
 // `unconverted` counts the rows no rate could value. They are missing from the
 // total, so it is short by real money — the UI marks a total carrying one
@@ -266,7 +257,7 @@ export interface SummaryRow extends ConvertedTotal {
   color: string;
 }
 
-export interface Summary extends ConvertedTotal {
+interface Summary extends ConvertedTotal {
   byCategory: SummaryRow[];
 }
 
@@ -303,8 +294,7 @@ export async function summary(
 
   // Grouped and totaled in TS, not SQL: a raw `sum(...)::int` returns
   // `numeric`/`bigint` as a string once the `::int` cast is dropped, and a
-  // per-row currency conversion has no single SQL-side rounding rule anyway
-  // (plan Step 5.5, ADR).
+  // per-row currency conversion has no single SQL-side rounding rule anyway.
   const byCategoryId = new Map<
     string,
     { name: string; color: string; rows: ConvertibleRow[] }

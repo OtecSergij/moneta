@@ -21,10 +21,12 @@ export function CurrencySegment({
   value,
   onChange,
   label,
+  disabled = false,
 }: {
   value: CurrencyCode;
   onChange: (value: CurrencyCode) => void;
   label: string;
+  disabled?: boolean;
 }) {
   return (
     <Segment
@@ -33,6 +35,7 @@ export function CurrencySegment({
       onChange={onChange}
       ariaLabel={label}
       tone="symbol"
+      disabled={disabled}
     />
   );
 }

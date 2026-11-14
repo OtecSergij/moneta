@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useFormContext, useWatch } from "react-hook-form";
 import { type ExpenseFormValues } from "@/lib/expense-form";
 import { EXPENSE_NOTE_MAX } from "@/lib/expense-constants";
 import type {
-  Category,
   CategoryWithUsage,
+  ExpenseCategory,
 } from "@/repositories/categories";
 import { type CurrencyCode } from "@/lib/currency";
-import { formatMoney, parseMoney } from "@/lib/money";
-import { quoteConversionAction } from "@/lib/actions/fx";
+import { parseMoney } from "@/lib/money";
+import { useConversionPreview } from "@/lib/hooks/use-conversion-preview";
+import { useSheetTask } from "@/lib/hooks/use-sheet-task";
 import { TextField } from "@/components/kit/text-field";
 import { AmountField } from "@/components/expenses/amount-field";
 import {
@@ -23,20 +24,8 @@ import { CategoryChips } from "@/components/categories/category-chips";
 import { NewCategoryPanel } from "@/components/categories/new-category-panel";
 import { CategoryEditSheet } from "@/components/categories/category-edit-sheet";
 
-const PREVIEW_DEBOUNCE_MS = 300;
-
-type ConversionQuote =
-  | { status: "unavailable" }
-  | { status: "value"; convertedMinor: number; displayCurrency: CurrencyCode };
-
-type VisiblePreview = { status: "pending" } | ConversionQuote;
-
-function previewLabel(preview: VisiblePreview): string {
-  if (preview.status === "value") {
-    return `≈ ${formatMoney(preview.convertedMinor, preview.displayCurrency)}`;
-  }
-  return preview.status === "unavailable" ? "Курс недоступен" : "≈ …";
-}
+const NO_ACCOUNTS_FIELD_DIM = "has-disabled:opacity-60!";
+export const NO_ACCOUNTS_BUTTON_DIM = "disabled:opacity-60!";
 
 type CategoryProps =
   | {
@@ -44,17 +33,19 @@ type CategoryProps =
       categories: CategoryWithUsage[];
       onCategoriesChange: (next: CategoryWithUsage[]) => void;
     }
-  | { categoriesEditable?: false; categories: Category[] };
+  | { categoriesEditable?: false; categories: ExpenseCategory[] };
 
 export function ExpenseFormFields({
   displayCurrency,
   size,
   accounts,
+  disabled = false,
   ...categoryProps
 }: {
   displayCurrency: CurrencyCode;
   size: "main" | "sheet";
   accounts: ExpenseAccount[];
+  disabled?: boolean;
 } & CategoryProps) {
   const {
     register,
@@ -83,70 +74,14 @@ export function ExpenseFormFields({
   }
 
   const noAccounts = accounts.length === 0;
+  const noAccountsDim = noAccounts ? NO_ACCOUNTS_FIELD_DIM : undefined;
 
-  // With matching currencies convert.ts's identity rule returns exactly the
-  // entered amount, so there is nothing to show and no quote to request.
-  const currenciesDiffer = currency !== displayCurrency;
-
-  const minor = parseMoney(amount, currency);
-
-  const previewKey =
-    currenciesDiffer && minor !== null && minor > 0
-      ? `${minor}|${currency}|${displayCurrency}|${spentAt}`
-      : null;
-
-  // Resolved answers are keyed by the exact inputs they answer for, so
-  // "pending" vs. "resolved" falls out of a plain render-time comparison
-  // below instead of a synchronous setState in the effect body
-  // (react-hooks/set-state-in-effect) — the effect only ever calls setState
-  // from inside the async callback.
-  const [resolved, setResolved] = useState<{
-    key: string;
-    result: ConversionQuote;
-  } | null>(null);
-
-  // Debounced live preview: quoteConversionAction is a server round-trip, so
-  // typing shouldn't fire it on every keystroke, and a failure must never
-  // block the amount input itself (plan Step 6.4).
-  useEffect(() => {
-    if (previewKey === null) return;
-
-    let cancelled = false;
-    const key = previewKey;
-    const timer = setTimeout(() => {
-      quoteConversionAction({ amountMinor: minor, currency, spentAt }).then((res) => {
-        if (cancelled) return;
-        if (!res.ok) {
-          setResolved({ key, result: { status: "unavailable" } });
-          return;
-        }
-        const { convertedMinor, displayCurrency: quotedIn } = res.data;
-        setResolved({
-          key,
-          result:
-            convertedMinor === null
-              ? { status: "unavailable" }
-              : { status: "value", convertedMinor, displayCurrency: quotedIn },
-        });
-      }).catch(() => {
-        // requireSession redirects by throwing; mid-typing that lands here
-        // rather than as an unhandled rejection while the redirect proceeds.
-        if (!cancelled) setResolved({ key, result: { status: "unavailable" } });
-      });
-    }, PREVIEW_DEBOUNCE_MS);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [previewKey, minor, currency, spentAt]);
-
-  const preview: VisiblePreview | null =
-    previewKey === null
-      ? null
-      : resolved && resolved.key === previewKey
-        ? resolved.result
-        : { status: "pending" };
+  const preview = useConversionPreview({
+    amountMinor: parseMoney(amount, currency),
+    currency,
+    displayCurrency,
+    date: spentAt,
+  });
 
   return (
     <>
@@ -154,10 +89,11 @@ export function ExpenseFormFields({
         id={size === "main" ? "amount" : "e-amount"}
         size={size}
         currency={currency}
-        preview={preview ? previewLabel(preview) : null}
+        preview={preview}
         error={errors.amount?.message}
         {...register("amount")}
-        disabled={noAccounts}
+        disabled={noAccounts || disabled}
+        className={noAccountsDim}
       />
 
       {!noAccounts ? (
@@ -166,6 +102,7 @@ export function ExpenseFormFields({
           value={accountId}
           onChange={selectAccount}
           error={errors.accountId?.message}
+          disabled={disabled}
         />
       ) : (
         <Link
@@ -193,6 +130,7 @@ export function ExpenseFormFields({
           value={categoryId}
           onChange={selectCategory}
           error={errors.categoryId?.message}
+          disabled={disabled}
         />
       )}
 
@@ -204,13 +142,15 @@ export function ExpenseFormFields({
         maxLength={EXPENSE_NOTE_MAX}
         error={errors.note?.message}
         {...register("note")}
-        disabled={noAccounts}
+        disabled={noAccounts || disabled}
+        className={noAccountsDim}
       />
 
       <DateChips
         value={spentAt ?? ""}
         onChange={(iso) => setValue("spentAt", iso, { shouldValidate: true })}
         error={errors.spentAt?.message}
+        disabled={disabled}
       />
     </>
   );
@@ -233,6 +173,7 @@ function EditableCategories({
 }) {
   const [newOpen, setNewOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const creating = useSheetTask();
   const empty = categories.length === 0;
   const editing = categories.find((c) => c.id === editingId) ?? null;
 
@@ -246,12 +187,14 @@ function EditableCategories({
         error={error}
         onEdit={setEditingId}
         newOpen={newOpen || empty}
+        newDisabled={creating.pending}
         onNewToggle={() => setNewOpen(!newOpen)}
       >
         {newOpen || empty ? (
           <NewCategoryPanel
             categories={categories}
             autoFocus={newOpen}
+            saveTask={creating}
             onCancel={empty ? undefined : () => setNewOpen(false)}
             onCreated={(c) => {
               onCategoriesChange([...categories, { ...c, hasExpenses: false }]);

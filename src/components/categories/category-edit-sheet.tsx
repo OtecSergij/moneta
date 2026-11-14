@@ -2,9 +2,10 @@
 
 import { Trash2 } from "lucide-react";
 import { CATEGORY_NAME_MAX } from "@/lib/categories";
+import { onEnterKey } from "@/lib/enter-key";
 import type {
-  Category,
   CategoryWithUsage,
+  ExpenseCategory,
 } from "@/repositories/categories";
 import { BottomSheet } from "@/components/kit/bottom-sheet";
 import { Button } from "@/components/kit/button";
@@ -13,15 +14,16 @@ import { TextField } from "@/components/kit/text-field";
 import { useCategoryForm } from "@/components/categories/use-category-form";
 
 type Callbacks = {
-  onSaved: (category: Category) => void;
+  onSaved: (category: ExpenseCategory) => void;
   onRemoved: (id: string) => void;
   onRemoveRejected: () => void;
 };
 
-function EditForm({
+function EditSheet({
   category,
+  onClose,
   ...callbacks
-}: { category: CategoryWithUsage } & Callbacks) {
+}: { category: CategoryWithUsage; onClose: () => void } & Callbacks) {
   const {
     name,
     setName,
@@ -33,25 +35,32 @@ function EditForm({
     submit,
     remove,
   } = useCategoryForm({ category, ...callbacks });
+  const busy = saving || removing;
 
   return (
-    <>
+    <BottomSheet
+      onClose={onClose}
+      ariaLabel="Категория"
+      focusSheet
+      busy={busy}
+    >
       <TextField
         label="Название категории"
         labelHidden
         variant="title"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-            e.preventDefault();
-            submit();
-          }
-        }}
+        onKeyDown={(e) => onEnterKey(e, submit)}
         maxLength={CATEGORY_NAME_MAX}
         error={nameError}
+        disabled={busy}
       />
-      <ColorSwatches value={color} onChange={setColor} size="sheet" />
+      <ColorSwatches
+        value={color}
+        onChange={setColor}
+        size="sheet"
+        disabled={busy}
+      />
       <div className="flex gap-2">
         {!category.hasExpenses ? (
           <Button
@@ -74,33 +83,18 @@ function EditForm({
           Сохранить
         </Button>
       </div>
-    </>
+    </BottomSheet>
   );
 }
 
 export function CategoryEditSheet({
   category,
-  onClose,
-  ...callbacks
+  ...props
 }: {
   category: CategoryWithUsage | null;
   onClose: () => void;
 } & Callbacks) {
-  return (
-    <BottomSheet
-      open={category !== null}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-      ariaLabel="Категория"
-      onOpenAutoFocus={(event) => {
-        event.preventDefault();
-        (event.currentTarget as HTMLElement).focus();
-      }}
-    >
-      {category ? (
-        <EditForm key={category.id} category={category} {...callbacks} />
-      ) : null}
-    </BottomSheet>
-  );
+  return category ? (
+    <EditSheet key={category.id} category={category} {...props} />
+  ) : null;
 }

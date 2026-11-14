@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { type AccountBalance, summarizeAccounts } from "@/lib/accounts-total";
+import {
+  type AccountBalance,
+  balanceInDisplay,
+  summarizeAccounts,
+} from "@/lib/accounts-total";
 import type { CurrencyCode } from "@/lib/currency";
+import { parseRate } from "@/lib/fx/convert";
 import { FIXED_RATE_DATE, fixedRateIndex } from "@/test/fx-fixtures";
 
 const TODAY = FIXED_RATE_DATE;
@@ -12,7 +17,7 @@ function acc(
   balanceMinor: number,
   color = "#3B82F6",
 ): AccountBalance {
-  return { id: name, name, currency, color, balanceMinor, expenseCount: 0 };
+  return { id: name, name, currency, color, balanceMinor };
 }
 
 const SEED = [
@@ -114,5 +119,22 @@ describe("summarizeAccounts", () => {
     const s = summarizeAccounts([acc("Пусто", "USD", 0)], "RUB", index, TODAY);
     expect(s.totalMinor).toBe(0);
     expect(s.rows[0]).toMatchObject({ convertedMinor: 0, sharePermille: 0 });
+  });
+});
+
+describe("balanceInDisplay", () => {
+  it("converts at today's rate, not at an earlier one", () => {
+    const twoRates = fixedRateIndex({ USD: "1" });
+    twoRates.set("EUR", [
+      { effectiveDate: "2026-08-01", rateToUsd: parseRate("1") },
+      { effectiveDate: TODAY, rateToUsd: parseRate("1.1") },
+      { effectiveDate: "2026-09-02", rateToUsd: parseRate("1.2") },
+    ]);
+    expect(balanceInDisplay(acc("Карта", "EUR", 62000), "USD", twoRates, TODAY)).toBe(68200);
+  });
+
+  it("returns null without a rate", () => {
+    const partial = fixedRateIndex({ USD: "1" });
+    expect(balanceInDisplay(acc("Рубли", "RUB", 100000), "USD", partial, TODAY)).toBeNull();
   });
 });

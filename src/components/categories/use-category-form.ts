@@ -1,12 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
-import { CATEGORY_NAME_MAX } from "@/lib/categories";
+import { CATEGORY_NAME_MAX, type CategoryPatch } from "@/lib/categories";
 import {
   DEFAULT_PALETTE_COLOR,
-  isPaletteColor,
+  toPaletteColor,
   type PaletteColor,
 } from "@/lib/palette";
 import {
@@ -14,32 +14,36 @@ import {
   deleteCategoryAction,
   updateCategoryAction,
 } from "@/lib/actions/categories";
-import type { Category } from "@/repositories/categories";
+import { useSheetTask } from "@/lib/hooks/use-sheet-task";
+import type { ExpenseCategory } from "@/repositories/categories";
 
 export function useCategoryForm({
   category,
   defaultColor = DEFAULT_PALETTE_COLOR,
+  saveTask,
   onSaved,
   onRemoved,
   onRemoveRejected,
 }: {
-  category?: Category;
+  category?: ExpenseCategory;
   defaultColor?: PaletteColor;
-  onSaved: (category: Category) => void;
+  saveTask?: ReturnType<typeof useSheetTask>;
+  onSaved: (category: ExpenseCategory) => void;
   onRemoved?: (id: string) => void;
   onRemoveRejected?: () => void;
 }) {
+  const initialColor = category
+    ? toPaletteColor(category.color, defaultColor)
+    : defaultColor;
   const [name, setName] = useState(category?.name ?? "");
-  const [color, setColor] = useState<PaletteColor>(
-    category && isPaletteColor(category.color) ? category.color : defaultColor,
-  );
+  const [color, setColor] = useState<PaletteColor>(initialColor);
   const [nameError, setNameError] = useState<string | undefined>();
-  const [saving, setSaving] = useState(false);
-  const [removing, setRemoving] = useState(false);
-  const busy = useRef(false);
+  const ownSave = useSheetTask();
+  const save = saveTask ?? ownSave;
+  const removal = useSheetTask();
 
   async function submit() {
-    if (busy.current) return;
+    if (save.pending || removal.pending) return;
     const trimmed = name.trim();
     if (trimmed.length === 0) {
       setNameError("Введите название");
@@ -50,53 +54,50 @@ export function useCategoryForm({
       return;
     }
     setNameError(undefined);
-    busy.current = true;
-    setSaving(true);
-    try {
-      const res = category
-        ? await updateCategoryAction(category.id, { name: trimmed, color })
-        : await createCategoryAction({ name: trimmed, color });
-      if (!res.ok) {
-        if (category && "notFound" in res) {
-          toast.error(res.error);
-          onRemoved?.(category.id);
+    const patch: CategoryPatch = {};
+    if (trimmed !== category?.name) patch.name = trimmed;
+    if (color !== initialColor) patch.color = color;
+    await save.run(async () => {
+      try {
+        const res = category
+          ? await updateCategoryAction(category.id, patch)
+          : await createCategoryAction({ name: trimmed, color });
+        if (!res.ok) {
+          if (category && "notFound" in res) {
+            toast.error(res.error);
+            onRemoved?.(category.id);
+            return;
+          }
+          setNameError(res.error);
           return;
         }
-        setNameError(res.error);
-        return;
+        toast.success(category ? "Категория обновлена" : "Категория создана");
+        onSaved(res.data);
+      } catch (error) {
+        unstable_rethrow(error);
+        toast.error("Не удалось сохранить категорию");
       }
-      toast.success(category ? "Категория обновлена" : "Категория создана");
-      onSaved(res.data);
-    } catch (error) {
-      unstable_rethrow(error);
-      toast.error("Не удалось сохранить категорию");
-    } finally {
-      busy.current = false;
-      setSaving(false);
-    }
+    });
   }
 
   async function remove() {
-    if (!category || busy.current) return;
-    busy.current = true;
-    setRemoving(true);
-    try {
-      const res = await deleteCategoryAction(category.id);
-      if (!res.ok) {
-        toast.error(res.error);
-        if ("notFound" in res) onRemoved?.(category.id);
-        else onRemoveRejected?.();
-        return;
+    if (!category || save.pending) return;
+    await removal.run(async () => {
+      try {
+        const res = await deleteCategoryAction(category.id);
+        if (!res.ok) {
+          toast.error(res.error);
+          if ("notFound" in res) onRemoved?.(category.id);
+          else onRemoveRejected?.();
+          return;
+        }
+        toast.success("Категория удалена");
+        onRemoved?.(category.id);
+      } catch (error) {
+        unstable_rethrow(error);
+        toast.error("Не удалось удалить категорию");
       }
-      toast.success("Категория удалена");
-      onRemoved?.(category.id);
-    } catch (error) {
-      unstable_rethrow(error);
-      toast.error("Не удалось удалить категорию");
-    } finally {
-      busy.current = false;
-      setRemoving(false);
-    }
+    });
   }
 
   return {
@@ -105,8 +106,8 @@ export function useCategoryForm({
     color,
     setColor,
     nameError,
-    saving,
-    removing,
+    saving: save.pending,
+    removing: removal.pending,
     submit,
     remove,
   };
